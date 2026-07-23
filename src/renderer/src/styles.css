@@ -1,0 +1,217 @@
+/* This app is always dark themed (see main/index.ts nativeTheme.themeSource),
+   independent of the Windows system theme setting. */
+:root {
+  color-scheme: dark;
+  --bg: rgba(28, 28, 30, 0.9);
+  --fg: #f2f2f2;
+  --muted: #9a9a9a;
+  --border: rgba(255, 255, 255, 0.08);
+  --active-bg: rgba(90, 160, 255, 0.18);
+  --accent: #5aa0ff;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  margin: 0;
+  height: 100%;
+  background: transparent;
+  font-family:
+    'Segoe UI',
+    system-ui,
+    -apple-system,
+    sans-serif;
+}
+
+.palette {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  background: var(--bg);
+  color: var(--fg);
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.35);
+  overflow: hidden;
+  -webkit-backdrop-filter: blur(20px);
+  backdrop-filter: blur(20px);
+}
+
+.palette-input {
+  border: none;
+  outline: none;
+  background: transparent;
+  color: var(--fg);
+  font-size: 18px;
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--border);
+}
+
+.palette-banner {
+  padding: 8px 20px;
+  font-size: 12px;
+  color: #ff6b5b;
+  background: rgba(255, 107, 91, 0.14);
+  border-bottom: 1px solid var(--border);
+}
+
+.calc-result {
+  padding: 16px 20px;
+  font-size: 20px;
+  color: var(--accent);
+}
+
+.palette-list {
+  list-style: none;
+  margin: 0;
+  padding: 6px;
+  overflow-y: auto;
+  flex: 1;
+}
+
+.palette-item {
+  display: flex;
+  flex-direction: column;
+  padding: 8px 12px;
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+.palette-item.active,
+.palette-item:hover {
+  background: var(--active-bg);
+}
+
+.palette-item-label {
+  font-size: 14px;
+}
+
+.palette-item-sublabel {
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.palette-empty {
+  padding: 12px;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.config-manager {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  outline: none;
+}
+
+.config-manager .palette-item {
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.palette-item-text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.config-app-checkbox {
+  pointer-events: none;
+  flex-shrink: 0;
+}
+
+.config-item-delete {
+  border: none;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  font-size: 13px;
+  padding: 2px 6px;
+  border-radius: 4px;
+  opacity: 0;
+}
+
+.palette-item:hover .config-item-delete,
+.palette-item.active .config-item-delete {
+  opacity: 1;
+}
+
+.config-item-delete:hover {
+  color: #ff6b5b;
+  background: rgba(255, 107, 91, 0.14);
+}
+
+.config-form {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 16px 20px;
+  overflow-y: auto;
+  flex: 1;
+}
+
+.config-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.config-field-input {
+  font: inherit;
+  color: var(--fg);
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 8px 10px;
+  outline: none;
+}
+
+.config-field-input:focus {
+  border-color: var(--accent);
+}
+
+.config-form-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+.config-btn {
+  font: inherit;
+  border: 1px solid var(--border);
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--fg);
+  border-radius: 6px;
+  padding: 8px 14px;
+  cursor: pointer;
+}
+
+.config-btn:hover {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.config-btn-primary {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #0b1520;
+  font-weight: 600;
+}
+
+.config-btn-primary:hover {
+  filter: brightness(1.08);
+}
+
+.config-btn-danger {
+  color: #ff6b5b;
+}
+
+.config-btn-danger:hover {
+  background: rgba(255, 107, 91, 0.14);
+}
