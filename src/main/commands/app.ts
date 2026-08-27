@@ -33,12 +33,22 @@ function walk(dir: string, out: AppEntry[]): void {
   }
 }
 
+const CACHE_TTL_MS = 10 * 60 * 1000
+let cachedShortcuts: AppEntry[] | null = null
+let lastCacheTime = 0
+
 function listShortcuts(): AppEntry[] {
+  const now = Date.now()
+  if (cachedShortcuts && now - lastCacheTime < CACHE_TTL_MS) {
+    return cachedShortcuts
+  }
   const out: AppEntry[] = []
   for (const dir of START_MENU_DIRS) {
     walk(dir, out)
   }
   out.sort((a, b) => a.name.localeCompare(b.name))
+  cachedShortcuts = out
+  lastCacheTime = now
   return out
 }
 

@@ -1,49 +1,138 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
-import { COMMANDS, type CommandName, type SearchResultItem, type HistoryEntry } from '../../shared/types'
+import { useCallback, useEffect, useRef, useState, useMemo } from 'react'
+import {
+  COMMANDS,
+  type CommandName,
+  type SearchResultItem,
+  type HistoryEntry,
+  type CustomCommand,
+  type GrowOrigin
+} from '../../shared/types'
 import ConfigManager from './ConfigManager'
+import { windowMode } from './windowMode'
+import { formatAccelerator } from './accelerator'
 
 interface ListItem {
   key: string
   label: string
   sublabel?: string
+  // Set when this item fills the input rather than running anything — lets Tab accept it
+  // without also triggering Enter's "run" behavior for regular result items.
+  completion?: string
   onSelect: () => void
 }
 
 // Only these three commands get a shortcut, mapped to their Settings field — by design,
 // not every command (see the "//" Settings screen for the user-editable letters).
-const SHORTCUT_SETTINGS_FIELD: Record<'teams' | 'call' | 'link', string> = {
+const SHORTCUT_SETTINGS_FIELD: Record<'teams' | 'fav' | 'snippet', string> = {
   teams: 'teamsShortcut',
-  call: 'callShortcut',
-  link: 'linkShortcut'
+  fav: 'favShortcut',
+  snippet: 'snippetShortcut'
 }
 
 function parseInput(
   raw: string,
-  shortcuts: Record<string, CommandName>
+  shortcuts: Record<string, CommandName>,
+  customNames: Set<string>
 ): { command: CommandName | null; query: string } {
   if (!raw.startsWith('/')) return { command: null, query: '' }
   const spaceIdx = raw.indexOf(' ')
   if (spaceIdx === -1) return { command: null, query: raw.slice(1) }
   const name = raw.slice(1, spaceIdx)
+  const rest = raw.slice(spaceIdx + 1)
+  // Custom commands resolve to the single 'custom' CommandName, carrying their own name
+  // as the first token of the query so commands/custom.ts can tell which one was meant —
+  // same shape whether invoked directly ("/deploy ...") or via "/custom deploy ...".
+  if (customNames.has(name)) return { command: 'custom', query: `${name} ${rest}`.trim() }
   const command = COMMANDS.find((c) => c.name === name)?.name ?? shortcuts[name] ?? null
-  return { command, query: raw.slice(spaceIdx + 1) }
+  return { command, query: rest }
 }
 
 export default function CommandPalette(): JSX.Element {
   const [value, setValue] = useState('')
+  // Bar-mode only: whether the bar is pulled out to full palette size (icon otherwise) —
+  // driven by explicit user/hotkey actions rather than DOM focus, since the idle state is
+  // now just an icon button with nothing to focus. Authoritative state lives in main (see
+  // barWindow.ts); this mirrors it via 'palette-shown' (activate) and 'bar-collapsed'
+  // (deactivate).
+  const [barActive, setBarActive] = useState(false)
+  // Bar-mode only: whether "/move" mode is showing the drag handle instead of the
+  // icon/palette — mirrors main's moveModeActive via 'move-mode-changed'.
+  const [moveMode, setMoveMode] = useState(false)
   const [history, setHistory] = useState<HistoryEntry[]>([])
   const [results, setResults] = useState<SearchResultItem[]>([])
   const [calcResult, setCalcResult] = useState<string | null>(null)
   const [activeIndex, setActiveIndex] = useState(0)
   const [hotkeyError, setHotkeyError] = useState<string | null>(null)
+  const [commandError, setCommandError] = useState<string | null>(null)
+  const [historyEnabled, setHistoryEnabled] = useState(true)
+  const [disableMouseInput, setDisableMouseInput] = useState(false)
+  const [defaultCommand, setDefaultCommand] = useState<string>('')
   const [shortcuts, setShortcuts] = useState<Record<string, CommandName>>({})
+  const [hiddenCommands, setHiddenCommands] = useState<Set<CommandName>>(new Set())
+  const [customCommands, setCustomCommands] = useState<CustomCommand[]>([])
+  const [paletteHotkey, setPaletteHotkey] = useState('')
+  const [shimmerInfo, setShimmerInfo] = useState<{
+    corner: 'tl' | 'tr' | 'br' | 'bl'
+    color: string
+    gradient: string
+    flickerType: number | null
+  } | null>(null)
+  // Where the icon sat inside the now-full-size window, so the palette can grow out of it
+  // (see barWindow.ts's activateBar). Cleared once the animation has played, so a re-render
+  // mid-session — typing, results arriving — doesn't restart it.
+  const [growOrigin, setGrowOrigin] = useState<GrowOrigin | null>(null)
+  // 'pending' holds the palette mounted but invisible for one frame before 'running' starts
+  // the animation. Activation is the first time this window ever builds the palette subtree
+  // (idle is just the icon), so without the delay the very first grow competes with mounting
+  // the input/list, laying out fonts, and rasterizing the backdrop-filter — which is exactly
+  // why the first one looked jumpy while later ones were fine.
+  const [growPhase, setGrowPhase] = useState<'pending' | 'running' | 'collapsing' | null>(null)
   const inputRef = useRef<HTMLInputElement>(null)
   const activeItemRef = useRef<HTMLLIElement>(null)
+  // The palette opens wherever the cursor already happens to be resting, which fires a
+  // phantom mouseenter (and even the browser's native CSS :hover) on whatever list item
+  // ends up underneath it — stealing activeIndex from keyboard navigation, and visually
+  // highlighting a row the user never touched. Chromium also synthesizes a mousemove at
+  // the cursor's existing position when new content appears underneath it (to recompute
+  // hover state), so a plain "has mousemove fired yet" check isn't enough — track the last
+  // seen position and only stop ignoring once it actually changes. This needs to be state
+  // (not a ref) because disabling :hover via pointer-events requires a re-render.
+  const [ignoreMouse, setIgnoreMouse] = useState(true)
+  const lastMousePosRef = useRef<{ x: number; y: number } | null>(null)
+  // Guards against out-of-order IPC responses: every search/calc request bumps this, and a
+  // response is only applied if it's still the most recent one requested — otherwise a slow
+  // response for an older query could resolve after a newer one and overwrite its results.
+  const requestIdRef = useRef(0)
+  // Escape's keydown listener below is subscribed once (empty deps) so it doesn't get
+  // re-added on every keystroke — this ref lets it read the current input text without
+  // that stale-closure trap.
+  const valueRef = useRef(value)
+  useEffect(() => {
+    valueRef.current = value
+  }, [value])
+  // Same stale-closure guard as valueRef, for the same reason (blur/Escape are subscribed
+  // once with empty deps).
+  const moveModeRef = useRef(moveMode)
+  useEffect(() => {
+    moveModeRef.current = moveMode
+  }, [moveMode])
 
-  const { command, query } = parseInput(value, shortcuts)
+  const historyEnabledRef = useRef(historyEnabled)
+  useEffect(() => {
+    historyEnabledRef.current = historyEnabled
+  }, [historyEnabled])
+
+  const getDefaultValue = useCallback(() => (historyEnabledRef.current ? '' : '/'), [])
+
+  const customNames = new Set(customCommands.map((c) => c.command))
+  const { command, query } = parseInput(value, shortcuts, customNames)
   const showingCommandList = value.startsWith('/') && command === null
+  const visibleCommands = COMMANDS.filter((c) => !hiddenCommands.has(c.name))
   const filteredCommands = showingCommandList
-    ? COMMANDS.filter((c) => c.name.startsWith(value.slice(1)))
+    ? visibleCommands.filter((c) => c.name.startsWith(value.slice(1)))
+    : []
+  const filteredCustomCommands = showingCommandList
+    ? customCommands.filter((c) => c.command.startsWith(value.slice(1)))
     : []
   const shortcutFor = useCallback(
     (name: CommandName): string | undefined =>
@@ -55,10 +144,24 @@ export default function CommandPalette(): JSX.Element {
     window.api.getHistory().then(setHistory)
   }, [])
 
-  const refreshShortcuts = useCallback(() => {
+  const refreshSettings = useCallback(() => {
     window.api.getConfigEntries('settings').then((list) => {
       const settings = list[0]
       if (!settings) return
+      if (typeof settings.historyEnabled === 'boolean') {
+        const enabled = settings.historyEnabled
+        setHistoryEnabled(enabled)
+        historyEnabledRef.current = enabled
+      }
+      if (typeof settings.disableMouseInput === 'boolean') {
+        setDisableMouseInput(settings.disableMouseInput)
+      }
+      if (typeof settings.defaultCommand === 'string') {
+        setDefaultCommand(settings.defaultCommand)
+      }
+      if (Array.isArray(settings.hiddenCommands)) {
+        setHiddenCommands(new Set(settings.hiddenCommands as CommandName[]))
+      }
       const map: Record<string, CommandName> = {}
       for (const [command, field] of Object.entries(SHORTCUT_SETTINGS_FIELD) as [
         keyof typeof SHORTCUT_SETTINGS_FIELD,
@@ -71,25 +174,80 @@ export default function CommandPalette(): JSX.Element {
     })
   }, [])
 
+  // The palette hotkey is editable from Settings, so this re-runs on config-changed too.
+  const refreshHotkeys = useCallback(() => {
+    window.api.getHotkeys().then((hotkeys) => setPaletteHotkey(formatAccelerator(hotkeys.palette)))
+  }, [])
+
+  const refreshCustomCommands = useCallback(() => {
+    window.api.listCustomCommands().then(setCustomCommands)
+  }, [])
+
   useEffect(() => {
     refreshHistory()
-    refreshShortcuts()
-    window.api.onPaletteShown(() => {
-      setValue('')
-      setCalcResult(null)
-      setActiveIndex(0)
-      refreshHistory()
-      inputRef.current?.focus()
-    })
-    window.api.onConfigChanged(() => {
-      refreshHistory()
-      refreshShortcuts()
-    })
-    window.api.onHotkeyError((hotkey) => {
-      setHotkeyError(`Couldn't register hotkey "${hotkey}" — keeping the previous one.`)
-      setTimeout(() => setHotkeyError(null), 5000)
-    })
-  }, [refreshHistory, refreshShortcuts])
+    refreshSettings()
+    refreshHotkeys()
+    refreshCustomCommands()
+    // Each onX call below subscribes an ipcRenderer listener that outlives this component
+    // unless explicitly removed — without unsubscribing here, every remount (React effect
+    // re-run in StrictMode, Vite HMR in dev) would pile on another listener on top of the
+    // old ones instead of replacing them.
+    const unsubscribers = [
+      window.api.onPaletteShown(() => {
+        refreshHistory()
+        refreshSettings()
+        setValue((val) => (val === '' || val === '/' ? getDefaultValue() : val))
+        if (windowMode === 'bar') setBarActive(true)
+        inputRef.current?.focus()
+      }),
+      // Fires for both activation paths (icon click and hotkey), so it's the one place
+      // that needs to arm the grow animation.
+      window.api.onBarActivated((origin) => {
+        setBarActive(true)
+        setGrowOrigin(origin)
+        setGrowPhase('pending')
+        setValue((val) => (val === '' || val === '/' ? getDefaultValue() : val))
+      }),
+      window.api.onBarCollapsing((origin) => {
+        setGrowOrigin(origin)
+        setGrowPhase('collapsing')
+      }),
+      window.api.onBarCollapsed(() => {
+        setBarActive(false)
+        setGrowOrigin(null)
+        setGrowPhase(null)
+        setValue(getDefaultValue())
+        inputRef.current?.blur()
+      }),
+      window.api.onMoveModeChanged((active) => {
+        setMoveMode(active)
+        if (!active) {
+          // Dropped — the handle hands back to the idle icon at wherever it landed.
+          setBarActive(false)
+          setValue(getDefaultValue())
+        }
+      }),
+      window.api.onConfigChanged(() => {
+        refreshHistory()
+        refreshSettings()
+        refreshHotkeys()
+      }),
+      window.api.onCustomCommandsChanged(() => {
+        refreshCustomCommands()
+      }),
+      window.api.onHotkeyError((hotkey) => {
+        setHotkeyError(`Couldn't register hotkey "${hotkey}" — keeping the previous one.`)
+        setTimeout(() => setHotkeyError(null), 5000)
+      }),
+      window.api.onTerminalHotkeyError((hotkey) => {
+        setHotkeyError(`Couldn't register terminal hotkey "${hotkey}" — keeping the previous one.`)
+        setTimeout(() => setHotkeyError(null), 5000)
+      })
+    ]
+    return () => {
+      for (const unsubscribe of unsubscribers) unsubscribe()
+    }
+  }, [refreshHistory, refreshSettings, refreshHotkeys, refreshCustomCommands, getDefaultValue])
 
   useEffect(() => {
     setActiveIndex(0)
@@ -98,47 +256,213 @@ export default function CommandPalette(): JSX.Element {
       setCalcResult(null)
       return
     }
+    const requestId = ++requestIdRef.current
     if (command === 'calc') {
-      window.api.runCalc(query).then(setCalcResult)
+      window.api.runCalc(query).then((result) => {
+        if (requestIdRef.current === requestId) setCalcResult(result)
+      })
       setResults([])
       return
     }
-    window.api.search(command, query).then(setResults)
+    window.api.search(command, query).then((res) => {
+      if (requestIdRef.current === requestId) setResults(res)
+    })
   }, [command, query])
 
   useEffect(() => {
+    // main hides the window right after it loses focus (see win.on('blur', ...) in
+    // src/main/index.ts), so this fires reliably just before every hide, for both
+    // click-away and Escape/executing a command. Clearing state here — instead of on the
+    // next 'palette-shown' — means the window is already blank while offscreen, so the
+    // *next* show paints clean instead of flashing this session's stale query/results for
+    // a frame before the reset IPC round-trip lands.
+    const handleBlur = (): void => {
+      setValue(getDefaultValue())
+      setCalcResult(null)
+      setCommandError(null)
+      setActiveIndex(0)
+      setIgnoreMouse(true)
+      lastMousePosRef.current = null
+      // The bar never hides on blur (that's the point of it being "persistent") — but it
+      // should still collapse back to its idle icon once you click away, or drop the drag
+      // handle if a "/move" was left in progress.
+      if (windowMode === 'bar') {
+        if (moveModeRef.current) {
+          window.api.moveModeToggle()
+        } else {
+          window.api.barDeactivate()
+        }
+      }
+    }
+    window.addEventListener('blur', handleBlur)
+    return () => window.removeEventListener('blur', handleBlur)
+  }, [getDefaultValue])
+
+  useEffect(() => {
     const handler = (e: KeyboardEvent): void => {
-      if (e.key === 'Escape') {
+      if (e.key !== 'Escape') return
+      const defVal = getDefaultValue()
+      if (windowMode === 'bar') {
+        if (moveModeRef.current) {
+          // Dropping is handled by the onMoveModeChanged subscriber above.
+          window.api.moveModeToggle()
+          return
+        }
+        // First Escape clears the text (staying pulled out); a second Escape (now that
+        // there's nothing left to clear) releases focus and collapses back to the idle
+        // icon — the bar itself never hides.
+        if (valueRef.current !== '' && valueRef.current !== defVal) {
+          setValue(defVal)
+        } else {
+          window.api.barDeactivate()
+          inputRef.current?.blur()
+        }
+        return
+      }
+      if (valueRef.current !== '' && valueRef.current !== defVal) {
+        setValue(defVal)
+      } else {
         window.api.hidePalette()
       }
     }
     window.addEventListener('keydown', handler)
     return () => window.removeEventListener('keydown', handler)
-  }, [])
+  }, [getDefaultValue])
 
   useEffect(() => {
     activeItemRef.current?.scrollIntoView({ block: 'nearest' })
   }, [activeIndex])
 
-  const items: ListItem[] = (() => {
+  // Two frames: the first lets React commit the palette subtree and Chromium paint it (as
+  // an invisible, layer-promoted element); the second starts the animation against that
+  // already-warm layer. One frame isn't enough — the commit's paint hasn't necessarily
+  // flushed by the next rAF callback.
+  // 80ms delay: allows Electron's native window resize and Chromium paint to completely settle
+  // as an invisible layer before starting the scale-up animation, avoiding first-frame jumps.
+  useEffect(() => {
+    if (growPhase !== 'pending') return
+    const timer = setTimeout(() => {
+      setGrowPhase('running')
+    }, 80)
+    return () => clearTimeout(timer)
+  }, [growPhase])
+
+  // Focus the input whenever the main palette input is mounted (e.g. upon bar activation
+  // or when backing out of the "//" config manager view).
+  useEffect(() => {
+    if (!value.startsWith('//')) {
+      inputRef.current?.focus()
+    }
+  }, [value, barActive, windowMode])
+
+  useEffect(() => {
+    if (windowMode !== 'bar' || barActive) {
+      setShimmerInfo(null)
+      return
+    }
+
+    let timerId: NodeJS.Timeout
+    let resetId: NodeJS.Timeout
+
+    const SHIMMER_PALETTES = [
+      { color: '#5aa0ff', gradient: 'linear-gradient(135deg, #5aa0ff, #50e3c2)' },
+      { color: '#bd10e0', gradient: 'linear-gradient(135deg, #bd10e0, #5aa0ff)' },
+      { color: '#ff6bb4', gradient: 'linear-gradient(135deg, #ff6bb4, #ffb45a)' },
+      { color: '#50e3c2', gradient: 'linear-gradient(135deg, #50e3c2, #b8e986)' },
+      { color: '#ffb45a', gradient: 'linear-gradient(135deg, #ffb45a, #ff6b6b)' },
+      { color: '#a855f7', gradient: 'linear-gradient(135deg, #a855f7, #ec4899)' },
+      { color: '#38bdf8', gradient: 'linear-gradient(135deg, #38bdf8, #818cf8)' },
+      { color: '#34d399', gradient: 'linear-gradient(135deg, #34d399, #0ea5e9)' },
+      { color: '#f472b6', gradient: 'linear-gradient(135deg, #f472b6, #fb7185)' },
+      { color: '#fbbf24', gradient: 'linear-gradient(135deg, #fbbf24, #f59e0b)' },
+      { color: '#c084fc', gradient: 'linear-gradient(135deg, #c084fc, #38bdf8)' },
+      { color: '#4ade80', gradient: 'linear-gradient(135deg, #4ade80, #2dd4bf)' }
+    ]
+
+    const scheduleShimmer = (): void => {
+      const randomDelay = Math.floor(Math.random() * 5000) + 5000
+      timerId = setTimeout(() => {
+        const corners: Array<'tl' | 'tr' | 'br' | 'bl'> = ['tl', 'tr', 'br', 'bl']
+        const randomCorner = corners[Math.floor(Math.random() * corners.length)]
+        const randomTheme = SHIMMER_PALETTES[Math.floor(Math.random() * SHIMMER_PALETTES.length)]
+        const randomFlicker = Math.random() < 0.4
+        const flickerType = randomFlicker ? Math.floor(Math.random() * 3) + 1 : null
+        setShimmerInfo({
+          corner: randomCorner,
+          color: randomTheme.color,
+          gradient: randomTheme.gradient,
+          flickerType
+        })
+        resetId = setTimeout(() => {
+          setShimmerInfo(null)
+          scheduleShimmer()
+        }, 1200)
+      }, randomDelay)
+    }
+
+    scheduleShimmer()
+
+    return () => {
+      clearTimeout(timerId)
+      clearTimeout(resetId)
+    }
+  }, [windowMode, barActive])
+
+  const formatCommandList = useCallback((
+    builtinCmds: typeof COMMANDS,
+    customCmds: CustomCommand[]
+  ): ListItem[] => {
+    let visible = builtinCmds.filter((c) => !hiddenCommands.has(c.name))
+    if (defaultCommand) {
+      visible = [...visible].sort((a, b) => {
+        if (a.name === defaultCommand) return -1
+        if (b.name === defaultCommand) return 1
+        return 0
+      })
+    }
+    const builtins = visible.map((c) => {
+      const shortcut = shortcutFor(c.name)
+      return {
+        key: c.name,
+        label: `/${c.name}`,
+        sublabel: shortcut ? `${c.description} · /${shortcut}` : c.description,
+        onSelect: () => setValue(`/${c.name} `)
+      }
+    })
+    const custom = customCmds.map((c) => {
+      const detail = c.folder !== undefined ? `Browse ${c.folder}` : (c.action ?? '')
+      return {
+        key: `custom-${c.command}`,
+        label: `/${c.command}`,
+        sublabel: c.label ? `${c.label} — ${detail}` : detail,
+        onSelect: () => setValue(`/${c.command} `)
+      }
+    })
+    return [...builtins, ...custom]
+  }, [shortcutFor, hiddenCommands, defaultCommand])
+
+  const runCommand = useCallback((cmd: CommandName, item: SearchResultItem): void => {
+    window.api.executeCommand(cmd, item, query).then(handleExecuteResult)
+  }, [query])
+
+  const runFromHistory = useCallback((h: HistoryEntry): void => {
+    window.api.executeCommand(h.command, { label: h.label, value: h.value }, h.query).then(handleExecuteResult)
+  }, [])
+
+  const items: ListItem[] = useMemo(() => {
     if (value === '') {
-      return history.map((h) => ({
-        key: `${h.command}-${h.query}-${h.timestamp}`,
-        label: h.label,
-        sublabel: `/${h.command} ${h.query}`,
-        onSelect: () => runFromHistory(h)
-      }))
+      if (historyEnabled) {
+        return history.map((h) => ({
+          key: `${h.command}-${h.query}-${h.timestamp}`,
+          label: h.label,
+          sublabel: `/${h.command} ${h.query}`,
+          onSelect: () => runFromHistory(h)
+        }))
+      }
+      return formatCommandList(COMMANDS, customCommands)
     }
     if (showingCommandList) {
-      return filteredCommands.map((c) => {
-        const shortcut = shortcutFor(c.name)
-        return {
-          key: c.name,
-          label: `/${c.name}`,
-          sublabel: shortcut ? `${c.description} · /${shortcut}` : c.description,
-          onSelect: () => setValue(`/${c.name} `)
-        }
-      })
+      return formatCommandList(filteredCommands, filteredCustomCommands)
     }
     if (command === 'calc') {
       return []
@@ -148,10 +472,27 @@ export default function CommandPalette(): JSX.Element {
         key: `${r.value}|${r.label}`,
         label: r.label,
         sublabel: r.sublabel,
+        completion: r.completion,
         onSelect: () => {
           if (r.disabled) return
-          if (command === 'script' && r.isDirectory) {
-            setValue(r.value ? `/script ${r.value}/` : '/script ')
+          if (r.completion !== undefined) {
+            setValue(r.completion)
+            inputRef.current?.focus()
+            return
+          }
+          if (command === 'custom' && r.isDirectory) {
+            // A folder-type custom command's drill-down result — r.value is a bare relPath
+            // (see main/commands/custom.ts), so rebuild "/<name> <relPath>/" using whichever
+            // name the user actually typed (query is "<name> <rest>" for custom commands).
+            const cmdName = query.split(' ')[0]
+            setValue(r.value ? `/${cmdName} ${r.value}/` : `/${cmdName} `)
+            inputRef.current?.focus()
+            return
+          }
+          if (command === 'gif' && r.isDirectory) {
+            // /gif's query is just the raw text after "/gif " (no compound "<name> <rest>"
+            // encoding like "custom"), so the drill-down rebuild is simpler.
+            setValue(r.value ? `/gif ${r.value}/` : '/gif ')
             inputRef.current?.focus()
             return
           }
@@ -160,14 +501,40 @@ export default function CommandPalette(): JSX.Element {
       }))
     }
     return []
-  })()
+  }, [
+    value,
+    historyEnabled,
+    history,
+    runFromHistory,
+    formatCommandList,
+    customCommands,
+    showingCommandList,
+    filteredCommands,
+    filteredCustomCommands,
+    command,
+    results,
+    query,
+    runCommand
+  ])
 
-  function runCommand(cmd: CommandName, item: SearchResultItem): void {
-    window.api.executeCommand(cmd, item, query).then(refreshHistory)
+  function handleExecuteResult(error: string | null): void {
+    if (error) {
+      setCommandError(error)
+      setTimeout(() => setCommandError(null), 5000)
+      return
+    }
+    refreshHistory()
+    if (windowMode === 'bar') {
+      window.api.barDeactivate()
+    }
   }
 
-  function runFromHistory(h: HistoryEntry): void {
-    window.api.executeCommand(h.command, { label: h.label, value: h.value }, h.query).then(refreshHistory)
+  function closePalette(): void {
+    if (windowMode === 'bar') {
+      window.api.barDeactivate()
+    } else {
+      window.api.hidePalette()
+    }
   }
 
   function handleKeyDown(e: React.KeyboardEvent<HTMLInputElement>): void {
@@ -177,11 +544,20 @@ export default function CommandPalette(): JSX.Element {
     } else if (e.key === 'ArrowUp') {
       e.preventDefault()
       setActiveIndex((i) => Math.max(i - 1, 0))
+    } else if (e.key === 'Tab') {
+      // Accepts the active parameter suggestion (see the "custom" command's `completion`
+      // items) by filling it into the input, same as clicking it. No-op otherwise, so a
+      // plain Tab press doesn't accidentally run a regular result.
+      const item = items[activeIndex]
+      if (item?.completion !== undefined) {
+        e.preventDefault()
+        item.onSelect()
+      }
     } else if (e.key === 'Enter') {
       if (command === 'calc') {
         if (calcResult !== null) {
           navigator.clipboard.writeText(calcResult)
-          window.api.hidePalette()
+          closePalette()
         }
         return
       }
@@ -190,38 +566,141 @@ export default function CommandPalette(): JSX.Element {
     }
   }
 
+  if (windowMode === 'bar' && moveMode) {
+    return (
+      <div
+        className="palette palette-bar-move"
+        title="Drag to move — click here or press Escape to drop it"
+        onClick={() => window.api.moveModeToggle()}
+      >
+        <span className="move-handle-icon">✥</span>
+      </div>
+    )
+  }
+
+  if (windowMode === 'bar' && !barActive) {
+    return (
+      <div
+        className={`palette palette-bar-icon ${shimmerInfo ? `icon-shimmer shimmer-${shimmerInfo.corner}${shimmerInfo.flickerType ? ` has-flicker-${shimmerInfo.flickerType}` : ''}` : ''}`}
+        style={
+          shimmerInfo
+            ? ({
+                '--shimmer-color': shimmerInfo.color,
+                '--shimmer-gradient': shimmerInfo.gradient
+              } as React.CSSProperties)
+            : undefined
+        }
+      >
+        <button
+          className="bar-icon-button"
+          title={paletteHotkey ? `Open command bar (${paletteHotkey})` : 'Open command bar'}
+          // Deliberately doesn't flip barActive itself — main's 'bar-activated' does that,
+          // arriving with the geometry the grow animation needs. Setting it here too would
+          // paint the palette at full size for a frame before that geometry lands.
+          onClick={() => window.api.barActivate()}
+        >
+          {'/'}
+        </button>
+      </div>
+    )
+  }
+
+  // The grow animation is armed only for the frame right after activation (growOrigin is
+  // cleared on animationend), so ordinary re-renders don't replay it. The origin/scale come
+  // from main because only it knows where the icon was relative to the new window bounds.
+  const paletteClassName = [
+    'palette',
+    windowMode === 'bar' ? 'palette-bar' : '',
+    disableMouseInput ? 'disable-mouse-input' : '',
+    growPhase === 'pending' ? 'grow-pending' : '',
+    growPhase === 'running' ? 'grow-in' : '',
+    growPhase === 'collapsing' ? 'grow-out' : ''
+  ]
+    .filter(Boolean)
+    .join(' ')
+  // Scoped to the palette's own animation — animationend bubbles, so a descendant's
+  // animation must not be able to clear the grow state out from under it.
+  const onGrowEnd = (e: React.AnimationEvent<HTMLDivElement>): void => {
+    if (e.target !== e.currentTarget) return
+    setGrowOrigin(null)
+    setGrowPhase(null)
+  }
+  const growStyle = growOrigin
+    ? ({
+        '--grow-origin-x': `${growOrigin.originX}%`,
+        '--grow-origin-y': `${growOrigin.originY}%`,
+        '--grow-scale': growOrigin.scale
+      } as React.CSSProperties)
+    : undefined
+
   if (value.startsWith('//')) {
     return (
-      <div className="palette">
-        <ConfigManager onExit={() => setValue('')} />
+      <div className={paletteClassName} style={growStyle} onAnimationEnd={onGrowEnd}>
+        <ConfigManager
+          initialFilter={value.slice(2)}
+          onExit={(exitVal) => {
+            if (windowMode === 'bar' && exitVal === undefined) {
+              window.api.barDeactivate()
+            } else {
+              setValue(exitVal !== undefined ? exitVal : getDefaultValue())
+            }
+          }}
+        />
       </div>
     )
   }
 
   return (
-    <div className="palette">
+    <div
+      className={paletteClassName}
+      style={growStyle}
+      onAnimationEnd={onGrowEnd}
+      onMouseDown={(e) => {
+        if (
+          e.target !== inputRef.current &&
+          !(e.target instanceof HTMLInputElement) &&
+          !(e.target instanceof HTMLTextAreaElement)
+        ) {
+          e.preventDefault()
+          inputRef.current?.focus()
+        }
+      }}
+    >
       <input
         ref={inputRef}
         className="palette-input"
         value={value}
         placeholder="Type / for commands, // to manage config..."
-        autoFocus
+        autoFocus={windowMode === 'popup'}
         onChange={(e) => setValue(e.target.value)}
         onKeyDown={handleKeyDown}
       />
       {hotkeyError && <div className="palette-banner">{hotkeyError}</div>}
+      {commandError && <div className="palette-banner">{commandError}</div>}
       {command === 'calc' && (
         <div className="calc-result">{calcResult ?? (query ? 'Invalid expression' : 'Enter an expression')}</div>
       )}
       {command !== 'calc' && (
-        <ul className="palette-list">
+        <ul
+          className={ignoreMouse || disableMouseInput ? 'palette-list ignore-mouse' : 'palette-list'}
+          onMouseMove={(e) => {
+            if (disableMouseInput) return
+            const last = lastMousePosRef.current
+            if (last && (last.x !== e.clientX || last.y !== e.clientY)) {
+              if (ignoreMouse) setIgnoreMouse(false)
+            }
+            lastMousePosRef.current = { x: e.clientX, y: e.clientY }
+          }}
+        >
           {items.length === 0 && <li className="palette-empty">No results</li>}
           {items.map((item, idx) => (
             <li
               key={item.key}
               ref={idx === activeIndex ? activeItemRef : undefined}
               className={idx === activeIndex ? 'palette-item active' : 'palette-item'}
-              onMouseEnter={() => setActiveIndex(idx)}
+              onMouseEnter={() => {
+                if (!ignoreMouse) setActiveIndex(idx)
+              }}
               onClick={item.onSelect}
             >
               <span className="palette-item-label">{item.label}</span>

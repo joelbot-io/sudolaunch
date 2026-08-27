@@ -2,23 +2,24 @@
    independent of the Windows system theme setting. */
 :root {
   color-scheme: dark;
-  --bg: rgba(28, 28, 30, 0.9);
+  --bg: rgba(18, 18, 22, 0.85);
   --fg: #f2f2f2;
   --muted: #9a9a9a;
-  --border: rgba(255, 255, 255, 0.08);
+  --border: rgba(255, 255, 255, 0.14);
   --active-bg: rgba(90, 160, 255, 0.18);
   --accent: #5aa0ff;
-}
-
-* {
-  box-sizing: border-box;
+  --glass-blur: blur(32px) saturate(160%);
+  --glass-sheen: linear-gradient(180deg, rgba(255, 255, 255, 0.09), rgba(255, 255, 255, 0) 45%);
 }
 
 html,
 body,
 #root {
   margin: 0;
+  width: 100%;
   height: 100%;
+  overflow: hidden !important;
+  scrollbar-width: none !important;
   background: transparent;
   font-family:
     'Segoe UI',
@@ -27,18 +28,327 @@ body,
     sans-serif;
 }
 
+html::-webkit-scrollbar,
+body::-webkit-scrollbar,
+#root::-webkit-scrollbar {
+  display: none !important;
+  width: 0 !important;
+  height: 0 !important;
+}
+
+* {
+  box-sizing: border-box;
+}
+
 .palette {
   display: flex;
   flex-direction: column;
   height: 100%;
-  background: var(--bg);
+  background: var(--glass-sheen), var(--bg);
   color: var(--fg);
-  border-radius: 12px;
+  border-radius: 14px;
   border: 1px solid var(--border);
-  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.35);
+  box-shadow:
+    0 16px 48px rgba(0, 0, 0, 0.35),
+    inset 0 1px 0 rgba(255, 255, 255, 0.08);
   overflow: hidden;
-  -webkit-backdrop-filter: blur(20px);
-  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: var(--glass-blur);
+  backdrop-filter: var(--glass-blur);
+}
+
+/* Idle bar: a small icon (see CommandPalette.tsx's windowMode==='bar' && !barActive
+   branch) rather than the full palette DOM — main sizes the window to match (see
+   barWindow.ts's ICON_SIZE), so this just needs to fill it. */
+.palette-bar-icon {
+  display: flex;
+  position: relative;
+}
+
+.bar-icon-button {
+  flex: 1;
+  border: none;
+  background: transparent;
+  color: var(--accent);
+  font-size: 18px;
+  font-family: 'Cascadia Mono', Consolas, monospace;
+  cursor: pointer;
+}
+
+.bar-icon-button:hover {
+  background: var(--active-bg);
+}
+
+/* Edge shimmer effect for idle icons (bar icon and terminal icon) — single vibrant corner arc */
+.palette-bar-icon::after,
+.term-collapsed::after {
+  content: '';
+  position: absolute;
+  width: 18px;
+  height: 18px;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.3s ease;
+}
+
+.palette-bar-icon.shimmer-tl::after,
+.term-collapsed.shimmer-tl::after {
+  top: -1px;
+  left: -1px;
+  border-top-left-radius: 14px;
+  background: var(--shimmer-gradient, var(--accent));
+  -webkit-mask: radial-gradient(circle at 18px 18px, transparent 16px, #fff 16.5px);
+  mask: radial-gradient(circle at 18px 18px, transparent 16px, #fff 16.5px);
+}
+
+.palette-bar-icon.shimmer-tr::after,
+.term-collapsed.shimmer-tr::after {
+  top: -1px;
+  right: -1px;
+  border-top-right-radius: 14px;
+  background: var(--shimmer-gradient, var(--accent));
+  -webkit-mask: radial-gradient(circle at 0px 18px, transparent 16px, #fff 16.5px);
+  mask: radial-gradient(circle at 0px 18px, transparent 16px, #fff 16.5px);
+}
+
+.palette-bar-icon.shimmer-br::after,
+.term-collapsed.shimmer-br::after {
+  bottom: -1px;
+  right: -1px;
+  border-bottom-right-radius: 14px;
+  background: var(--shimmer-gradient, var(--accent));
+  -webkit-mask: radial-gradient(circle at 0px 0px, transparent 16px, #fff 16.5px);
+  mask: radial-gradient(circle at 0px 0px, transparent 16px, #fff 16.5px);
+}
+
+.palette-bar-icon.shimmer-bl::after,
+.term-collapsed.shimmer-bl::after {
+  bottom: -1px;
+  left: -1px;
+  border-bottom-left-radius: 14px;
+  background: var(--shimmer-gradient, var(--accent));
+  -webkit-mask: radial-gradient(circle at 18px 0px, transparent 16px, #fff 16.5px);
+  mask: radial-gradient(circle at 18px 0px, transparent 16px, #fff 16.5px);
+}
+
+.palette-bar-icon.icon-shimmer::after,
+.term-collapsed.icon-shimmer::after {
+  animation: corner-shimmer 1.2s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+}
+
+.palette-bar-icon.icon-shimmer.has-flicker-1::after,
+.term-collapsed.icon-shimmer.has-flicker-1::after {
+  animation: corner-shimmer-flicker-1 1.2s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+}
+
+.palette-bar-icon.icon-shimmer.has-flicker-2::after,
+.term-collapsed.icon-shimmer.has-flicker-2::after {
+  animation: corner-shimmer-flicker-2 1.2s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+}
+
+.palette-bar-icon.icon-shimmer.has-flicker-3::after,
+.term-collapsed.icon-shimmer.has-flicker-3::after {
+  animation: corner-shimmer-flicker-3 1.2s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+}
+
+@keyframes corner-shimmer {
+  0% {
+    opacity: 0;
+    filter: drop-shadow(0 0 0 transparent);
+  }
+  40% {
+    opacity: 0.22;
+    filter: drop-shadow(0 0 4px var(--shimmer-color, var(--accent)));
+  }
+  100% {
+    opacity: 0;
+    filter: drop-shadow(0 0 0 transparent);
+  }
+}
+
+@keyframes corner-shimmer-flicker-1 {
+  0% { opacity: 0; filter: drop-shadow(0 0 0 transparent); }
+  12% { opacity: 0.22; filter: drop-shadow(0 0 4px var(--shimmer-color, var(--accent))); }
+  18% { opacity: 0.04; filter: drop-shadow(0 0 0 transparent); }
+  26% { opacity: 0.18; filter: drop-shadow(0 0 3px var(--shimmer-color, var(--accent))); }
+  32% { opacity: 0.02; filter: drop-shadow(0 0 0 transparent); }
+  45% { opacity: 0.25; filter: drop-shadow(0 0 5px var(--shimmer-color, var(--accent))); }
+  75% { opacity: 0.20; filter: drop-shadow(0 0 4px var(--shimmer-color, var(--accent))); }
+  100% { opacity: 0; filter: drop-shadow(0 0 0 transparent); }
+}
+
+@keyframes corner-shimmer-flicker-2 {
+  0% { opacity: 0; filter: drop-shadow(0 0 0 transparent); }
+  15% { opacity: 0.10; filter: drop-shadow(0 0 2px var(--shimmer-color, var(--accent))); }
+  22% { opacity: 0.02; filter: drop-shadow(0 0 0 transparent); }
+  30% { opacity: 0.23; filter: drop-shadow(0 0 4px var(--shimmer-color, var(--accent))); }
+  36% { opacity: 0.05; filter: drop-shadow(0 0 1px var(--shimmer-color, var(--accent))); }
+  42% { opacity: 0.25; filter: drop-shadow(0 0 5px var(--shimmer-color, var(--accent))); }
+  80% { opacity: 0.18; filter: drop-shadow(0 0 3px var(--shimmer-color, var(--accent))); }
+  100% { opacity: 0; filter: drop-shadow(0 0 0 transparent); }
+}
+
+@keyframes corner-shimmer-flicker-3 {
+  0% { opacity: 0; filter: drop-shadow(0 0 0 transparent); }
+  30% { opacity: 0.23; filter: drop-shadow(0 0 4px var(--shimmer-color, var(--accent))); }
+  48% { opacity: 0.19; filter: drop-shadow(0 0 3px var(--shimmer-color, var(--accent))); }
+  54% { opacity: 0.02; filter: drop-shadow(0 0 0 transparent); }
+  60% { opacity: 0.25; filter: drop-shadow(0 0 5px var(--shimmer-color, var(--accent))); }
+  65% { opacity: 0.04; filter: drop-shadow(0 0 1px var(--shimmer-color, var(--accent))); }
+  72% { opacity: 0.21; filter: drop-shadow(0 0 4px var(--shimmer-color, var(--accent))); }
+  100% { opacity: 0; filter: drop-shadow(0 0 0 transparent); }
+}
+
+/* "/move" mode: the whole window becomes an OS-level drag handle (see main/barWindow.ts's
+   toggleMoveMode, which shrinks it to icon size first) — click it or press Escape to drop. */
+.palette-bar-move {
+  -webkit-app-region: drag;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: grab;
+  color: var(--accent);
+  font-size: 16px;
+}
+
+/* Shared by the bar's palette and the terminal panel: the OS window snaps to full size in
+   one step (main can't animate window bounds smoothly), so the illusion of growing out of
+   the icon is done here — scaling up from the icon's footprint, anchored wherever the icon
+   actually sat within the new bounds. The custom properties are set inline by
+   CommandPalette.tsx / Terminal.tsx from geometry main sends; the fallbacks cover a
+   dead-center icon. transform/opacity only, so this stays on the compositor. */
+
+/* Mounted and painted, but not yet shown — one frame of this is what lets the animation
+   below start against a warm layer instead of racing the content's first paint. */
+.grow-pending {
+  opacity: 0;
+  overflow: hidden !important;
+  will-change: transform, opacity;
+}
+
+.grow-in {
+  transform-origin: var(--grow-origin-x, 50%) var(--grow-origin-y, 50%);
+  animation: grow-in 150ms cubic-bezier(0.2, 0.8, 0.3, 1);
+  overflow: hidden !important;
+  will-change: transform, opacity;
+  /* backdrop-filter re-blurs everything behind the element on every frame, and the blur
+     radius interacts with the scaling geometry — by far the most expensive thing in this
+     animation. The palette is nearly transparent during it anyway, so it's dropped until
+     the last frame and only then does the glass settle in. */
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}
+
+.grow-out {
+  transform-origin: var(--grow-origin-x, 50%) var(--grow-origin-y, 50%);
+  animation: grow-out 150ms cubic-bezier(0.4, 0, 1, 1) forwards;
+  overflow: hidden !important;
+  will-change: transform, opacity;
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}
+
+/* Suppress all scrollbars and hide inner body/header during collapse and pending transitions to prevent visual artifacts */
+.grow-pending,
+.grow-out {
+  overflow: hidden !important;
+}
+
+.term-shell.grow-out .term-body,
+.term-shell.grow-out .term-header,
+.term-shell.grow-pending .term-body,
+.term-shell.grow-pending .term-header {
+  opacity: 0 !important;
+  visibility: hidden !important;
+  pointer-events: none !important;
+}
+
+.term-shell.grow-in .term-body {
+  animation: term-body-fade-in 140ms ease-out 20ms both;
+}
+
+@keyframes term-body-fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.grow-pending *,
+.grow-out *,
+.term-collapsed * {
+  scrollbar-width: none !important;
+}
+
+.grow-pending *::-webkit-scrollbar,
+.grow-pending *::-webkit-scrollbar-thumb,
+.grow-pending *::-webkit-scrollbar-track,
+.grow-out *::-webkit-scrollbar,
+.grow-out *::-webkit-scrollbar-thumb,
+.grow-out *::-webkit-scrollbar-track,
+.term-collapsed *::-webkit-scrollbar,
+.term-collapsed *::-webkit-scrollbar-thumb,
+.term-collapsed *::-webkit-scrollbar-track,
+.grow-pending .xterm-viewport,
+.grow-in .xterm-viewport,
+.grow-out .xterm-viewport {
+  width: 0 !important;
+  height: 0 !important;
+  display: none !important;
+  background: transparent !important;
+  opacity: 0 !important;
+  visibility: hidden !important;
+}
+
+@keyframes grow-in {
+  from {
+    transform: scale(var(--grow-scale, 0.07));
+    opacity: 0;
+  }
+  to {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+@keyframes grow-out {
+  from {
+    transform: scale(1);
+    opacity: 1;
+  }
+  to {
+    transform: scale(var(--grow-scale, 0.07));
+    opacity: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .grow-in {
+    animation: grow-in-fade 150ms ease-out;
+  }
+
+  .grow-out {
+    animation: grow-out-fade 150ms ease-in forwards;
+  }
+
+  @keyframes grow-in-fade {
+    from {
+      opacity: 0;
+    }
+    to {
+      opacity: 1;
+    }
+  }
+
+  @keyframes grow-out-fade {
+    from {
+      opacity: 1;
+    }
+    to {
+      opacity: 0;
+    }
+  }
 }
 
 .palette-input {
@@ -73,6 +383,23 @@ body,
   flex: 1;
 }
 
+.palette-list::-webkit-scrollbar {
+  width: 6px;
+}
+
+.palette-list::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.palette-list::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.15);
+  border-radius: 99px;
+}
+
+.palette-list::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.3);
+}
+
 .palette-item {
   display: flex;
   flex-direction: column;
@@ -84,6 +411,21 @@ body,
 .palette-item.active,
 .palette-item:hover {
   background: var(--active-bg);
+}
+
+/* Disables hover (and click) entirely until a real mousemove proves the cursor moved —
+   otherwise the row already sitting under the cursor when the palette opens shows this
+   same highlight via native :hover, independent of the active/keyboard state above. */
+.palette-list.ignore-mouse .palette-item {
+  pointer-events: none;
+}
+
+.disable-mouse-input,
+.disable-mouse-input *,
+.disable-mouse-input input,
+.disable-mouse-input textarea {
+  user-select: none !important;
+  -webkit-user-select: none !important;
 }
 
 .palette-item-label {
@@ -120,9 +462,27 @@ body,
   min-width: 0;
 }
 
-.config-app-checkbox {
-  pointer-events: none;
+
+.config-toggle-badge {
+  font-size: 11px;
+  font-weight: 500;
+  padding: 3px 10px;
+  border-radius: 99px;
+  user-select: none;
   flex-shrink: 0;
+  transition: all 0.15s ease;
+}
+
+.config-toggle-on {
+  background: rgba(90, 160, 255, 0.18);
+  color: var(--accent);
+  border: 1px solid rgba(90, 160, 255, 0.35);
+}
+
+.config-toggle-off {
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--muted);
+  border: 1px solid rgba(255, 255, 255, 0.1);
 }
 
 .config-item-delete {
@@ -214,4 +574,220 @@ body,
 
 .config-btn-danger:hover {
   background: rgba(255, 107, 91, 0.14);
+}
+
+/* Same semi-transparent glass look as .palette — the terminal window is its own
+   BrowserWindow (see main/terminalWindow.ts) so it needs its own root element, but should
+   read as part of the same visual family as the bar it hovers off of. */
+.term-shell {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  background: var(--glass-sheen), var(--bg);
+  color: var(--fg);
+  border-radius: 14px;
+  border: 1px solid var(--border);
+  box-shadow:
+    0 20px 50px rgba(0, 0, 0, 0.45),
+    inset 0 1px 0 rgba(255, 255, 255, 0.1),
+    inset 0 0 24px rgba(0, 0, 0, 0.2);
+  overflow: hidden;
+  -webkit-backdrop-filter: var(--glass-blur);
+  backdrop-filter: var(--glass-blur);
+}
+
+.term-icon {
+  flex: 1;
+  border: none;
+  background: transparent;
+  color: var(--accent);
+  font-size: 16px;
+  font-family: 'Cascadia Mono', Consolas, monospace;
+  cursor: pointer;
+}
+
+.term-icon:hover {
+  background: var(--active-bg);
+}
+
+/* The shell that was backing the panel has exited (see Terminal.tsx's sessionEnded) —
+   amber rather than the error red used for banners, since this isn't a failure: clicking
+   still works, it just starts a new session. The glow pulses so it reads as a status
+   change on an icon that's otherwise easy to overlook at 44px. */
+.term-icon-ended {
+  color: #ffb45a;
+  position: relative;
+}
+
+/* The pulse animates opacity on a static radial glow rather than the icon's own
+   text-shadow — this window sits always-on-top and the animation runs indefinitely, so
+   it needs to stay a compositor-only property instead of repainting every frame. */
+.term-icon-ended::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: radial-gradient(circle at center, rgba(255, 180, 90, 0.45), transparent 70%);
+  animation: term-icon-ended-glow 2s ease-in-out infinite;
+}
+
+.term-icon-ended:hover {
+  background: rgba(255, 180, 90, 0.16);
+}
+
+@keyframes term-icon-ended-glow {
+  0%,
+  100% {
+    opacity: 0.35;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+/* Users who've asked the OS to cut down on motion get the glow, without the pulse. */
+@media (prefers-reduced-motion: reduce) {
+  .term-icon-ended::after {
+    animation: none;
+    opacity: 0.7;
+  }
+}
+
+.term-header {
+  -webkit-app-region: drag;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 14px;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--muted);
+  background: rgba(255, 255, 255, 0.02);
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+  user-select: none;
+  cursor: grab;
+}
+
+.term-header:active {
+  cursor: grabbing;
+}
+
+.term-header-left {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.term-drag-handle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--muted);
+  opacity: 0.45;
+  transition: opacity 0.15s ease, color 0.15s ease;
+}
+
+.term-header:hover .term-drag-handle {
+  opacity: 0.85;
+  color: var(--accent);
+}
+
+.term-header-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.term-header-label::before {
+  content: '';
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--accent);
+  box-shadow: 0 0 6px var(--accent);
+}
+
+.term-collapse {
+  -webkit-app-region: no-drag;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--muted);
+  cursor: pointer;
+  border-radius: 6px;
+  transition: all 0.15s ease;
+}
+
+.term-collapse:hover {
+  background: rgba(255, 255, 255, 0.12);
+  border-color: rgba(255, 255, 255, 0.18);
+  color: var(--fg);
+  transform: translateY(1px);
+}
+
+.term-collapse:active {
+  transform: translateY(2px);
+  background: rgba(255, 255, 255, 0.18);
+}
+
+.term-body {
+  flex: 1;
+  min-height: 0;
+  padding: 6px 10px;
+  background: transparent;
+  overflow: hidden;
+}
+
+.term-body .xterm {
+  height: 100%;
+}
+
+.term-body .xterm,
+.term-body .xterm-viewport,
+.term-body .xterm-screen {
+  background: transparent !important;
+}
+
+.term-body .xterm-viewport {
+  overflow-x: hidden !important;
+  overflow-y: auto !important;
+}
+
+/* Custom sleek scrollbar for xterm viewport */
+.term-body .xterm-viewport::-webkit-scrollbar {
+  width: 6px;
+}
+
+.term-body .xterm-viewport::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.term-body .xterm-viewport::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.15);
+  border-radius: 99px;
+  transition: background 0.15s ease;
+}
+
+.term-body .xterm-viewport::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.3);
+}
+
+/* Instantly suppress the terminal body and header during collapsed, pending, and collapsing states */
+.term-collapsed .term-header,
+.term-collapsed .term-body,
+.grow-out .term-header,
+.grow-out .term-body,
+.grow-pending .term-header,
+.grow-pending .term-body {
+  display: none !important;
+}
+
+.term-expanded .term-icon {
+  display: none;
 }

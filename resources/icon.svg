@@ -1,0 +1,104 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" fill="none">
+  <defs>
+    <!-- Background Gradient -->
+    <radialGradient id="slBgGrad" cx="50%" cy="30%" r="70%">
+      <stop offset="0%" stop-color="#1e293b" />
+      <stop offset="60%" stop-color="#0f172a" />
+      <stop offset="100%" stop-color="#020617" />
+    </radialGradient>
+
+    <!-- Glowing Chevron Gradients -->
+    <linearGradient id="slGlowGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#00f2fe" />
+      <stop offset="40%" stop-color="#38bdf8" />
+      <stop offset="80%" stop-color="#3b82f6" />
+      <stop offset="100%" stop-color="#8b5cf6" />
+    </linearGradient>
+
+    <linearGradient id="slCursorGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#00f2fe" />
+      <stop offset="100%" stop-color="#10b981" />
+    </linearGradient>
+
+    <!-- Glass Rim Gradient -->
+    <linearGradient id="slBorderGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="rgba(56, 189, 248, 0.9)" />
+      <stop offset="50%" stop-color="rgba(255, 255, 255, 0.25)" />
+      <stop offset="100%" stop-color="rgba(139, 92, 246, 0.6)" />
+    </linearGradient>
+
+    <!-- Multi-stage Glow Filter -->
+    <filter id="slGlowFilter" x="-40%" y="-40%" width="180%" height="180%">
+      <feGaussianBlur stdDeviation="2" result="blur1" />
+      <feGaussianBlur stdDeviation="0.8" result="blur2" />
+      <feMerge>
+        <feMergeNode in="blur1" />
+        <feMergeNode in="blur2" />
+        <feMergeNode in="SourceGraphic" />
+      </feMerge>
+    </filter>
+
+    <filter id="slBackGlow" x="-30%" y="-30%" width="160%" height="160%">
+      <feGaussianBlur stdDeviation="3" result="backBlur" />
+    </filter>
+  </defs>
+
+  <!-- Ambient Backdrop Glow -->
+  <rect x="6" y="6" width="52" height="52" rx="14" fill="#00f2fe" opacity="0.18" filter="url(#slBackGlow)" />
+
+  <!-- Background Squircle Tile -->
+  <rect x="5" y="5" width="54" height="54" rx="13" fill="url(#slBgGrad)" />
+  <rect x="5" y="5" width="54" height="54" rx="13" stroke="url(#slBorderGrad)" stroke-width="1.5" />
+
+  <!-- Launch Thrust / Grid Accent Lines -->
+  <path d="M14 32h8" stroke="#38bdf8" stroke-width="1.5" stroke-linecap="round" opacity="0.4" />
+  <path d="M12 26h6" stroke="#38bdf8" stroke-width="1" stroke-linecap="round" opacity="0.25" />
+  <path d="M12 38h6" stroke="#38bdf8" stroke-width="1" stroke-linecap="round" opacity="0.25" />
+
+  <!-- Glowing Terminal Launch Chevron ">" & Cursor "_" -->
+  <g filter="url(#slGlowFilter)">
+    <!-- Neon Glow Base for Chevron -->
+    <path
+      d="M20 20L33 32L20 44"
+      stroke="url(#slGlowGrad)"
+      stroke-width="5"
+      stroke-linecap="round"
+      stroke-linejoin="round"
+    />
+    <!-- Core Bright Line for Chevron -->
+    <path
+      d="M20 20L33 32L20 44"
+      stroke="#ffffff"
+      stroke-width="2"
+      stroke-linecap="round"
+      stroke-linejoin="round"
+      opacity="0.9"
+    />
+
+    <!-- Neon Glow Base for Underscore Cursor -->
+    <line
+      x1="36"
+      y1="44"
+      x2="46"
+      y2="44"
+      stroke="url(#slCursorGrad)"
+      stroke-width="5"
+      stroke-linecap="round"
+    />
+    <!-- Core Bright Line for Underscore Cursor -->
+    <line
+      x1="36"
+      y1="44"
+      x2="46"
+      y2="44"
+      stroke="#ffffff"
+      stroke-width="2"
+      stroke-linecap="round"
+      opacity="0.9"
+    />
+  </g>
+
+  <!-- Sparkle Accent -->
+  <circle cx="47" cy="17" r="1.5" fill="#00f2fe" filter="url(#slGlowFilter)" />
+  <circle cx="47" cy="17" r="0.75" fill="#ffffff" />
+</svg>

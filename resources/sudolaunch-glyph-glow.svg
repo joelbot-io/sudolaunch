@@ -1,0 +1,99 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="100%" height="100%" fill="none">
+  <defs>
+    <!-- Glyph Neon Gradients -->
+    <linearGradient id="glyphGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#00f2fe" />
+      <stop offset="45%" stop-color="#38bdf8" />
+      <stop offset="80%" stop-color="#3b82f6" />
+      <stop offset="100%" stop-color="#8b5cf6" />
+    </linearGradient>
+
+    <linearGradient id="glyphHighlight" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#ffffff" stop-opacity="0.95" />
+      <stop offset="50%" stop-color="#67e8f9" stop-opacity="0.8" />
+      <stop offset="100%" stop-color="#38bdf8" stop-opacity="0.4" />
+    </linearGradient>
+
+    <linearGradient id="cursorGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#00f2fe" />
+      <stop offset="70%" stop-color="#38bdf8" />
+      <stop offset="100%" stop-color="#10b981" />
+    </linearGradient>
+
+    <linearGradient id="thrustGrad" x1="0%" y1="50%" x2="100%" y2="50%">
+      <stop offset="0%" stop-color="#00f2fe" stop-opacity="0.8" />
+      <stop offset="50%" stop-color="#3b82f6" stop-opacity="0.4" />
+      <stop offset="100%" stop-color="#8b5cf6" stop-opacity="0" />
+    </linearGradient>
+
+    <!-- Multi-stage Glow Filter -->
+    <filter id="glow" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur in="SourceGraphic" stdDeviation="16" result="blur1" />
+      <feGaussianBlur in="SourceGraphic" stdDeviation="8" result="blur2" />
+      <feGaussianBlur in="SourceGraphic" stdDeviation="3" result="blur3" />
+      <feMerge>
+        <feMergeNode in="blur1" />
+        <feMergeNode in="blur2" />
+        <feMergeNode in="blur3" />
+        <feMergeNode in="SourceGraphic" />
+      </feMerge>
+    </filter>
+  </defs>
+
+  <!-- Speed/Thrust Trail from Prompt -->
+  <g filter="url(#glow)">
+    <path d="M72 256 L192 256" stroke="url(#thrustGrad)" stroke-width="8" stroke-linecap="round" opacity="0.45" />
+    <path d="M48 210 L144 210" stroke="url(#thrustGrad)" stroke-width="5" stroke-linecap="round" opacity="0.3" />
+    <path d="M48 302 L144 302" stroke="url(#thrustGrad)" stroke-width="5" stroke-linecap="round" opacity="0.3" />
+
+    <!-- Terminal Prompt Chevron / Supersonic Warp Wedge ">" -->
+    <!-- Outer Glow Stroke -->
+    <path
+      d="M136 128 L280 256 L136 384"
+      stroke="url(#glyphGrad)"
+      stroke-width="44"
+      stroke-linecap="round"
+      stroke-linejoin="round"
+    />
+
+    <!-- Inner Crisp Core Beam -->
+    <path
+      d="M136 128 L280 256 L136 384"
+      stroke="url(#glyphHighlight)"
+      stroke-width="22"
+      stroke-linecap="round"
+      stroke-linejoin="round"
+    />
+
+    <!-- Center White Filament -->
+    <path
+      d="M136 128 L280 256 L136 384"
+      stroke="#ffffff"
+      stroke-width="8"
+      stroke-linecap="round"
+      stroke-linejoin="round"
+      opacity="0.95"
+    />
+
+    <!-- Active Command Cursor Underscore "_" -->
+    <line
+      x1="310"
+      y1="384"
+      x2="410"
+      y2="384"
+      stroke="url(#cursorGrad)"
+      stroke-width="42"
+      stroke-linecap="round"
+    />
+    <line
+      x1="310"
+      y1="384"
+      x2="410"
+      y2="384"
+      stroke="#ffffff"
+      stroke-width="16"
+      stroke-linecap="round"
+      opacity="0.95"
+    />
+  </g>
+</svg>

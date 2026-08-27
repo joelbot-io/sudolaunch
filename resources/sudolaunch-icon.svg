@@ -1,0 +1,192 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="100%" height="100%" fill="none">
+  <defs>
+    <!-- Background Gradients -->
+    <radialGradient id="bgAmbient" cx="50%" cy="30%" r="70%">
+      <stop offset="0%" stop-color="#1e2942" stop-opacity="0.8" />
+      <stop offset="50%" stop-color="#0c1220" stop-opacity="0.95" />
+      <stop offset="100%" stop-color="#04060a" stop-opacity="1" />
+    </radialGradient>
+
+    <radialGradient id="neonBackdropGlow" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#00f2fe" stop-opacity="0.28" />
+      <stop offset="45%" stop-color="#0072ff" stop-opacity="0.12" />
+      <stop offset="80%" stop-color="#7928ca" stop-opacity="0.05" />
+      <stop offset="100%" stop-color="#000000" stop-opacity="0" />
+    </radialGradient>
+
+    <!-- Border Gradient -->
+    <linearGradient id="squircleBorder" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#38bdf8" stop-opacity="0.9" />
+      <stop offset="30%" stop-color="#0284c7" stop-opacity="0.4" />
+      <stop offset="70%" stop-color="#1e293b" stop-opacity="0.2" />
+      <stop offset="100%" stop-color="#818cf8" stop-opacity="0.6" />
+    </linearGradient>
+
+    <linearGradient id="innerRim" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#ffffff" stop-opacity="0.18" />
+      <stop offset="100%" stop-color="#ffffff" stop-opacity="0.02" />
+    </linearGradient>
+
+    <!-- Glyph Neon Gradients -->
+    <linearGradient id="chevronPrimaryGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#00f2fe" />
+      <stop offset="45%" stop-color="#38bdf8" />
+      <stop offset="80%" stop-color="#2563eb" />
+      <stop offset="100%" stop-color="#7c3aed" />
+    </linearGradient>
+
+    <linearGradient id="chevronHighlight" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#ffffff" stop-opacity="0.95" />
+      <stop offset="50%" stop-color="#67e8f9" stop-opacity="0.8" />
+      <stop offset="100%" stop-color="#38bdf8" stop-opacity="0" />
+    </linearGradient>
+
+    <linearGradient id="cursorGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#00f2fe" />
+      <stop offset="60%" stop-color="#38bdf8" />
+      <stop offset="100%" stop-color="#4ade80" />
+    </linearGradient>
+
+    <linearGradient id="rocketThrustGrad" x1="0%" y1="50%" x2="100%" y2="50%">
+      <stop offset="0%" stop-color="#00f2fe" stop-opacity="0.8" />
+      <stop offset="50%" stop-color="#3b82f6" stop-opacity="0.5" />
+      <stop offset="100%" stop-color="#8b5cf6" stop-opacity="0" />
+    </linearGradient>
+
+    <!-- Glow Filters -->
+    <filter id="superGlow" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur in="SourceGraphic" stdDeviation="16" result="blur1" />
+      <feGaussianBlur in="SourceGraphic" stdDeviation="8" result="blur2" />
+      <feGaussianBlur in="SourceGraphic" stdDeviation="3" result="blur3" />
+      <feColorMatrix in="blur1" type="matrix" values="
+        1 0 0 0 0
+        0 1 0 0 0.4
+        0 0 1 0 0.9
+        0 0 0 1.2 0" result="boostBlur" />
+      <feMerge>
+        <feMergeNode in="boostBlur" />
+        <feMergeNode in="blur2" />
+        <feMergeNode in="blur3" />
+        <feMergeNode in="SourceGraphic" />
+      </feMerge>
+    </filter>
+
+    <filter id="softAura" x="-40%" y="-40%" width="180%" height="180%">
+      <feGaussianBlur in="SourceGraphic" stdDeviation="24" result="aura" />
+    </filter>
+
+    <filter id="cursorPulse" x="-60%" y="-60%" width="220%" height="220%">
+      <feGaussianBlur in="SourceGraphic" stdDeviation="10" result="blur" />
+      <feGaussianBlur in="SourceGraphic" stdDeviation="4" result="sharpBlur" />
+      <feMerge>
+        <feMergeNode in="blur" />
+        <feMergeNode in="sharpBlur" />
+        <feMergeNode in="SourceGraphic" />
+      </feMerge>
+    </filter>
+  </defs>
+
+  <!-- Ambient Glow behind Squircle -->
+  <rect x="56" y="56" width="400" height="400" rx="100" fill="url(#neonBackdropGlow)" filter="url(#softAura)" />
+
+  <!-- Outer Glassmorphic Squircle Tile -->
+  <rect x="48" y="48" width="416" height="416" rx="96" fill="url(#bgAmbient)" />
+  
+  <!-- Subtle Grid Pattern / Tech Accents in Tile -->
+  <g opacity="0.07" stroke="#38bdf8" stroke-width="1.5">
+    <line x1="48" y1="152" x2="464" y2="152" />
+    <line x1="48" y1="256" x2="464" y2="256" />
+    <line x1="48" y1="360" x2="464" y2="360" />
+    <line x1="152" y1="48" x2="152" y2="464" />
+    <line x1="256" y1="48" x2="256" y2="464" />
+    <line x1="360" y1="48" x2="360" y2="464" />
+  </g>
+
+  <!-- Inner Specular Rim -->
+  <rect x="50" y="50" width="412" height="412" rx="94" stroke="url(#innerRim)" stroke-width="1.5" />
+  <!-- Outer Glowing Border -->
+  <rect x="48" y="48" width="416" height="416" rx="96" stroke="url(#squircleBorder)" stroke-width="2.5" />
+
+  <!-- Top-Right Ambient Sudo Star / Launch Sparkle -->
+  <g transform="translate(372, 108)" opacity="0.85">
+    <path d="M0 -14 Q0 0 14 0 Q0 0 0 14 Q0 0 -14 0 Q0 0 0 -14 Z" fill="#00f2fe" filter="url(#cursorPulse)" />
+    <circle cx="0" cy="0" r="2.5" fill="#ffffff" />
+  </g>
+
+  <!-- Main Hero Icon Elements: Supersonic Launch Prompt (Sudo >_) -->
+  <g filter="url(#superGlow)">
+    <!-- Speed/Thrust Trail from Prompt -->
+    <path d="M128 256 L224 256" stroke="url(#rocketThrustGrad)" stroke-width="6" stroke-linecap="round" opacity="0.4" />
+    <path d="M104 220 L184 220" stroke="url(#rocketThrustGrad)" stroke-width="4" stroke-linecap="round" opacity="0.25" />
+    <path d="M104 292 L184 292" stroke="url(#rocketThrustGrad)" stroke-width="4" stroke-linecap="round" opacity="0.25" />
+
+    <!-- Terminal Prompt Chevron / Supersonic Warp Wedge ">" -->
+    <!-- Outer Deep Glow Layer -->
+    <path
+      d="M164 156 L278 256 L164 356"
+      stroke="url(#chevronPrimaryGrad)"
+      stroke-width="36"
+      stroke-linecap="round"
+      stroke-linejoin="round"
+      opacity="0.85"
+    />
+
+    <!-- Inner Crisp Core Beam -->
+    <path
+      d="M164 156 L278 256 L164 356"
+      stroke="url(#chevronHighlight)"
+      stroke-width="18"
+      stroke-linecap="round"
+      stroke-linejoin="round"
+    />
+
+    <!-- Ultra-Bright Center Filament -->
+    <path
+      d="M164 156 L278 256 L164 356"
+      stroke="#ffffff"
+      stroke-width="7"
+      stroke-linecap="round"
+      stroke-linejoin="round"
+      opacity="0.9"
+    />
+
+    <!-- Elevation "Sudo" Lightning Accent Notch (Subtle Power Bolt on the Chevron Vertex) -->
+    <path
+      d="M260 236 L284 256 L260 276"
+      stroke="#00f2fe"
+      stroke-width="8"
+      stroke-linecap="round"
+      stroke-linejoin="round"
+      opacity="0.95"
+    />
+
+    <!-- Terminal Underscore / Launch Platform / Active Command Bar Cursor "_" -->
+    <!-- Glow Backdrop for Cursor -->
+    <line
+      x1="304"
+      y1="356"
+      x2="384"
+      y2="356"
+      stroke="url(#cursorGrad)"
+      stroke-width="34"
+      stroke-linecap="round"
+      opacity="0.85"
+    />
+    <!-- Core Crisp Beam for Cursor -->
+    <line
+      x1="304"
+      y1="356"
+      x2="384"
+      y2="356"
+      stroke="#ffffff"
+      stroke-width="14"
+      stroke-linecap="round"
+    />
+  </g>
+
+  <!-- Small Terminal Status Indicator / Command Ready Orb -->
+  <g transform="translate(164, 156)">
+    <circle cx="0" cy="0" r="6" fill="#00f2fe" filter="url(#cursorPulse)" />
+    <circle cx="0" cy="0" r="2.5" fill="#ffffff" />
+  </g>
+</svg>

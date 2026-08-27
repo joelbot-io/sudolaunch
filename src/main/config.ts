@@ -2,7 +2,16 @@ import { app } from 'electron'
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'fs'
 import { join } from 'path'
 import { watch as chokidarWatch } from 'chokidar'
-import type { Contact, Snippet, Link, HistoryEntry, Settings, ConfigType, ConfigEntry } from '../shared/types'
+import type {
+  Contact,
+  Snippet,
+  Link,
+  TeamLink,
+  HistoryEntry,
+  Settings,
+  ConfigType,
+  ConfigEntry
+} from '../shared/types'
 
 export const CONFIG_DIR = join(app.getPath('home'), '.sudolaunch')
 
@@ -10,19 +19,31 @@ const PATHS = {
   contacts: join(CONFIG_DIR, 'contacts.json'),
   snippets: join(CONFIG_DIR, 'snippets.json'),
   links: join(CONFIG_DIR, 'links.json'),
+  teamLinks: join(CONFIG_DIR, 'teamLinks.json'),
   history: join(CONFIG_DIR, 'history.json'),
   settings: join(CONFIG_DIR, 'settings.json')
 }
 
 const DEFAULT_SETTINGS: Settings = {
   hotkey: 'CommandOrControl+Space',
+  terminalHotkey: 'Control+Alt+T',
+  historyEnabled: true,
   historyLimit: 25,
   autoStart: true,
+  disableMouseInput: false,
+  defaultCommand: '',
   disabledApps: [],
   teamsShortcut: 't',
-  callShortcut: 'c',
-  linkShortcut: 'l',
-  scriptsFolder: ''
+  favShortcut: 'f',
+  snippetShortcut: 's',
+  searchExcludedCommands: [],
+  hiddenCommands: [],
+  gifFolder: 'gif',
+  lookupFolder: 'lookup',
+  barEnabled: true,
+  barPosition: null,
+  termPosition: null,
+  termWindowPosition: null
 }
 
 const SEED_CONTACTS: Contact[] = [
@@ -42,6 +63,7 @@ export function ensureConfigDir(): void {
   seedFile(PATHS.contacts, SEED_CONTACTS)
   seedFile(PATHS.snippets, [] as Snippet[])
   seedFile(PATHS.links, [] as Link[])
+  seedFile(PATHS.teamLinks, [] as TeamLink[])
   seedFile(PATHS.history, [] as HistoryEntry[])
   seedFile(PATHS.settings, DEFAULT_SETTINGS)
 }
@@ -65,6 +87,10 @@ export function readSnippets(): Snippet[] {
 
 export function readLinks(): Link[] {
   return readJson<Link[]>(PATHS.links, [])
+}
+
+export function readTeamLinks(): TeamLink[] {
+  return readJson<TeamLink[]>(PATHS.teamLinks, [])
 }
 
 export function readSettings(): Settings {
@@ -91,6 +117,10 @@ export function writeLinks(links: Link[]): void {
   writeFileSync(PATHS.links, JSON.stringify(links, null, 2), 'utf-8')
 }
 
+export function writeTeamLinks(teamLinks: TeamLink[]): void {
+  writeFileSync(PATHS.teamLinks, JSON.stringify(teamLinks, null, 2), 'utf-8')
+}
+
 export function writeSettings(settings: Settings): void {
   writeFileSync(PATHS.settings, JSON.stringify(settings, null, 2), 'utf-8')
 }
@@ -106,6 +136,8 @@ export function getConfigEntries(type: ConfigType): ConfigEntry[] {
       return readSnippets() as unknown as ConfigEntry[]
     case 'links':
       return readLinks() as unknown as ConfigEntry[]
+    case 'teamLinks':
+      return readTeamLinks() as unknown as ConfigEntry[]
     case 'settings':
       return [readSettings() as unknown as ConfigEntry]
   }
@@ -119,6 +151,8 @@ function writeConfigList(type: Exclude<ConfigType, 'settings'>, list: ConfigEntr
       return writeSnippets(list as unknown as Snippet[])
     case 'links':
       return writeLinks(list as unknown as Link[])
+    case 'teamLinks':
+      return writeTeamLinks(list as unknown as TeamLink[])
   }
 }
 
@@ -157,7 +191,7 @@ function watchFiles(paths: string[], onChange: (path: string) => void): void {
 }
 
 export function watchConfig(onChange: () => void): void {
-  watchFiles([PATHS.contacts, PATHS.snippets, PATHS.links], () => onChange())
+  watchFiles([PATHS.contacts, PATHS.snippets, PATHS.links, PATHS.teamLinks], () => onChange())
 }
 
 export function watchSettings(onChange: (settings: Settings) => void): void {

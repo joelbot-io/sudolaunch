@@ -5,6 +5,9 @@ directories:
   buildResources: build
 files:
   - out/**/*
+asarUnpack:
+  - node_modules/node-window-manager/**
+  - node_modules/electron-clipboard-ex/**
 extraResources:
   - from: resources
     to: .
@@ -13,6 +16,11 @@ win:
   artifactName: '${productName}-${version}-setup.${ext}'
 nsis:
   oneClick: false
+  # Per-user install (the electron-builder default when this is unset, but pinned
+  # explicitly here) — installs to %LOCALAPPDATA%\Programs\${productName} in the user's
+  # own profile, so it needs no admin rights and won't accidentally land in Program Files
+  # if allowToChangeInstallationDirectory lets someone browse there.
+  perMachine: false
   allowToChangeInstallationDirectory: true
   createDesktopShortcut: true
   createStartMenuShortcut: true
