@@ -8,7 +8,7 @@ A global-hotkey command palette, persistent command bar, and drop-down terminal 
 - [Command bar](#command-bar)
 - [Terminal](#terminal)
 - [Lookup tables](#lookup-tables)
-- [In-App Configuration (`//`)](#in-app-configuration-)
+- [In-App Configuration (`/settings`)](#in-app-configuration-settings)
 - [Configuration Files](#configuration-files)
 - [Custom commands](#custom-commands)
 - [Requirements](#requirements)
@@ -22,47 +22,51 @@ A global-hotkey command palette, persistent command bar, and drop-down terminal 
 
 | Command | Behavior |
 |---|---|
+| `/search <query>` | Universal multi-source search across contacts, links, snippets, apps, windows, custom commands, and GIFs |
+| `/app <query>` | Fuzzy-search Start Menu shortcuts and installed applications, launch (cached in-memory with a 10-minute TTL for fast typing) |
 | `/teams <query>` | Fuzzy-search contacts and team/channel deep links, open a Teams chat or navigate to a channel |
 | `/mail <query>` | Fuzzy-search contacts, compose an email in your default mail client |
 | `/snippet <query>` | Fuzzy-search snippets, copy text directly to clipboard |
 | `/fav <query>` | Fuzzy-search saved links, open URL in default browser |
-| `/app <query>` | Fuzzy-search Start Menu shortcuts and installed applications, launch (cached in-memory with a 10-minute TTL for fast typing) |
 | `/focus <query>` | Fuzzy-search open desktop windows by title, restore and bring to front |
 | `/calc <expression>` | Evaluate a math expression inline; Enter copies the result to clipboard |
 | `/<custom name> <args>` | Run a user-defined custom PowerShell command, or browse a folder of scripts (see [Custom commands](#custom-commands)) |
-| `/search <query>` | Universal multi-source search across contacts, links, snippets, apps, windows, custom commands, and GIFs |
 | `/gif <query>` | Fuzzy-search and copy animated GIFs from your GIF folder to clipboard |
 | `/lookup <table> <query>` | Fuzzy-search a JSON table from your lookup folder; select a record to drill into its fields, then select a field to copy its value to clipboard |
-| `/view` | Toggle the persistent command bar on/off; `/view reset` returns it to its default bottom-center dock (see [Command bar](#command-bar)) |
-| `/term` | Expand/collapse the persistent drop-down terminal (see [Terminal](#terminal)) |
-| `/move` | Drag the command bar to a new position on screen (see [Command bar](#command-bar)) |
+| `/settings` | Open the interactive configuration manager (alias: `/config`) |
+| `/term [command]` | Expand/collapse the persistent terminal, or execute a shell command directly (e.g. `/term git status`) |
+| `/view` | Toggle the persistent command bar on/off; `/view reset` returns both buttons to their default dock |
+| `/move` | Interactively drag the command bar and terminal icons to new positions on screen |
 | `/default` | Set or clear the default command prioritized at the top of the suggestions list |
 | `/restart` | Relaunch the application |
 
-`/teams`, `/fav`, and `/snippet` can each have a single-character shortcut (e.g. `/t` for `/teams`, `/f` for `/fav`, `/s` for `/snippet`), configurable in Settings (`//`).
-
-When opened with an empty input, the palette displays your most recent executed commands (configurable), re-runnable with Enter.
+- **Unprefixed Search**: Typing text without a leading slash (e.g. `chrome`, `github`, `project`) automatically falls back to universal search (`/search`), or your chosen default command.
+- **Shortcuts**: `/teams` (`/t`), `/fav` (`/f`), `/snippet` (`/s`), and `/settings` (`/config`) provide fast single/short aliases.
+- **Recent History**: When opened with an empty input, the palette displays your most recent executed commands, re-runnable with Enter.
+- **Empty Folder Helper**: If `~/.sudolaunch/gif` or `~/.sudolaunch/lookup` is empty, selecting `/gif` or `/lookup` displays an actionable prompt; pressing Enter opens the folder in Explorer.
 
 ## Command bar
 
-Alongside the hotkey popup, a second window sits as a small frosted-glass icon (bottom-center by default) and stays docked on screen — it's on by default and doesn't hide when you click away.
+Alongside the hotkey popup, a second window sits as a frosted-glass icon dock (bottom-center by default) and stays docked on screen — it's on by default and doesn't hide when you click away.
 
-- **Expand**: Click the icon or press `Ctrl+Space` (when the bar is enabled) to expand it to the full palette size, ready to search and run any command.
-- **Collapse**: Executing a command or pressing Escape (once to clear text, once more to release focus) collapses it back to the docked icon.
-- **Reposition (`/move`)**: Type `/move` from the expanded bar to shrink it to a grab handle you can drag anywhere on screen. Click it or press Escape to drop it. The new position is saved in `settings.json` (`barPosition`) and restored across restarts.
-- **Reset (`/view reset`)**: Returns the command bar back to its default bottom-center dock.
+- **Expand**: Click the `/` icon or press `Ctrl+Space` (when the bar is enabled) to open the palette. The window smoothly expands and hovers above the docked icon without obscuring the dock buttons or taskbar.
+- **Collapse**: Executing a command or pressing Escape collapses the palette back to the docked icon.
+- **Reposition (`/move`)**: Type `/move` to enter move mode where you can drag the `/` and `>_` buttons anywhere on screen (or move them individually via `/move-bar` and `/move-term`). Positions are saved in `settings.json` and restored across restarts.
+- **Edge-Aware Docking**: When docked near the left or right edges of the screen, the dock buttons automatically switch to a vertical layout to prevent off-screen clipping.
+- **Reset (`/view reset`)**: Returns both the command bar and terminal buttons back to their default dock.
 - **Toggle Visibility (`/view`)**: Toggles the persistent bar on/off entirely. When disabled, `Ctrl+Space` opens the centered standalone popup window instead.
 
 ## Terminal
 
-A real, interactive PowerShell session (powered by `node-pty` + `xterm.js`) is integrated directly with the command bar:
+A real, interactive PowerShell session (powered by `node-pty` + `xterm.js`) is integrated directly alongside the command bar:
 
-- **Toggle UI**: Click the `>_` icon to the left of the collapsed bar (or the `⌄` button in the terminal panel header), or run `/term`.
+- **Toggle UI**: Click the `>_` icon beside the bar button (or the `⌄` collapse button in the terminal header), or run `/term`.
+- **Draggable Window**: Click and drag the move handle on the terminal header to freely position the open console anywhere on your desktop. The expanded position is remembered independently while the collapsed icon returns to its dock.
+- **Direct Command Execution**: Run `/term <command>` from the palette (e.g. `/term npm run test`) to open PowerShell and execute the command immediately.
 - **Global Hotkeys**:
-  - **Configurable hotkey**: `Ctrl+Alt+T` by default, configurable in Settings (`//` → Settings → **Terminal hotkey**).
+  - **Configurable hotkey**: `Ctrl+Alt+T` by default, configurable in `/settings` (**Terminal hotkey**).
   - **Fast fixed hotkeys**: `Ctrl+Win+/` and `F1` (swallows F1 across apps to serve as an instant global terminal trigger).
-- **Persistent Session**: The underlying PowerShell process is spawned lazily on first open and kept alive in the background. Collapsing the panel preserves running commands, shell state, and terminal scrollback.
-- **Bar Anchoring**: The terminal opens docked directly above the command bar's current location on screen.
+- **Persistent Session**: The underlying PowerShell process is spawned lazily on first open and kept alive in the background with `-NoLogo` startup. Collapsing preserves running commands, shell state, and scrollback.
 
 ## Lookup tables
 
@@ -72,9 +76,9 @@ A real, interactive PowerShell session (powered by `node-pty` + `xterm.js`) is i
 - **Usage**: `/lookup` lists available tables; `/lookup <table>` browses/fuzzy-searches its records, using the first two string fields on each record as the label/sublabel (auto-detected — no config needed). Selecting a record drills into a list of its individual fields; selecting a field copies just that field's value to the clipboard. `Backspace`/`Escape` navigates back a level.
 - Since which field is "the useful one" (a URL, an ID, ...) varies per table, `/lookup` lets you pick it at select-time rather than hardcoding one.
 
-## In-App Configuration (`//`)
+## In-App Configuration (`/settings`)
 
-Type `//` into the command palette to open the interactive configuration manager:
+Type `/settings` (or `/config`) into the command palette to open the interactive configuration manager:
 
 - **Contacts**: Add, edit, or delete contacts (`name`, `alias`, `email`, `teamsId`).
 - **Snippets**: Add, edit, or delete reusable text snippets (`name`, `text`).
@@ -87,7 +91,7 @@ Type `//` into the command palette to open the interactive configuration manager
   - **Command Visibility**: Choose which commands appear in palette suggestions.
   - **Default Command**: Choose which command is prioritized at the top of the suggestions list.
 
-Keyboard navigation in `//`: Arrow keys + Enter to navigate/select, `Delete` to remove entries, and `Escape` to go back a level or exit.
+Keyboard navigation in `/settings`: Arrow keys + Enter to navigate/select, `Delete` to remove entries, and `Escape` to go back a level or exit.
 
 ## Configuration Files
 
@@ -97,7 +101,7 @@ Configuration files are stored in `%USERPROFILE%\.sudolaunch\`. On first run, Su
 - `snippets.json` — Snippets list for `/snippet` (`[{ "name", "text" }]`)
 - `links.json` — Saved links for `/fav` (`[{ "name", "url" }]`)
 - `teamLinks.json` — Direct channel/team deep links for `/teams` (`[{ "name", "url", "description" }]`)
-- `settings.json` — App preferences (`hotkey`, `terminalHotkey`, `historyEnabled`, `historyLimit`, `autoStart`, `disableMouseInput`, `defaultCommand`, `disabledApps`, `teamsShortcut`, `favShortcut`, `snippetShortcut`, `searchExcludedCommands`, `hiddenCommands`, `gifFolder`, `lookupFolder`, `barEnabled`, `barPosition`)
+- `settings.json` — App preferences (`hotkey`, `terminalHotkey`, `historyEnabled`, `historyLimit`, `autoStart`, `disableMouseInput`, `defaultCommand`, `disabledApps`, `teamsShortcut`, `favShortcut`, `snippetShortcut`, `searchExcludedCommands`, `hiddenCommands`, `gifFolder`, `lookupFolder`, `barEnabled`, `barPosition`, `termPosition`, `termWindowPosition`)
 - `history.json` — App-managed execution history of recent commands
 - `commands\` — Folder containing custom command `.json` files (seeded with `example.json` and `maint.json`)
 - `maintenance\` — Folder containing script examples (seeded with `example-update-modules.ps1`)

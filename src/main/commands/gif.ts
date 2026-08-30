@@ -1,3 +1,4 @@
+import { shell } from 'electron'
 import { existsSync, mkdirSync } from 'fs'
 import type { SearchResultItem } from '../../shared/types'
 import { readSettings } from '../config'
@@ -9,7 +10,7 @@ const GIF_EXTENSIONS = ['.gif']
 // Settings.gifFolder defaults to "gif" (~/.sudolaunch/gif) — create whatever folder is
 // currently configured on startup so the command works out of the box, same as the
 // "commands"/"maintenance" scaffold folders. Re-reads the setting (rather than hardcoding
-// "gif") so changing it in // Settings gets the new folder auto-created too.
+// "gif") so changing it in /settings gets the new folder auto-created too.
 export function ensureGifDir(): void {
   const { gifFolder } = readSettings()
   const dir = resolveFolderRoot(gifFolder)
@@ -21,7 +22,7 @@ export function ensureGifDir(): void {
 export function search(query: string): SearchResultItem[] {
   const { gifFolder } = readSettings()
   if (!gifFolder) {
-    return [{ label: 'Set a GIF folder in // Settings first', value: '', disabled: true }]
+    return [{ label: 'Set a GIF folder in /settings first', value: '', disabled: true }]
   }
 
   const root = resolveFolderRoot(gifFolder)
@@ -29,7 +30,17 @@ export function search(query: string): SearchResultItem[] {
     return [{ label: 'Folder must be inside ~/.sudolaunch', value: '', disabled: true }]
   }
 
-  return browseFolder(root, query, GIF_EXTENSIONS)
+  const results = browseFolder(root, query, GIF_EXTENSIONS)
+  if (results.length === 0 && !query.trim()) {
+    return [
+      {
+        label: 'No GIFs found in folder',
+        sublabel: `Drop .gif files into ${root} · Press Enter to open folder in Explorer`,
+        value: 'open-folder'
+      }
+    ]
+  }
+  return results
 }
 
 export async function execute(item: SearchResultItem): Promise<void> {
@@ -39,6 +50,11 @@ export async function execute(item: SearchResultItem): Promise<void> {
   const root = resolveFolderRoot(gifFolder)
   if (!root) {
     throw new Error('Folder must be inside ~/.sudolaunch')
+  }
+
+  if (item.value === 'open-folder') {
+    await shell.openPath(root)
+    return
   }
 
   const absPath = resolveFileWithin(root, item.value)

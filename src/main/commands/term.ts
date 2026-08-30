@@ -1,17 +1,31 @@
 import type { SearchResultItem } from '../../shared/types'
-import { toggleTerminal } from '../terminalWindow'
+import { toggleTerminal, runInTerminal } from '../terminalWindow'
 
-// Not query-shaped — always offers the single toggle action, same pattern as /view.
-export function search(): SearchResultItem[] {
+export function search(query: string): SearchResultItem[] {
+  const q = query.trim()
+  if (!q) {
+    return [
+      {
+        label: 'Open Terminal',
+        sublabel: 'Expand the PowerShell console',
+        value: 'toggle'
+      }
+    ]
+  }
   return [
     {
-      label: 'Toggle terminal',
-      sublabel: 'Expand/collapse the persistent terminal',
-      value: 'toggle'
+      label: `Run "${q}" in Terminal`,
+      sublabel: 'Opens PowerShell and executes this command',
+      value: q
     }
   ]
 }
 
-export async function execute(): Promise<void> {
-  toggleTerminal()
+export async function execute(item: SearchResultItem, query: string): Promise<void> {
+  const target = item.value || query.trim()
+  if (!target || target === 'toggle') {
+    toggleTerminal()
+  } else {
+    runInTerminal(target)
+  }
 }

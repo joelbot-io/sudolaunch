@@ -52,7 +52,7 @@ function listShortcuts(): AppEntry[] {
   return out
 }
 
-// Every discovered shortcut, unfiltered — used by the "//" App Visibility settings screen.
+// Every discovered shortcut, unfiltered — used by the "/settings" App Visibility settings screen.
 export function listApps(): AppEntry[] {
   return listShortcuts()
 }

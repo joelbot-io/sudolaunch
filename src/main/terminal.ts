@@ -49,12 +49,6 @@ export function onPtyExit(listener: (code: number) => void): () => void {
   }
 }
 
-// Whether a live shell is currently backing the panel — false before the first expand
-// spawns one, and again after the session exits.
-export function isPtyAlive(): boolean {
-  return ptyProcess !== null
-}
-
 export function killPty(): void {
   ptyProcess?.kill()
   ptyProcess = null

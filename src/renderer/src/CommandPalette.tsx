@@ -22,7 +22,7 @@ interface ListItem {
 }
 
 // Only these three commands get a shortcut, mapped to their Settings field — by design,
-// not every command (see the "//" Settings screen for the user-editable letters).
+// not every command (see the "/settings" Settings screen for the user-editable letters).
 const SHORTCUT_SETTINGS_FIELD: Record<'teams' | 'fav' | 'snippet', string> = {
   teams: 'teamsShortcut',
   fav: 'favShortcut',
@@ -32,16 +32,31 @@ const SHORTCUT_SETTINGS_FIELD: Record<'teams' | 'fav' | 'snippet', string> = {
 function parseInput(
   raw: string,
   shortcuts: Record<string, CommandName>,
-  customNames: Set<string>
+  customNames: Set<string>,
+  defaultCommand: string
 ): { command: CommandName | null; query: string } {
-  if (!raw.startsWith('/')) return { command: null, query: '' }
+  // If user typed without a leading slash:
+  if (!raw.startsWith('/')) {
+    const trimmed = raw.trim()
+    if (!trimmed) return { command: null, query: '' }
+    if (defaultCommand && defaultCommand !== 'none') {
+      const defCmd = COMMANDS.find((c) => c.name === defaultCommand)?.name
+      if (defCmd) return { command: defCmd, query: trimmed }
+    }
+    return { command: 'search', query: trimmed }
+  }
+
   const spaceIdx = raw.indexOf(' ')
-  if (spaceIdx === -1) return { command: null, query: raw.slice(1) }
+  if (spaceIdx === -1) {
+    const name = raw.slice(1)
+    if (name === 'settings' || name === 'config') {
+      return { command: 'settings', query: '' }
+    }
+    return { command: null, query: name }
+  }
   const name = raw.slice(1, spaceIdx)
   const rest = raw.slice(spaceIdx + 1)
-  // Custom commands resolve to the single 'custom' CommandName, carrying their own name
-  // as the first token of the query so commands/custom.ts can tell which one was meant —
-  // same shape whether invoked directly ("/deploy ...") or via "/custom deploy ...".
+  if (name === 'settings' || name === 'config') return { command: 'settings', query: rest }
   if (customNames.has(name)) return { command: 'custom', query: `${name} ${rest}`.trim() }
   const command = COMMANDS.find((c) => c.name === name)?.name ?? shortcuts[name] ?? null
   return { command, query: rest }
@@ -60,6 +75,10 @@ export default function CommandPalette(): JSX.Element {
   const [moveMode, setMoveMode] = useState(false)
   const [history, setHistory] = useState<HistoryEntry[]>([])
   const [results, setResults] = useState<SearchResultItem[]>([])
+  // True while a search/calc request is in flight — lets the empty-list render distinguish
+  // "still waiting on main" from "main answered and there's genuinely nothing", so a fast
+  // typist doesn't see a flash of "No results" before every real result set lands.
+  const [isSearching, setIsSearching] = useState(false)
   const [calcResult, setCalcResult] = useState<string | null>(null)
   const [activeIndex, setActiveIndex] = useState(0)
   const [hotkeyError, setHotkeyError] = useState<string | null>(null)
@@ -125,8 +144,15 @@ export default function CommandPalette(): JSX.Element {
   const getDefaultValue = useCallback(() => (historyEnabledRef.current ? '' : '/'), [])
 
   const customNames = new Set(customCommands.map((c) => c.command))
-  const { command, query } = parseInput(value, shortcuts, customNames)
-  const showingCommandList = value.startsWith('/') && command === null
+  const { command, query } = parseInput(value, shortcuts, customNames, defaultCommand)
+  const isSettingsMode =
+    value === '/settings' ||
+    value.startsWith('/settings') ||
+    value === '/config' ||
+    value.startsWith('/config') ||
+    command === 'settings'
+
+  const showingCommandList = value.startsWith('/') && command === null && !isSettingsMode
   const visibleCommands = COMMANDS.filter((c) => !hiddenCommands.has(c.name))
   const filteredCommands = showingCommandList
     ? visibleCommands.filter((c) => c.name.startsWith(value.slice(1)))
@@ -163,12 +189,12 @@ export default function CommandPalette(): JSX.Element {
         setHiddenCommands(new Set(settings.hiddenCommands as CommandName[]))
       }
       const map: Record<string, CommandName> = {}
-      for (const [command, field] of Object.entries(SHORTCUT_SETTINGS_FIELD) as [
+      for (const [cmdName, field] of Object.entries(SHORTCUT_SETTINGS_FIELD) as [
         keyof typeof SHORTCUT_SETTINGS_FIELD,
         string
       ][]) {
         const key = String(settings[field] ?? '').trim()
-        if (key) map[key] = command
+        if (key) map[key] = cmdName
       }
       setShortcuts(map)
     })
@@ -251,21 +277,31 @@ export default function CommandPalette(): JSX.Element {
 
   useEffect(() => {
     setActiveIndex(0)
-    if (!command) {
+    if (!command || command === 'settings') {
       setResults([])
       setCalcResult(null)
+      setIsSearching(false)
       return
     }
     const requestId = ++requestIdRef.current
     if (command === 'calc') {
-      window.api.runCalc(query).then((result) => {
-        if (requestIdRef.current === requestId) setCalcResult(result)
+      const expr = query.trim()
+      if (!expr) {
+        setCalcResult(null)
+        setIsSearching(false)
+        return
+      }
+      window.api.runCalc(expr).then((res: string | null) => {
+        if (requestId === requestIdRef.current) setCalcResult(res)
       })
-      setResults([])
       return
     }
-    window.api.search(command, query).then((res) => {
-      if (requestIdRef.current === requestId) setResults(res)
+    setIsSearching(true)
+    window.api.search(command, query).then((res: SearchResultItem[]) => {
+      if (requestId === requestIdRef.current) {
+        setResults(res)
+        setIsSearching(false)
+      }
     })
   }, [command, query])
 
@@ -280,6 +316,7 @@ export default function CommandPalette(): JSX.Element {
       setValue(getDefaultValue())
       setCalcResult(null)
       setCommandError(null)
+      setIsSearching(false)
       setActiveIndex(0)
       setIgnoreMouse(true)
       lastMousePosRef.current = null
@@ -302,25 +339,26 @@ export default function CommandPalette(): JSX.Element {
     const handler = (e: KeyboardEvent): void => {
       if (e.key !== 'Escape') return
       const defVal = getDefaultValue()
-      if (windowMode === 'bar') {
-        if (moveModeRef.current) {
-          // Dropping is handled by the onMoveModeChanged subscriber above.
-          window.api.moveModeToggle()
-          return
-        }
-        // First Escape clears the text (staying pulled out); a second Escape (now that
-        // there's nothing left to clear) releases focus and collapses back to the idle
-        // icon — the bar itself never hides.
-        if (valueRef.current !== '' && valueRef.current !== defVal) {
-          setValue(defVal)
-        } else {
-          window.api.barDeactivate()
-          inputRef.current?.blur()
-        }
+      if (valueRef.current.startsWith('/custom ') && valueRef.current.length > '/custom '.length) {
+        setValue('/custom ')
+        return
+      }
+      if (valueRef.current.startsWith('/gif ') && valueRef.current.length > '/gif '.length) {
+        setValue('/gif ')
+        return
+      }
+      if (valueRef.current.startsWith('/lookup ') && valueRef.current.length > '/lookup '.length) {
+        setValue('/lookup ')
         return
       }
       if (valueRef.current !== '' && valueRef.current !== defVal) {
         setValue(defVal)
+      } else if (windowMode === 'bar') {
+        if (moveModeRef.current) {
+          window.api.moveModeToggle()
+        } else {
+          window.api.barDeactivate()
+        }
       } else {
         window.api.hidePalette()
       }
@@ -348,12 +386,12 @@ export default function CommandPalette(): JSX.Element {
   }, [growPhase])
 
   // Focus the input whenever the main palette input is mounted (e.g. upon bar activation
-  // or when backing out of the "//" config manager view).
+  // or when backing out of the /settings config manager view).
   useEffect(() => {
-    if (!value.startsWith('//')) {
+    if (!isSettingsMode) {
       inputRef.current?.focus()
     }
-  }, [value, barActive, windowMode])
+  }, [isSettingsMode, barActive, windowMode])
 
   useEffect(() => {
     if (windowMode !== 'bar' || barActive) {
@@ -426,7 +464,7 @@ export default function CommandPalette(): JSX.Element {
         key: c.name,
         label: `/${c.name}`,
         sublabel: shortcut ? `${c.description} · /${shortcut}` : c.description,
-        onSelect: () => setValue(`/${c.name} `)
+        onSelect: () => setValue(c.name === 'settings' ? '/settings' : `/${c.name} `)
       }
     })
     const custom = customCmds.map((c) => {
@@ -517,52 +555,50 @@ export default function CommandPalette(): JSX.Element {
     runCommand
   ])
 
+  // Tab only ever does one of two things — fill in a result's completion, or drill into a
+  // command from the "/" list — so the footer hint should only appear when the active item
+  // actually supports one of those, instead of always claiming "Tab Complete".
+  const activeItem = items[activeIndex]
+  const tabHintLabel =
+    activeItem?.completion !== undefined ? 'Complete' : showingCommandList && activeItem ? 'Select' : null
+
   function handleExecuteResult(error: string | null): void {
     if (error) {
       setCommandError(error)
-      setTimeout(() => setCommandError(null), 5000)
-      return
-    }
-    refreshHistory()
-    if (windowMode === 'bar') {
-      window.api.barDeactivate()
-    }
-  }
-
-  function closePalette(): void {
-    if (windowMode === 'bar') {
-      window.api.barDeactivate()
+      setTimeout(() => setCommandError((current) => (current === error ? null : current)), 5000)
     } else {
+      setCommandError(null)
       window.api.hidePalette()
     }
   }
 
-  function handleKeyDown(e: React.KeyboardEvent<HTMLInputElement>): void {
+  function handleKeyDown(e: React.KeyboardEvent): void {
     if (e.key === 'ArrowDown') {
       e.preventDefault()
-      setActiveIndex((i) => Math.min(i + 1, Math.max(items.length - 1, 0)))
+      setActiveIndex((i) => (items.length > 0 ? (i + 1) % items.length : 0))
     } else if (e.key === 'ArrowUp') {
       e.preventDefault()
-      setActiveIndex((i) => Math.max(i - 1, 0))
-    } else if (e.key === 'Tab') {
-      // Accepts the active parameter suggestion (see the "custom" command's `completion`
-      // items) by filling it into the input, same as clicking it. No-op otherwise, so a
-      // plain Tab press doesn't accidentally run a regular result.
-      const item = items[activeIndex]
-      if (item?.completion !== undefined) {
-        e.preventDefault()
-        item.onSelect()
-      }
+      setActiveIndex((i) => (items.length > 0 ? (i - 1 + items.length) % items.length : 0))
     } else if (e.key === 'Enter') {
+      e.preventDefault()
       if (command === 'calc') {
         if (calcResult !== null) {
           navigator.clipboard.writeText(calcResult)
-          closePalette()
+          window.api.hidePalette()
         }
         return
       }
       const item = items[activeIndex]
       item?.onSelect()
+    } else if (e.key === 'Tab') {
+      const item = items[activeIndex]
+      if (item?.completion !== undefined) {
+        e.preventDefault()
+        setValue(item.completion)
+      } else if (showingCommandList && item) {
+        e.preventDefault()
+        item.onSelect()
+      }
     }
   }
 
@@ -633,11 +669,16 @@ export default function CommandPalette(): JSX.Element {
       } as React.CSSProperties)
     : undefined
 
-  if (value.startsWith('//')) {
+  if (isSettingsMode) {
+    const filterText = value.startsWith('/settings ')
+      ? value.slice(10)
+      : value.startsWith('/config ')
+        ? value.slice(8)
+        : ''
     return (
       <div className={paletteClassName} style={growStyle} onAnimationEnd={onGrowEnd}>
         <ConfigManager
-          initialFilter={value.slice(2)}
+          initialFilter={filterText}
           onExit={(exitVal) => {
             if (windowMode === 'bar' && exitVal === undefined) {
               window.api.barDeactivate()
@@ -670,7 +711,7 @@ export default function CommandPalette(): JSX.Element {
         ref={inputRef}
         className="palette-input"
         value={value}
-        placeholder="Type / for commands, // to manage config..."
+        placeholder="Type to search, / for commands, /settings for config..."
         autoFocus={windowMode === 'popup'}
         onChange={(e) => setValue(e.target.value)}
         onKeyDown={handleKeyDown}
@@ -692,7 +733,11 @@ export default function CommandPalette(): JSX.Element {
             lastMousePosRef.current = { x: e.clientX, y: e.clientY }
           }}
         >
-          {items.length === 0 && <li className="palette-empty">No results</li>}
+          {items.length === 0 && (
+            <li className="palette-empty">
+              {isSearching && !showingCommandList ? 'Searching…' : 'No results'}
+            </li>
+          )}
           {items.map((item, idx) => (
             <li
               key={item.key}
@@ -709,6 +754,24 @@ export default function CommandPalette(): JSX.Element {
           ))}
         </ul>
       )}
+      <div className="palette-footer">
+        <span className="palette-footer-hint">
+          <kbd className="palette-kbd">↵</kbd> {command === 'calc' ? 'Copy' : 'Select'}
+        </span>
+        {tabHintLabel && (
+          <span className="palette-footer-hint">
+            <kbd className="palette-kbd">Tab</kbd> {tabHintLabel}
+          </span>
+        )}
+        <span className="palette-footer-hint">
+          <kbd className="palette-kbd">Esc</kbd> Close
+        </span>
+        {value === '' && (
+          <span className="palette-footer-hint">
+            <kbd className="palette-kbd">/</kbd> Commands
+          </span>
+        )}
+      </div>
     </div>
   )
 }

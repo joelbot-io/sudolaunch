@@ -15,6 +15,7 @@ import * as view from './view'
 import * as term from './term'
 import * as restart from './restart'
 import * as defaultCmd from './defaultCmd'
+import * as settingsCmd from './settings'
 
 const searchers: Record<Exclude<CommandName, 'calc'>, (query: string) => SearchResultItem[]> = {
   app: app.search,
@@ -27,6 +28,7 @@ const searchers: Record<Exclude<CommandName, 'calc'>, (query: string) => SearchR
   mail: mail.search,
   restart: restart.search,
   search: searchCmd.search,
+  settings: settingsCmd.search,
   snippet: snippet.search,
   teams: teams.search,
   term: term.search,
@@ -45,6 +47,7 @@ const executors: Record<CommandName, (item: SearchResultItem, query: string) => 
   mail: mail.execute,
   restart: restart.execute,
   search: searchCmd.execute,
+  settings: settingsCmd.execute,
   snippet: snippet.execute,
   teams: teams.execute,
   term: term.execute,

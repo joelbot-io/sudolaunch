@@ -48,7 +48,7 @@ const DEFAULT_COMMAND_ROW_LABEL = 'Default Command'
 const DEFAULT_COMMAND_ROW_DESCRIPTION = 'Choose which command appears first in suggestions'
 
 // Same fuzzy-match settings used throughout main/commands/*.ts (teams.ts, fav.ts, app.ts,
-// custom.ts, etc.) — keeps "//" filtering feeling identical to "/" command search instead
+// custom.ts, etc.) — keeps "/settings" filtering feeling identical to "/" command search instead
 // of introducing a second, different matching behavior.
 function fuzzyFilter<T>(items: T[], keys: string[], needle: string): T[] {
   if (!needle) return items
@@ -85,6 +85,11 @@ export default function ConfigManager({ initialFilter, onExit }: Props): JSX.Ele
   // so a filter typed on one screen doesn't leak into the next.
   const [filter, setFilter] = useState(initialFilter ?? '')
   const [error, setError] = useState<string | null>(null)
+  // Delete is destructive and irreversible, so the first press only "arms" the target
+  // entry (shows "Confirm delete?") — a second press within the window actually deletes.
+  // Keyed by originalIndex; cleared whenever we navigate away from the list.
+  const [pendingDeleteIndex, setPendingDeleteIndex] = useState<number | null>(null)
+  const pendingDeleteTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const filterRef = useRef<HTMLInputElement>(null)
   const firstFieldRef = useRef<HTMLInputElement | HTMLTextAreaElement>(null)
   const activeItemRef = useRef<HTMLLIElement>(null)
@@ -103,6 +108,12 @@ export default function ConfigManager({ initialFilter, onExit }: Props): JSX.Ele
   useEffect(() => {
     activeItemRef.current?.scrollIntoView({ block: 'nearest' })
   }, [activeIndex])
+
+  useEffect(() => {
+    return () => {
+      if (pendingDeleteTimeoutRef.current) clearTimeout(pendingDeleteTimeoutRef.current)
+    }
+  }, [])
 
   const loadEntries = useCallback((typeDef: ConfigTypeDef) => {
     window.api.getConfigEntries(typeDef.type).then((list) => {
@@ -264,9 +275,10 @@ export default function ConfigManager({ initialFilter, onExit }: Props): JSX.Ele
     setError(null)
     setFilter('')
     setActiveIndex(0)
+    clearPendingDelete()
     if (level.kind === 'form') {
       if (level.typeDef.singleton) {
-        onExit('//')
+        onExit('/settings')
         return
       }
       setLevel({ kind: 'list', typeDef: level.typeDef })
@@ -296,20 +308,44 @@ export default function ConfigManager({ initialFilter, onExit }: Props): JSX.Ele
     }
     await window.api.saveConfigEntry(typeDef.type, draft, index)
     if (typeDef.singleton) {
-      onExit()
+      onExit('/settings')
       return
     }
     setLevel({ kind: 'list', typeDef })
   }
 
+  function clearPendingDelete(): void {
+    if (pendingDeleteTimeoutRef.current) {
+      clearTimeout(pendingDeleteTimeoutRef.current)
+      pendingDeleteTimeoutRef.current = null
+    }
+    setPendingDeleteIndex(null)
+  }
+
   async function deleteEntryAt(typeDef: ConfigTypeDef, index: number): Promise<void> {
     await window.api.deleteConfigEntry(typeDef.type, index)
+    clearPendingDelete()
     loadEntries(typeDef)
+  }
+
+  // First call arms the row (and auto-disarms after 3s); the matching second call — on the
+  // already-armed row — actually deletes.
+  function requestDelete(typeDef: ConfigTypeDef, index: number): void {
+    if (pendingDeleteIndex === index) {
+      deleteEntryAt(typeDef, index)
+      return
+    }
+    if (pendingDeleteTimeoutRef.current) clearTimeout(pendingDeleteTimeoutRef.current)
+    setPendingDeleteIndex(index)
+    pendingDeleteTimeoutRef.current = setTimeout(() => {
+      pendingDeleteTimeoutRef.current = null
+      setPendingDeleteIndex(null)
+    }, 3000)
   }
 
   // Every filterable list below is built the same way CommandPalette.tsx builds `items`:
   // a flat array of rows with their own onSelect, fuzzy-filtered by whatever's typed into
-  // the top input. Keeps "//" navigation (arrows/Enter over `rows`) and rendering in sync
+  // the top input. Keeps "/settings" navigation (arrows/Enter over `rows`) and rendering in sync
   // by construction — no separate index bookkeeping to keep aligned with a filtered view.
   const typesRows: Row[] = fuzzyFilter(
     [
@@ -337,6 +373,12 @@ export default function ConfigManager({ initialFilter, onExit }: Props): JSX.Ele
         label: DEFAULT_COMMAND_ROW_LABEL,
         sublabel: DEFAULT_COMMAND_ROW_DESCRIPTION,
         onSelect: openDefaultCommandScreen
+      },
+      {
+        key: '__openConfigFolder',
+        label: 'Open Config Folder',
+        sublabel: 'Open %USERPROFILE%\\.sudolaunch in File Explorer',
+        onSelect: () => window.api.openConfigFolder()
       }
     ],
     ['label', 'sublabel'],
@@ -474,7 +516,7 @@ export default function ConfigManager({ initialFilter, onExit }: Props): JSX.Ele
       } else if (e.key === 'Delete' && activeIndex < filteredEntries.length) {
         e.preventDefault()
         const target = filteredEntries[activeIndex]
-        if (target) deleteEntryAt(level.typeDef, target.originalIndex)
+        if (target) requestDelete(level.typeDef, target.originalIndex)
       }
     }
   }
@@ -513,10 +555,10 @@ export default function ConfigManager({ initialFilter, onExit }: Props): JSX.Ele
       <input
         ref={filterRef}
         className="palette-input"
-        value={level.kind === 'types' ? '//' + filter : filter}
+        value={level.kind === 'types' ? (filter ? `/settings ${filter}` : '/settings') : filter}
         placeholder={
           level.kind === 'types'
-            ? '// — type to filter config...'
+            ? '/settings — type to filter config...'
             : level.kind === 'form'
               ? breadcrumb
               : `${breadcrumb} — type to filter...`
@@ -524,12 +566,17 @@ export default function ConfigManager({ initialFilter, onExit }: Props): JSX.Ele
         onChange={(e) => {
           const val = e.target.value
           if (level.kind === 'types') {
-            if (!val.startsWith('//')) {
-              onExit(val.startsWith('/') ? '/' : undefined)
+            if (val.startsWith('/settings ') || val.startsWith('/config ')) {
+              const spaceIdx = val.indexOf(' ')
+              setFilter(val.slice(spaceIdx + 1))
+              setActiveIndex(0)
+            } else if (val === '/settings' || val === '/config') {
+              setFilter('')
+              setActiveIndex(0)
+            } else {
+              onExit(val)
               return
             }
-            setFilter(val.slice(2))
-            setActiveIndex(0)
           } else {
             setFilter(val)
             setActiveIndex(0)
@@ -734,14 +781,18 @@ export default function ConfigManager({ initialFilter, onExit }: Props): JSX.Ele
               </span>
               <button
                 type="button"
-                className="config-item-delete"
-                title="Delete"
+                className={
+                  pendingDeleteIndex === originalIndex
+                    ? 'config-item-delete config-item-delete-confirm'
+                    : 'config-item-delete'
+                }
+                title={pendingDeleteIndex === originalIndex ? 'Click again to confirm delete' : 'Delete'}
                 onClick={(e) => {
                   e.stopPropagation()
-                  deleteEntryAt(level.typeDef, originalIndex)
+                  requestDelete(level.typeDef, originalIndex)
                 }}
               >
-                ✕
+                {pendingDeleteIndex === originalIndex ? 'Confirm?' : '✕'}
               </button>
             </li>
           ))}
@@ -779,8 +830,7 @@ export default function ConfigManager({ initialFilter, onExit }: Props): JSX.Ele
                 <button
                   type="button"
                   ref={idx === 0 ? (firstFieldRef as React.RefObject<HTMLButtonElement>) : undefined}
-                  className={`config-toggle-badge ${Boolean(level.draft[field.key]) ? 'config-toggle-on' : 'config-toggle-off'}`}
-                  style={{ cursor: 'pointer', outline: 'none', alignSelf: 'flex-start' }}
+                  className={`config-toggle-badge config-toggle-button ${Boolean(level.draft[field.key]) ? 'config-toggle-on' : 'config-toggle-off'}`}
                   onClick={() =>
                     setLevel({
                       ...level,
@@ -836,13 +886,21 @@ export default function ConfigManager({ initialFilter, onExit }: Props): JSX.Ele
             {level.index !== null && !level.typeDef.singleton && (
               <button
                 type="button"
-                className="config-btn config-btn-danger"
+                className={
+                  pendingDeleteIndex === level.index
+                    ? 'config-btn config-btn-danger config-btn-danger-confirm'
+                    : 'config-btn config-btn-danger'
+                }
                 onClick={async () => {
-                  await deleteEntryAt(level.typeDef, level.index as number)
-                  setLevel({ kind: 'list', typeDef: level.typeDef })
+                  if (pendingDeleteIndex === level.index) {
+                    await deleteEntryAt(level.typeDef, level.index as number)
+                    setLevel({ kind: 'list', typeDef: level.typeDef })
+                    return
+                  }
+                  requestDelete(level.typeDef, level.index as number)
                 }}
               >
-                Delete
+                {pendingDeleteIndex === level.index ? 'Confirm delete?' : 'Delete'}
               </button>
             )}
           </div>

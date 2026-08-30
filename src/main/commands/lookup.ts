@@ -1,4 +1,4 @@
-import { clipboard } from 'electron'
+import { clipboard, shell } from 'electron'
 import Fuse from 'fuse.js'
 import { existsSync, mkdirSync, readdirSync, readFileSync } from 'fs'
 import { basename, extname, join } from 'path'
@@ -18,7 +18,7 @@ import { resolveFolderRoot } from '../folderBrowse'
 // which field is "the useful one" (a URL, an ID, ...) varies per table, so the user
 // picks it instead of copying a fixed field or the whole record.
 
-// Re-reads the setting (rather than hardcoding "lookup") so changing it in // Settings
+// Re-reads the setting (rather than hardcoding "lookup") so changing it in /settings
 // gets the new folder auto-created too — same reasoning as gif.ts's ensureGifDir.
 export function ensureLookupDir(): void {
   const { lookupFolder } = readSettings()
@@ -81,7 +81,7 @@ function splitTableAndQuery(query: string): { table: string; rest: string } {
 export function search(query: string): SearchResultItem[] {
   const { lookupFolder } = readSettings()
   if (!lookupFolder) {
-    return [{ label: 'Set a lookup folder in // Settings first', value: '', disabled: true }]
+    return [{ label: 'Set a lookup folder in /settings first', value: '', disabled: true }]
   }
   const root = resolveFolderRoot(lookupFolder)
   if (!root) {
@@ -89,6 +89,16 @@ export function search(query: string): SearchResultItem[] {
   }
 
   const tables = listTables(root)
+  if (tables.length === 0 && !query.trim()) {
+    return [
+      {
+        label: 'No JSON tables found in folder',
+        sublabel: `Drop .json data tables into ${root} · Press Enter to open folder`,
+        value: 'open-folder'
+      }
+    ]
+  }
+
   const { table, rest } = splitTableAndQuery(query)
 
   if (!tables.includes(table)) {
@@ -120,5 +130,11 @@ export function search(query: string): SearchResultItem[] {
 
 export async function execute(item: SearchResultItem): Promise<void> {
   if (item.disabled || !item.value) return
+  if (item.value === 'open-folder') {
+    const { lookupFolder } = readSettings()
+    const root = resolveFolderRoot(lookupFolder)
+    if (root) await shell.openPath(root)
+    return
+  }
   clipboard.writeText(item.value)
 }

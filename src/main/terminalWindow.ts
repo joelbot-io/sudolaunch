@@ -93,7 +93,6 @@ function expandedBounds(bar?: Rectangle | null): Rectangle {
   const icon = idleBounds(bar)
   const { workArea } = screen.getDisplayNearestPoint({ x: icon.x, y: icon.y })
   const { width, height } = PANEL_SIZE
-  const screenCenterX = workArea.x + workArea.width / 2
   const screenCenterY = workArea.y + workArea.height / 2
   const iconCenterX = icon.x + icon.width / 2
   const iconCenterY = icon.y + icon.height / 2
@@ -225,10 +224,6 @@ export function toggleTermMoveMode(): void {
   termWindow.webContents.send('term-move-mode-changed', termMoveModeActive)
 }
 
-export function isTermMoveModeActive(): boolean {
-  return termMoveModeActive
-}
-
 export function resetTermPosition(): void {
   const settings = readSettings()
   writeSettings({ ...settings, termPosition: null, termWindowPosition: null })
@@ -253,6 +248,10 @@ export function toggleTerminal(): void {
 
   termExpanded = !termExpanded
   if (termExpanded) {
+    if (!termWindow.isVisible()) {
+      termWindow.setBounds(idleBounds(lastBarBounds))
+      termWindow.showInactive()
+    }
     const icon = idleBounds(lastBarBounds)
     const panel = expandedBounds(lastBarBounds)
     // Tell the renderer to switch to the (opacity-0, grow-pending) expanded layout and
@@ -288,15 +287,27 @@ export function toggleTerminal(): void {
   }
 }
 
-// Entry point for the dedicated "pop open the terminal" hotkey (see main/index.ts) —
-// unlike toggleTerminal(), this also makes sure the window is actually showing first
-// (it stays hidden whenever the bar's been turned off via "/view"), so the hotkey works
-// regardless of the bar's current visibility.
 export function openTerminal(): void {
   if (!termWindow) return
   if (!termWindow.isVisible()) {
     termWindow.setBounds(idleBounds(lastBarBounds))
     termWindow.showInactive()
   }
-  toggleTerminal()
+  if (!termExpanded) {
+    toggleTerminal()
+  }
+}
+
+export function runInTerminal(commandText: string): void {
+  if (!termWindow) return
+  if (!termWindow.isVisible()) {
+    termWindow.setBounds(idleBounds(lastBarBounds))
+    termWindow.showInactive()
+  }
+  if (!termExpanded) {
+    toggleTerminal()
+  }
+  setTimeout(() => {
+    writeToPty(commandText + '\r')
+  }, 120)
 }

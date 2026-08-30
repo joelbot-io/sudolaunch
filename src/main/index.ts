@@ -29,7 +29,7 @@ import { getAppIconPath } from './icon'
 import { ensureCommandsDir, loadCustomCommands, watchCustomCommands } from './customCommands'
 import { ensureGifDir } from './commands/gif'
 import { ensureLookupDir } from './commands/lookup'
-import { createTerminalWindow, registerTerminalIpc, openTerminal } from './terminalWindow'
+import { createTerminalWindow, registerTerminalIpc, openTerminal, toggleTerminal } from './terminalWindow'
 import { killPty } from './terminal'
 import {
   createBarWindow,
@@ -168,10 +168,10 @@ function createHotkeyRegistrar(
 }
 
 const paletteHotkey = createHotkeyRegistrar('hotkey-error', togglePalette)
-const terminalHotkey = createHotkeyRegistrar('terminal-hotkey-error', () => openTerminal())
+const terminalHotkey = createHotkeyRegistrar('terminal-hotkey-error', () => toggleTerminal())
 
 // Additional fixed (not user-configurable, not shown in tooltips) ways to pop the terminal
-// open, all interchangeable with the configurable terminalHotkey above.
+// open or minimize, all interchangeable with the configurable terminalHotkey above.
 //
 // "Control+Super+/": Ctrl+Win was the combo actually asked for, before landing on
 // Ctrl+Alt+T as the registerable default — Electron's globalShortcut can't bind an
@@ -188,7 +188,7 @@ const FIXED_TERMINAL_HOTKEYS = ['Control+Super+/', 'F1']
 function registerFixedTerminalHotkeys(): void {
   for (const hotkey of FIXED_TERMINAL_HOTKEYS) {
     try {
-      if (!globalShortcut.register(hotkey, () => openTerminal())) {
+      if (!globalShortcut.register(hotkey, () => toggleTerminal())) {
         console.error(`Failed to register fixed terminal hotkey: ${hotkey}`)
       }
     } catch (err) {

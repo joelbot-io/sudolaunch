@@ -121,6 +121,7 @@ export type CommandName =
   | 'teams'
   | 'term'
   | 'view'
+  | 'settings'
 
 export interface CommandDef {
   name: CommandName
@@ -139,9 +140,10 @@ export const COMMANDS: CommandDef[] = [
   { name: 'mail', description: 'Compose an email to a contact' },
   { name: 'restart', description: 'Relaunch the application' },
   { name: 'search', description: 'Search across other commands at once' },
+  { name: 'settings', description: 'Open settings and configuration manager' },
   { name: 'snippet', description: 'Copy a saved snippet to the clipboard' },
   { name: 'teams', description: 'Open a Teams chat with a contact' },
-  { name: 'term', description: 'Expand/collapse the persistent terminal' },
+  { name: 'term', description: 'Open or run a command in the persistent terminal' },
   { name: 'view', description: 'Toggle the command bar or change its position' }
 ]
 
@@ -149,7 +151,7 @@ export const COMMANDS: CommandDef[] = [
 // "calc" (not search-shaped) and "search" itself. Used both to build the SEARCHABLE
 // dispatch table in commands/search.ts and to drive the "Search Commands" toggle
 // screen in ConfigManager.tsx.
-export const SEARCHABLE_COMMAND_NAMES: Exclude<CommandName, 'calc' | 'search' | 'view' | 'term' | 'restart' | 'default'>[] = [
+export const SEARCHABLE_COMMAND_NAMES: Exclude<CommandName, 'calc' | 'search' | 'view' | 'term' | 'restart' | 'default' | 'settings'>[] = [
   'app',
   'custom',
   'fav',

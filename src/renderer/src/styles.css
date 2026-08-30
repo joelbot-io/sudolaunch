@@ -247,21 +247,6 @@ body::-webkit-scrollbar,
   backdrop-filter: none;
 }
 
-/* Suppress all scrollbars and hide inner body/header during collapse and pending transitions to prevent visual artifacts */
-.grow-pending,
-.grow-out {
-  overflow: hidden !important;
-}
-
-.term-shell.grow-out .term-body,
-.term-shell.grow-out .term-header,
-.term-shell.grow-pending .term-body,
-.term-shell.grow-pending .term-header {
-  opacity: 0 !important;
-  visibility: hidden !important;
-  pointer-events: none !important;
-}
-
 .term-shell.grow-in .term-body {
   animation: term-body-fade-in 140ms ease-out 20ms both;
 }
@@ -273,32 +258,6 @@ body::-webkit-scrollbar,
   to {
     opacity: 1;
   }
-}
-
-.grow-pending *,
-.grow-out *,
-.term-collapsed * {
-  scrollbar-width: none !important;
-}
-
-.grow-pending *::-webkit-scrollbar,
-.grow-pending *::-webkit-scrollbar-thumb,
-.grow-pending *::-webkit-scrollbar-track,
-.grow-out *::-webkit-scrollbar,
-.grow-out *::-webkit-scrollbar-thumb,
-.grow-out *::-webkit-scrollbar-track,
-.term-collapsed *::-webkit-scrollbar,
-.term-collapsed *::-webkit-scrollbar-thumb,
-.term-collapsed *::-webkit-scrollbar-track,
-.grow-pending .xterm-viewport,
-.grow-in .xterm-viewport,
-.grow-out .xterm-viewport {
-  width: 0 !important;
-  height: 0 !important;
-  display: none !important;
-  background: transparent !important;
-  opacity: 0 !important;
-  visibility: hidden !important;
 }
 
 @keyframes grow-in {
@@ -443,6 +402,42 @@ body::-webkit-scrollbar,
   font-size: 13px;
 }
 
+.palette-footer {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 14px;
+  padding: 6px 14px;
+  border-top: 1px solid rgba(255, 255, 255, 0.07);
+  background: rgba(0, 0, 0, 0.15);
+  font-size: 11px;
+  color: var(--muted);
+  user-select: none;
+  flex-shrink: 0;
+}
+
+.palette-footer-hint {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.palette-kbd {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 4px;
+  border-radius: 3px;
+  font-size: 10px;
+  font-family: inherit;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  color: #d0d0d0;
+  box-shadow: 0 1px 0 rgba(0, 0, 0, 0.2);
+}
+
 .config-manager {
   display: flex;
   flex-direction: column;
@@ -485,6 +480,19 @@ body::-webkit-scrollbar,
   border: 1px solid rgba(255, 255, 255, 0.1);
 }
 
+.config-toggle-button {
+  cursor: pointer;
+  align-self: flex-start;
+  font: inherit;
+}
+
+/* Keyboard-only ring — mouse clicks that focus the button don't get an outline, but
+   Tabbing to it does, so keyboard users always have a visible indicator. */
+.config-toggle-button:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
 .config-item-delete {
   border: none;
   background: transparent;
@@ -504,6 +512,26 @@ body::-webkit-scrollbar,
 .config-item-delete:hover {
   color: #ff6b5b;
   background: rgba(255, 107, 91, 0.14);
+}
+
+/* Armed state after the first click/press — stays visible (not just on hover) until
+   confirmed or the arm window times out, so "one more click deletes this" is legible. */
+.config-item-delete-confirm {
+  opacity: 1;
+  color: #ff6b5b;
+  background: rgba(255, 107, 91, 0.14);
+  border: 1px solid rgba(255, 107, 91, 0.4);
+  font-size: 11px;
+  padding: 2px 8px;
+}
+
+.config-btn-danger-confirm {
+  background: rgba(255, 107, 91, 0.14);
+  border-color: #ff6b5b;
+}
+
+.config-btn-danger-confirm:hover {
+  background: rgba(255, 107, 91, 0.22);
 }
 
 .config-form {

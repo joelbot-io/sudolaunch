@@ -125,7 +125,7 @@ export function writeSettings(settings: Settings): void {
   writeFileSync(PATHS.settings, JSON.stringify(settings, null, 2), 'utf-8')
 }
 
-// Generic CRUD used by the "//" in-app config editor. Each list-backed config type
+// Generic CRUD used by the "/settings" in-app config editor. Each list-backed config type
 // (contacts/snippets/links) is just an array of plain objects; settings is a single
 // object treated as one "entry" that can only be edited, never added or deleted.
 export function getConfigEntries(type: ConfigType): ConfigEntry[] {
