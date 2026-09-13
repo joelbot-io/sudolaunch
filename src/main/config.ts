@@ -70,7 +70,7 @@ export function ensureConfigDir(): void {
 
 function readJson<T>(path: string, fallback: T): T {
   try {
-    const raw = readFileSync(path, 'utf-8')
+    const raw = readFileSync(path, 'utf-8').replace(/^\uFEFF/, '')
     return JSON.parse(raw) as T
   } catch {
     return fallback

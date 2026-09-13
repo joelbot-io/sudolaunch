@@ -17,6 +17,7 @@ A global-hotkey command palette, persistent command bar, and drop-down terminal 
 - [Typecheck](#typecheck)
 - [Build & Packaging](#build--packaging)
 - [Auto-start](#auto-start)
+- [Profile Backup & Maintenance](#profile-backup--maintenance)
 
 ## Commands
 
@@ -223,3 +224,209 @@ Packaged installers will be generated at `dist/SudoLaunch-<version>-setup.exe`.
 ## Auto-start
 
 When installed via the packaged installer, SudoLaunch registers to launch automatically on Windows login (controlled by `settings.json` → `autoStart` or in `//` Settings). Auto-start registration is skipped in `npm run dev` to prevent dev builds from registering.
+
+## Profile Backup & Maintenance
+
+SudoLaunch stores user settings, contacts, snippets, team links, history, custom commands, lookups, and assets in `~/.sudolaunch`. A complete suite of enterprise-grade maintenance, diagnostic, and migration tools is included in `scripts/`:
+
+### Quick Reference
+
+| Command | Script | Description |
+|---|---|---|
+| `npm run profile:backup` | `backup-profile.ps1` | Backs up active profile to a timestamped ZIP archive in `~/.sudolaunch-archives` with embedded metadata manifest and retention cleanup. |
+| `npm run profile:restore` | `restore-profile.ps1` | Restores profile from an archive ZIP. Automatically creates a pre-restore safety snapshot before applying changes. |
+| `npm run profile:list` | `manage-profile.ps1 list` | Lists all stored backups and safety snapshots with timestamps and archive sizes. |
+| `npm run profile:create` | `create-profile.ps1` | Scaffolds a complete default profile directory at any target path (`-TargetDir`, `-Clean`, `-Force`). |
+| `npm run profile:validate` | `validate-profile.ps1` | Health check & JSON schema validator for settings, contacts, snippets, links, custom commands, and lookup tables (`-Fix`). |
+| `npm run profile:clean-history` | `clean-history.ps1` | Purges or scrubs command history (`-ScrubSensitive` sanitizes passwords, hashes, JWTs, and API tokens; `-Days`, `-KeepLast`, `-ClearAll`). |
+| `npm run profile:repair-env` | `repair-environment.ps1` | Diagnoses Node/npm/Python/csc toolchain, temporarily clears `NoDefaultCurrentDirectoryInExePath` for node-pty, recompiles `sendkey.exe`, and runs `electron-rebuild`. |
+| `npm run profile:import-teams` | `import-team-links.ps1` | Imports enterprise Teams channels, contacts, or links from CSV/JSON (`resources/team_list.csv`), with auto-schema detection and non-destructive merge. |
+| `npm run profile:export` | `export-profile.ps1` | Exports a sanitized portable `.zip` bundle (stripping window coordinates and private history) for migration or team sharing. |
+| `npm run profile:import-bundle` | `import-profile.ps1` | Imports a portable profile bundle with non-destructive merge (or `-Replace`), pre-import safety backup, and post-import health validation. |
+| `npm run profile:autostart` | `check-autostart.ps1` | Inspects Windows Startup Registry (`HKCU Run`) and settings alignment, verifies target binary path, and repairs (`-Enable`, `-Disable`, `-Repair`). |
+| `npm run profile:bookmarks` | `import-bookmarks.ps1` | Imports Edge, Chrome, and Brave bookmarks into `links.json` (`/fav`) and/or `lookup/bookmarks.json` (`/lookup bookmarks`). |
+| `npm run profile:git-scan` | `scan-git-repos.ps1` | Scans dev directories for Git repos, checks dirty status/branches, and generates `lookup/repos.json` (`/lookup repos`). |
+| `npm run profile:new-cmd` | `new-command.ps1` | Interactive wizard to scaffold and validate custom PowerShell action or folder-browsing commands in `commands/*.json`. |
+| `npm run profile:hotkeys` | `check-hotkey-conflicts.ps1` | Probes global hotkey availability, detects competing launchers (PowerToys, Flow), and flags Windows IME `Ctrl+Space` clashes. |
+| `npm run profile:apps` | `reindex-apps.ps1` | Scans Start Menu & UWP apps, resolves `.lnk` targets, tests query fuzzy matches, and exports `lookup/apps.json`. |
+| `npm run profile:clean-procs` | `clean-processes.ps1` | Detects and safely terminates lingering/orphaned `electron.exe`, `node-pty`, or dev server processes locking files or port 5173. |
+| `npm run profile:shell-sync` | `sync-terminal-profile.ps1` | Integrates `sl`, `sl-edit`, `sl-profile` shortcuts, and environment helpers into Windows PowerShell and pwsh 7 `$PROFILE`. |
+| `npm run profile:manage` | `manage-profile.ps1` | Unified interactive 21-option maintenance menu and CLI dispatcher covering all actions. |
+
+---
+
+### Detailed Usage & Examples
+
+#### 1. Profile Backup & Restore
+```powershell
+# Create an archive with an optional note and retain the 5 newest archives
+.\scripts\backup-profile.ps1 -Note "pre-update" -KeepLast 5
+
+# Restore the most recent backup non-interactively
+.\scripts\restore-profile.ps1 -Latest
+
+# Restore a specific archive file
+.\scripts\restore-profile.ps1 -BackupFile "C:\Users\username\.sudolaunch-archives\sudolaunch-backup-20260913-143000.zip"
+```
+
+#### 2. Profile Health Check & Validator (`validate-profile.ps1`)
+Validates JSON syntax, schema completeness, custom command integrity, and lookup tables across your profile:
+```powershell
+# Run health check diagnostic
+npm run profile:validate
+
+# Run health check and automatically repair missing default keys/files
+.\scripts\validate-profile.ps1 -Fix
+```
+
+#### 3. Execution History & Privacy Cleaner (`clean-history.ps1`)
+Safeguards private tokens, passwords, and sensitive commands:
+```powershell
+# Scrub sensitive queries (/pwd, /hash, JWTs, bearer tokens) and retain the last 50 entries
+npm run profile:clean-history
+
+# Clean entries older than 30 days
+.\scripts\clean-history.ps1 -Days 30
+
+# Preview changes without modifying files (dry run)
+.\scripts\clean-history.ps1 -Days 30 -DryRun
+
+# Completely clear all command history
+.\scripts\clean-history.ps1 -ClearAll
+```
+
+#### 4. Build Environment & Native Addons Repair (`repair-environment.ps1`)
+Fixes Windows native addon compilation issues (`node-pty`, `node-window-manager`, `electron-clipboard-ex`), compiles `sendkey.exe`, and verifies TypeScript:
+```powershell
+npm run profile:repair-env
+```
+
+#### 5. Enterprise Teams Links & Contacts CSV Importer (`import-team-links.ps1`)
+Import enterprise Teams channel links, contact directories, or bookmarks directly from CSV or JSON:
+```powershell
+# Import from default CSV (resources/team_list.csv) with non-destructive merge
+npm run profile:import-teams
+
+# Import custom CSV with overwrite/replace mode
+.\scripts\import-team-links.ps1 -CsvPath "D:\Data\org_channels.csv" -Replace
+```
+
+#### 6. Browser Bookmarks & Favorites Importer (`import-bookmarks.ps1`)
+Scans Microsoft Edge, Google Chrome, and Brave for bookmarks and imports them into SudoLaunch:
+```powershell
+# Import all browser bookmarks into both links.json (/fav) and lookup/bookmarks.json
+npm run profile:bookmarks
+
+# Only import from Microsoft Edge
+.\scripts\import-bookmarks.ps1 -Browser Edge
+
+# Filter bookmarks by folder name and test in dry-run mode
+.\scripts\import-bookmarks.ps1 -FolderFilter "Work|Dev" -DryRun
+```
+
+#### 7. Git Workspace Scanner & Lookup Generator (`scan-git-repos.ps1`)
+Scans developer drives (e.g. `D:\repo`, `C:\Users\<user>\repos`), analyzes branch status, and creates `~/.sudolaunch/lookup/repos.json`:
+```powershell
+# Scan default development drives and build /lookup repos table
+npm run profile:git-scan
+
+# Scan specific directories with maximum depth
+.\scripts\scan-git-repos.ps1 -ScanRoots "D:\repo", "C:\Projects" -MaxDepth 3
+
+# Also generate a /repo custom command in commands/repo.json
+.\scripts\scan-git-repos.ps1 -SetupCommand
+```
+
+#### 8. Custom Command Wizard (`new-command.ps1`)
+Quickly scaffolds, validates, and registers a custom command in `~/.sudolaunch/commands/<name>.json`:
+```powershell
+# Launch interactive creation wizard
+npm run profile:new-cmd
+
+# Non-interactive generation of a single-action command
+.\scripts\new-command.ps1 -Name "flushdns" -Type Action -Action "Clear-DnsClientCache; Write-Host 'DNS Flushed!'" -Label "Flush DNS Cache"
+
+# Non-interactive generation of a script folder browser (/ops)
+.\scripts\new-command.ps1 -Name "ops" -Type Folder -Folder "ops-scripts" -Label "DevOps Automation"
+```
+
+#### 9. Global Hotkey Conflict Diagnostic (`check-hotkey-conflicts.ps1`)
+Diagnoses why global hotkeys might fail to trigger:
+```powershell
+# Probe hotkey availability and check for competing launchers (PowerToys, Flow, IME)
+npm run profile:hotkeys
+```
+
+#### 10. Application & Shortcut Indexer (`reindex-apps.ps1`)
+Diagnoses Start Menu and UWP application discovery and tests search ranking:
+```powershell
+# Inspect all discovered shortcuts and modern apps
+npm run profile:apps
+
+# Simulate fuzzy search for a specific app
+.\scripts\reindex-apps.ps1 -Query "terminal"
+
+# Export application catalog to lookup/apps.json for /lookup apps
+.\scripts\reindex-apps.ps1 -ExportLookup
+```
+
+#### 11. Process & Zombie Cleaner (`clean-processes.ps1`)
+Detects and frees locked files or ports held by background Electron or terminal sessions:
+```powershell
+# Diagnostic check for orphaned processes and port 5173 status
+npm run profile:clean-procs
+
+# Terminate orphaned processes
+.\scripts\clean-processes.ps1 -Kill -Force
+```
+
+#### 12. PowerShell `$PROFILE` & Terminal Integrator (`sync-terminal-profile.ps1`)
+Injects convenient aliases (`sl`, `sl-edit`, `sl-profile`) into Windows PowerShell 5.1 and pwsh 7 profiles:
+```powershell
+# Check current profile status
+npm run profile:shell-sync
+
+# Install integration into profiles
+.\scripts\sync-terminal-profile.ps1 -Install
+
+# Remove integration from profiles
+.\scripts\sync-terminal-profile.ps1 -Uninstall
+```
+
+#### 13. Portable Profile Migration (`export-profile.ps1` & `import-profile.ps1`)
+Share custom commands, snippets, lookups, and links across developer machines without leaking window coordinates or private history:
+```powershell
+# Export sanitized portable bundle
+npm run profile:export
+# Or to a specific path:
+.\scripts\export-profile.ps1 -OutFile "D:\Backups\team-bundle.zip"
+
+# Import portable bundle (merges non-destructively by default)
+.\scripts\import-profile.ps1 -BundlePath "D:\Backups\team-bundle.zip"
+
+# Preview bundle import without changing files
+.\scripts\import-profile.ps1 -BundlePath "D:\Backups\team-bundle.zip" -DryRun
+```
+
+#### 14. Windows Auto-Start Diagnostic & Repair (`check-autostart.ps1`)
+Diagnose and repair Windows login startup registration:
+```powershell
+# Check current registration and detect binary
+npm run profile:autostart
+
+# Enable startup registration in HKCU\Software\Microsoft\Windows\CurrentVersion\Run
+.\scripts\check-autostart.ps1 -Enable
+
+# Disable startup registration
+.\scripts\check-autostart.ps1 -Disable
+
+# Repair broken executable path in registry
+.\scripts\check-autostart.ps1 -Repair
+```
+
+#### 15. All-in-One Interactive Maintenance Menu
+```powershell
+npm run profile:manage
+```
+Displays an interactive numeric menu covering all 21 maintenance and developer operations.
+

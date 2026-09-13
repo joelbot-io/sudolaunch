@@ -64,7 +64,8 @@ export function loadCustomCommands(): CustomCommand[] {
   const out: CustomCommand[] = []
   for (const file of files) {
     try {
-      const raw = JSON.parse(readFileSync(join(COMMANDS_DIR, file), 'utf-8'))
+      const content = readFileSync(join(COMMANDS_DIR, file), 'utf-8').replace(/^\uFEFF/, '')
+      const raw = JSON.parse(content)
       const hasAction = typeof raw.Action === 'string' && raw.Action.trim()
       const hasFolder = typeof raw.Folder === 'string' && raw.Folder.trim()
       if (typeof raw.Command !== 'string' || hasAction === hasFolder) {

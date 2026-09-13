@@ -42,7 +42,7 @@ function listTables(root: string): string[] {
 
 function loadTable(root: string, table: string): Record_[] {
   try {
-    const raw = readFileSync(join(root, `${table}.json`), 'utf-8')
+    const raw = readFileSync(join(root, `${table}.json`), 'utf-8').replace(/^\uFEFF/, '')
     const parsed = JSON.parse(raw)
     return Array.isArray(parsed) ? parsed : []
   } catch {
