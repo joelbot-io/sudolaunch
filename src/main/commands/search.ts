@@ -13,6 +13,28 @@ import * as custom from './custom'
 import * as focus from './focus'
 import * as gif from './gif'
 import * as lookup from './lookup'
+import * as tz from './tz'
+import * as hash from './hash'
+import * as uuid from './uuid'
+import * as ip from './ip'
+import * as pwd from './pwd'
+import * as port from './port'
+import * as unit from './unit'
+import * as color from './color'
+import * as caseCmd from './case'
+import * as chmod from './chmod'
+import * as cron from './cron'
+import * as emoji from './emoji'
+import * as git from './git'
+import * as http from './http'
+import * as json from './json'
+import * as lorem from './lorem'
+import * as mime from './mime'
+import * as pt from './pt'
+import * as qr from './qr'
+import * as regex from './regex'
+import * as text from './text'
+import * as url from './url'
 
 interface Searchable {
   name: CommandName
@@ -31,7 +53,29 @@ const SEARCHABLE: Searchable[] = [
   { name: 'custom', search: custom.search, execute: custom.execute },
   { name: 'focus', search: focus.search, execute: focus.execute },
   { name: 'gif', search: gif.search, execute: gif.execute },
-  { name: 'lookup', search: lookup.search, execute: lookup.execute }
+  { name: 'lookup', search: lookup.search, execute: lookup.execute },
+  { name: 'tz', search: tz.search, execute: tz.execute },
+  { name: 'case', search: caseCmd.search, execute: caseCmd.execute },
+  { name: 'chmod', search: chmod.search, execute: chmod.execute },
+  { name: 'color', search: color.search, execute: color.execute },
+  { name: 'cron', search: cron.search, execute: cron.execute },
+  { name: 'emoji', search: emoji.search, execute: emoji.execute },
+  { name: 'git', search: git.search, execute: git.execute },
+  { name: 'hash', search: hash.search, execute: hash.execute },
+  { name: 'http', search: http.search, execute: http.execute },
+  { name: 'ip', search: ip.search, execute: ip.execute },
+  { name: 'json', search: json.search, execute: json.execute },
+  { name: 'lorem', search: lorem.search, execute: lorem.execute },
+  { name: 'mime', search: mime.search, execute: mime.execute },
+  { name: 'port', search: port.search, execute: port.execute },
+  { name: 'pt', search: pt.search, execute: pt.execute },
+  { name: 'pwd', search: pwd.search, execute: pwd.execute },
+  { name: 'qr', search: qr.search, execute: qr.execute },
+  { name: 'regex', search: regex.search, execute: regex.execute },
+  { name: 'text', search: text.search, execute: text.execute },
+  { name: 'unit', search: unit.search, execute: unit.execute },
+  { name: 'url', search: url.search, execute: url.execute },
+  { name: 'uuid', search: uuid.search, execute: uuid.execute }
 ]
 
 function getDirectResult(rawQuery: string): SearchResultItem | null {

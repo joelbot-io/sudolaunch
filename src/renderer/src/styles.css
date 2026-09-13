@@ -393,7 +393,14 @@ body::-webkit-scrollbar,
 
 .palette-item-sublabel {
   font-size: 12px;
-  color: var(--muted);
+  color: #f6ad55;
+  line-height: 1.35;
+  margin-top: 1px;
+}
+
+.palette-item.active .palette-item-sublabel,
+.palette-item:hover .palette-item-sublabel {
+  color: #fef08a;
 }
 
 .palette-empty {

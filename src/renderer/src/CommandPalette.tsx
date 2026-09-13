@@ -52,11 +52,23 @@ function parseInput(
     if (name === 'settings' || name === 'config') {
       return { command: 'settings', query: '' }
     }
+    if (name === 'powertoys' || name === 'pt') {
+      return { command: 'pt', query: '' }
+    }
+    if (customNames.has(name)) {
+      return { command: 'custom', query: name }
+    }
+    const matchedCmd = COMMANDS.find((c) => c.name === name)?.name ?? shortcuts[name]
+    const nonZeroArg = new Set<CommandName>(['calc', 'search', 'restart', 'default', 'view', 'term'])
+    if (matchedCmd && !nonZeroArg.has(matchedCmd)) {
+      return { command: matchedCmd, query: '' }
+    }
     return { command: null, query: name }
   }
   const name = raw.slice(1, spaceIdx)
   const rest = raw.slice(spaceIdx + 1)
   if (name === 'settings' || name === 'config') return { command: 'settings', query: rest }
+  if (name === 'powertoys') return { command: 'pt', query: rest }
   if (customNames.has(name)) return { command: 'custom', query: `${name} ${rest}`.trim() }
   const command = COMMANDS.find((c) => c.name === name)?.name ?? shortcuts[name] ?? null
   return { command, query: rest }
@@ -351,6 +363,98 @@ export default function CommandPalette(): JSX.Element {
         setValue('/lookup ')
         return
       }
+      if (valueRef.current.startsWith('/tz ') && valueRef.current.length > '/tz '.length) {
+        setValue('/tz ')
+        return
+      }
+      if (valueRef.current.startsWith('/case ') && valueRef.current.length > '/case '.length) {
+        setValue('/case ')
+        return
+      }
+      if (valueRef.current.startsWith('/chmod ') && valueRef.current.length > '/chmod '.length) {
+        setValue('/chmod ')
+        return
+      }
+      if (valueRef.current.startsWith('/color ') && valueRef.current.length > '/color '.length) {
+        setValue('/color ')
+        return
+      }
+      if (valueRef.current.startsWith('/cron ') && valueRef.current.length > '/cron '.length) {
+        setValue('/cron ')
+        return
+      }
+      if (valueRef.current.startsWith('/emoji ') && valueRef.current.length > '/emoji '.length) {
+        setValue('/emoji ')
+        return
+      }
+      if (valueRef.current.startsWith('/git ') && valueRef.current.length > '/git '.length) {
+        setValue('/git ')
+        return
+      }
+      if (valueRef.current.startsWith('/hash ') && valueRef.current.length > '/hash '.length) {
+        setValue('/hash ')
+        return
+      }
+      if (valueRef.current.startsWith('/http ') && valueRef.current.length > '/http '.length) {
+        setValue('/http ')
+        return
+      }
+      if (valueRef.current.startsWith('/ip ') && valueRef.current.length > '/ip '.length) {
+        setValue('/ip ')
+        return
+      }
+      if (valueRef.current.startsWith('/json ') && valueRef.current.length > '/json '.length) {
+        setValue('/json ')
+        return
+      }
+      if (valueRef.current.startsWith('/lorem ') && valueRef.current.length > '/lorem '.length) {
+        setValue('/lorem ')
+        return
+      }
+      if (valueRef.current.startsWith('/mime ') && valueRef.current.length > '/mime '.length) {
+        setValue('/mime ')
+        return
+      }
+      if (valueRef.current.startsWith('/port ') && valueRef.current.length > '/port '.length) {
+        setValue('/port ')
+        return
+      }
+      if (valueRef.current.startsWith('/pt ') && valueRef.current.length > '/pt '.length) {
+        setValue('/pt ')
+        return
+      }
+      if (valueRef.current.startsWith('/powertoys ') && valueRef.current.length > '/powertoys '.length) {
+        setValue('/powertoys ')
+        return
+      }
+      if (valueRef.current.startsWith('/pwd ') && valueRef.current.length > '/pwd '.length) {
+        setValue('/pwd ')
+        return
+      }
+      if (valueRef.current.startsWith('/qr ') && valueRef.current.length > '/qr '.length) {
+        setValue('/qr ')
+        return
+      }
+      if (valueRef.current.startsWith('/regex ') && valueRef.current.length > '/regex '.length) {
+        setValue('/regex ')
+        return
+      }
+      if (valueRef.current.startsWith('/text ') && valueRef.current.length > '/text '.length) {
+        setValue('/text ')
+        return
+      }
+      if (valueRef.current.startsWith('/unit ') && valueRef.current.length > '/unit '.length) {
+        setValue('/unit ')
+        return
+      }
+      if (valueRef.current.startsWith('/url ') && valueRef.current.length > '/url '.length) {
+        setValue('/url ')
+        return
+      }
+      if (valueRef.current.startsWith('/uuid ') && valueRef.current.length > '/uuid '.length) {
+        setValue('/uuid ')
+        return
+      }
       if (valueRef.current !== '' && valueRef.current !== defVal) {
         setValue(defVal)
       } else if (windowMode === 'bar') {
@@ -480,6 +584,9 @@ export default function CommandPalette(): JSX.Element {
   }, [shortcutFor, hiddenCommands, defaultCommand])
 
   const runCommand = useCallback((cmd: CommandName, item: SearchResultItem): void => {
+    if (item.value && !item.value.startsWith('__')) {
+      navigator.clipboard?.writeText(item.value).catch(() => {})
+    }
     window.api.executeCommand(cmd, item, query).then(handleExecuteResult)
   }, [query])
 
@@ -568,7 +675,11 @@ export default function CommandPalette(): JSX.Element {
       setTimeout(() => setCommandError((current) => (current === error ? null : current)), 5000)
     } else {
       setCommandError(null)
-      window.api.hidePalette()
+      if (windowMode === 'bar') {
+        window.api.barDeactivate()
+      } else {
+        window.api.hidePalette()
+      }
     }
   }
 
@@ -584,7 +695,11 @@ export default function CommandPalette(): JSX.Element {
       if (command === 'calc') {
         if (calcResult !== null) {
           navigator.clipboard.writeText(calcResult)
-          window.api.hidePalette()
+          if (windowMode === 'bar') {
+            window.api.barDeactivate()
+          } else {
+            window.api.hidePalette()
+          }
         }
         return
       }

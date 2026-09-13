@@ -108,18 +108,40 @@ export interface AppEntry {
 export type CommandName =
   | 'app'
   | 'calc'
+  | 'case'
+  | 'chmod'
+  | 'color'
+  | 'cron'
   | 'custom'
   | 'default'
+  | 'emoji'
   | 'fav'
   | 'focus'
   | 'gif'
+  | 'git'
+  | 'hash'
+  | 'http'
+  | 'ip'
+  | 'json'
   | 'lookup'
+  | 'lorem'
   | 'mail'
+  | 'mime'
+  | 'port'
+  | 'pt'
+  | 'pwd'
+  | 'qr'
+  | 'regex'
   | 'restart'
   | 'search'
   | 'snippet'
   | 'teams'
   | 'term'
+  | 'text'
+  | 'tz'
+  | 'unit'
+  | 'url'
+  | 'uuid'
   | 'view'
   | 'settings'
 
@@ -131,19 +153,41 @@ export interface CommandDef {
 export const COMMANDS: CommandDef[] = [
   { name: 'app', description: 'Launch an installed application' },
   { name: 'calc', description: 'Evaluate a math expression' },
+  { name: 'case', description: 'Convert text case (camelCase, kebab-case, snake_case, PascalCase, etc.)' },
+  { name: 'chmod', description: 'Convert and calculate Linux/Unix file permissions (755, rwxr-xr-x)' },
+  { name: 'color', description: 'Convert color models (HEX, RGB, HSL) and copy formats' },
+  { name: 'cron', description: 'Explain cron expressions in plain English and compute upcoming runs' },
   { name: 'custom', description: 'Run a custom command, or browse a folder of scripts' },
   { name: 'default', description: 'Set the default command that shows first in suggestions' },
+  { name: 'emoji', description: 'Search and copy Unicode emojis by name, keyword, or shortcode' },
   { name: 'fav', description: 'Open a saved link in the browser' },
   { name: 'focus', description: 'Bring an open window to the front' },
   { name: 'gif', description: 'Copy a GIF from your GIF folder to the clipboard' },
+  { name: 'git', description: 'Search common Git recipes, recovery shortcuts, and commands' },
+  { name: 'hash', description: 'Generate hashes (SHA-256, MD5) and decode Base64, URL, or JWT' },
+  { name: 'http', description: 'Search HTTP status codes and standard HTTP header references' },
+  { name: 'ip', description: 'Inspect network interfaces, local IPs, and MAC addresses' },
+  { name: 'json', description: 'Prettify, minify, validate, or stringify JSON from text or clipboard' },
   { name: 'lookup', description: 'Search a local JSON data table' },
+  { name: 'lorem', description: 'Generate placeholder text, mock dummy data, emails, and names' },
   { name: 'mail', description: 'Compose an email to a contact' },
+  { name: 'mime', description: 'Search MIME content types and file extensions (e.g. .json, image/webp)' },
+  { name: 'port', description: 'Inspect listening TCP ports and kill blocking processes' },
+  { name: 'pt', description: 'Launch Microsoft PowerToys utilities and tools (alias: /powertoys)' },
+  { name: 'pwd', description: 'Generate secure passwords, passphrases, PINs, and API tokens' },
+  { name: 'qr', description: 'Generate QR codes from URLs or text with clipboard copy' },
+  { name: 'regex', description: 'Library of standard regex patterns and live regex tester' },
   { name: 'restart', description: 'Relaunch the application' },
   { name: 'search', description: 'Search across other commands at once' },
   { name: 'settings', description: 'Open settings and configuration manager' },
   { name: 'snippet', description: 'Copy a saved snippet to the clipboard' },
   { name: 'teams', description: 'Open a Teams chat with a contact' },
   { name: 'term', description: 'Open or run a command in the persistent terminal' },
+  { name: 'text', description: 'Analyze text statistics, sort, deduplicate, and join lines' },
+  { name: 'tz', description: 'Convert timestamps and timezones to local time' },
+  { name: 'unit', description: 'Convert data units, bandwidth, physical units, and number bases' },
+  { name: 'url', description: 'Parse URL components, extract query parameters, and build cURL snippets' },
+  { name: 'uuid', description: 'Generate UUIDs/GUIDs in multiple formats and inspect IDs' },
   { name: 'view', description: 'Toggle the command bar or change its position' }
 ]
 
@@ -153,14 +197,36 @@ export const COMMANDS: CommandDef[] = [
 // screen in ConfigManager.tsx.
 export const SEARCHABLE_COMMAND_NAMES: Exclude<CommandName, 'calc' | 'search' | 'view' | 'term' | 'restart' | 'default' | 'settings'>[] = [
   'app',
+  'case',
+  'chmod',
+  'color',
+  'cron',
   'custom',
+  'emoji',
   'fav',
   'focus',
   'gif',
+  'git',
+  'hash',
+  'http',
+  'ip',
+  'json',
   'lookup',
+  'lorem',
   'mail',
+  'mime',
+  'port',
+  'pt',
+  'pwd',
+  'qr',
+  'regex',
   'snippet',
-  'teams'
+  'teams',
+  'text',
+  'tz',
+  'unit',
+  'url',
+  'uuid'
 ]
 
 export interface SearchResultItem {

@@ -1,6 +1,6 @@
 # SudoLaunch
 
-A global-hotkey command palette, persistent command bar, and drop-down terminal for Windows. Press `Ctrl+Space` (configurable) to summon a centered, searchable palette covering Teams chats and channels, email, snippets, links, app launching, script browsing, window switching, custom PowerShell commands, animated GIFs, JSON table lookups, and inline math. Always dark themed, independent of the Windows system theme setting.
+A global-hotkey command palette, persistent command bar, and drop-down terminal for Windows. Press `Ctrl+Space` (configurable) to summon a centered, searchable palette covering Teams chats and channels, email, snippets, links, app launching, script browsing, window switching, custom PowerShell commands, animated GIFs, JSON table lookups, and an extensive suite of instant developer utilities (timezones, hashing, regex, Git recipes, HTTP codes, QR codes, unit/color converters, and text manipulation). Always dark themed, independent of the Windows system theme setting.
 
 ## Contents
 
@@ -33,6 +33,28 @@ A global-hotkey command palette, persistent command bar, and drop-down terminal 
 | `/<custom name> <args>` | Run a user-defined custom PowerShell command, or browse a folder of scripts (see [Custom commands](#custom-commands)) |
 | `/gif <query>` | Fuzzy-search and copy animated GIFs from your GIF folder to clipboard |
 | `/lookup <table> <query>` | Fuzzy-search a JSON table from your lookup folder; select a record to drill into its fields, then select a field to copy its value to clipboard |
+| `/tz [query]` | Universal timezone & timestamp converter (e.g. `/tz time australia`, Unix epoch, ISO 8601, relative time, time-with-zone, "X to Y"); Enter copies result |
+| `/case [text]` | Convert text case (camelCase, kebab-case, snake_case, CONSTANT_CASE, PascalCase, Title Case, dot.case, path/case) with clipboard fallback |
+| `/chmod [mode]` | Calculate and convert Unix/Linux file permissions (e.g. `755`, `644`, `rwxr-xr-x`) with owner/group breakdowns |
+| `/color <color>` | Convert between color models (HEX, RGB, RGBA, HSL, HSLA, CSS variable) with visual color values |
+| `/cron <expression>` | Explain 5-part cron expressions in plain English and compute upcoming execution timestamps in local time |
+| `/emoji <query>` | Fast fuzzy search across 250+ Unicode emojis by keyword, category, or shortcode (`:rocket:`, `:fire:`, `:lock:`, `:bug:`) |
+| `/git [query]` | Searchable reference of high-frequency Git commands and recovery recipes (undo, squash, prune, stash, rebase) |
+| `/hash <text>` | Instant cryptographic hashing (SHA-256, SHA-512, MD5, SHA-1), Base64/URL/Hex encoding/decoding, and JWT inspection |
+| `/http [code|name]` | Search HTTP status codes (1xx-5xx) and standard HTTP header references with one-click copy |
+| `/ip [filter]` | Inspect local network interfaces, primary IPv4, IPv6, adapter types, and MAC addresses |
+| `/json [json]` | Prettify (2/4 spaces), minify, validate, or stringify JSON with clipboard fallback and error diagnostics |
+| `/lorem [count|type]` | Generate placeholder text (paragraphs, sentences) and mock data (names, emails, phones, addresses, companies) |
+| `/mime <query>` | Two-way lookup between file extensions and standard MIME content types (e.g. `.webp`, `application/pdf`, `text/html`) |
+| `/port [port]` | Inspect active listening TCP ports and running processes; Enter kills the blocking process or copies PID |
+| `/pt [query]` | Launch Microsoft PowerToys utilities & tools (Hosts, FancyZones, OCR, Ruler, ColorPicker, Awake, etc., alias: `/powertoys`) |
+| `/pwd [length|type]` | Generate cryptographically secure passwords, Diceware passphrases, PINs, and 256-bit API secrets |
+| `/qr [url|text]` | Generate QR codes from URLs or text with clipboard copy for SVG Data URI, SVG XML, or ASCII terminal art |
+| `/regex [pattern]` | Searchable catalog of standard regex patterns (email, URL, IPv4, SemVer, UUID, date) + live regex tester |
+| `/text [text]` | Inspect text metrics (word, char, line count, read time) and transform lines (sort, unique, strip empty, join comma) |
+| `/unit <expr>` | Unit converter for data storage (GB/MB), bandwidth (Mbps), physical units, and number bases (dec/hex/bin/oct) |
+| `/url <url>` | Parse URL components (host, path, port), extract individual query params, and generate cURL / fetch / PowerShell snippets |
+| `/uuid [id]` | Generate UUIDs/GUIDs in multiple formats (standard, uppercase, no-hyphens, C# GUID, Base64, UUIDv7) or inspect existing IDs |
 | `/settings` | Open the interactive configuration manager (alias: `/config`) |
 | `/term [command]` | Expand/collapse the persistent terminal, or execute a shell command directly (e.g. `/term git status`) |
 | `/view` | Toggle the persistent command bar on/off; `/view reset` returns both buttons to their default dock |
