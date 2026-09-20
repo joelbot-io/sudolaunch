@@ -5,12 +5,14 @@ A global-hotkey command palette, persistent command bar, and drop-down terminal 
 ## Contents
 
 - [Commands](#commands)
+- [Input Sharing (`/swap`)](#input-sharing-swap)
 - [Command bar](#command-bar)
 - [Terminal](#terminal)
 - [Lookup tables](#lookup-tables)
 - [In-App Configuration (`/settings`)](#in-app-configuration-settings)
 - [Configuration Files](#configuration-files)
 - [Custom commands](#custom-commands)
+- [Script Safety & Security Advisory](#script-safety--security-advisory)
 - [Requirements](#requirements)
 - [Setup](#setup)
 - [Development](#development)
@@ -29,6 +31,7 @@ A global-hotkey command palette, persistent command bar, and drop-down terminal 
 | `/mail <query>` | Fuzzy-search contacts, compose an email in your default mail client |
 | `/snippet <query>` | Fuzzy-search snippets, copy text directly to clipboard |
 | `/fav <query>` | Fuzzy-search saved links, open URL in default browser |
+| `/g <query>` | Open a Google search in your default web browser (alias: `/google`, clipboard fallback) |
 | `/focus <query>` | Fuzzy-search open desktop windows by title, restore and bring to front |
 | `/calc <expression>` | Evaluate a math expression inline; Enter copies the result to clipboard |
 | `/<custom name> <args>` | Run a user-defined custom PowerShell command, or browse a folder of scripts (see [Custom commands](#custom-commands)) |
@@ -57,16 +60,41 @@ A global-hotkey command palette, persistent command bar, and drop-down terminal 
 | `/url <url>` | Parse URL components (host, path, port), extract individual query params, and generate cURL / fetch / PowerShell snippets |
 | `/uuid [id]` | Generate UUIDs/GUIDs in multiple formats (standard, uppercase, no-hyphens, C# GUID, Base64, UUIDv7) or inspect existing IDs |
 | `/settings` | Open the interactive configuration manager (alias: `/config`) |
+| `/swap [#]` | Toggle active keyboard/mouse input sharing with another computer (e.g. `/swap 2` or `/swap 192.168.1.105`) |
+| `/release` | Release input sharing connection and restore local control regardless of whether input is local or remote |
 | `/term [command]` | Expand/collapse the persistent terminal, or execute a shell command directly (e.g. `/term git status`) |
 | `/view` | Toggle the persistent command bar on/off; `/view reset` returns both buttons to their default dock |
 | `/move` | Interactively drag the command bar and terminal icons to new positions on screen |
 | `/default` | Set or clear the default command prioritized at the top of the suggestions list |
 | `/restart` | Relaunch the application |
+| `/exit` | Exit and close the application (alias: `/quit`) |
 
 - **Unprefixed Search**: Typing text without a leading slash (e.g. `chrome`, `github`, `project`) automatically falls back to universal search (`/search`), or your chosen default command.
 - **Shortcuts**: `/teams` (`/t`), `/fav` (`/f`), `/snippet` (`/s`), and `/settings` (`/config`) provide fast single/short aliases.
 - **Recent History**: When opened with an empty input, the palette displays your most recent executed commands, re-runnable with Enter.
 - **Empty Folder Helper**: If `~/.sudolaunch/gif` or `~/.sudolaunch/lookup` is empty, selecting `/gif` or `/lookup` displays an actionable prompt; pressing Enter opens the folder in Explorer.
+
+## Input Sharing (`/swap`)
+
+Toggle active keyboard and mouse control between multiple SudoLaunch instances across your local network via direct TCP/IP:
+
+- **Usage**:
+  - `/swap`: Displays configured peer computers and their status. Press Enter on any computer or toggle option.
+  - `/swap <#>`: Directly swaps input to the specified machine number (e.g. `/swap 2`). Running `/swap 2` again toggles input back to your local computer.
+  - `/swap <ip>`: Directly connects and shares input with a specified IP address or hostname (e.g. `/swap 192.168.1.105` or `/swap 192.168.1.105:41234`).
+  - `/release` or `/swap release` / `/swap back` / `/swap off` / `/swap 0`: Releases any active input sharing session (both outgoing controller session and incoming receiver connection) and restores local control.
+- **Safety Escape Toggles**:
+  - While input is swapped to another computer, local mouse and keyboard events are captured and forwarded without interacting with local windows.
+  - Pressing **`ScrollLock`**, **`Pause/Break`**, or **`Ctrl+Alt+S`** immediately releases the input hook and restores control to the host computer.
+  - A sleek floating banner is displayed at the top of the screen: `[ ⇄ Input Swapped to #2 (Laptop) · Press ScrollLock to Return ]` with a clickable "Return Input" button.
+- **Configuration (`/settings -> Swap Peers`)**:
+  - Configured in `~/.sudolaunch/peers.json` or through the interactive `/settings` UI:
+    ```json
+    [
+      { "id": 1, "name": "Desktop PC", "host": "192.168.1.100", "port": 41234 },
+      { "id": 2, "name": "Laptop", "host": "192.168.1.105", "port": 41234 }
+    ]
+    ```
 
 ## Command bar
 
@@ -176,6 +204,24 @@ Each custom command is defined as a `.json` file in `%USERPROFILE%\.sudolaunch\c
 - **Usage**: Typing the command (e.g. `/maint` or `/script`) lists subfolders and `.py` / `.ps1` scripts. Fuzzy-search within the current folder, type a folder name followed by `/` to navigate into subdirectories, or select `.. (up one level)` to navigate back up.
 - **Execution**: Selecting a script launches it in a new visible console window (`python` for `.py` files, `powershell -NoExit -File` for `.ps1` files) so you can view outputs or respond to interactive prompts. Both `python` and `powershell` must be on your system `PATH`.
 
+### 3. Script Safety & Security Advisory
+
+PowerShell actions and script browser commands execute directly on your Windows desktop with the full permissions and security context of your user account. SudoLaunch does not sandbox PowerShell execution.
+
+> [!CAUTION]
+> **Dangers of Unverified & AI-Generated Scripts**:
+> Running scripts sourced from public repositories, community forums, or generated by AI models without careful review can introduce severe risks and unintended side-effects on your environment:
+> - **Accidental Data Loss**: Commands using recursive deletion flags (e.g. `Remove-Item -Recurse -Force`) can wipe entire folder hierarchies if target paths or parameters fail to resolve properly.
+> - **Hallucinated or Malformed Cmdlets**: AI-generated code often produces plausible-looking cmdlets with incorrect, deprecated, or destructive switches that may alter system registries, environment variables, or terminate background processes.
+> - **Parameter Injection**: Parameters supplied via the palette (e.g. `/mycmd param=value`) are interpolated directly into the PowerShell `Action` string before dispatch. Never paste untrusted or unescaped text into custom command parameters.
+> - **Unintended System Modifications**: Scripts may modify PowerShell Execution Policies, system PATH variables, or Windows network adapter configurations.
+
+#### Safe Scripting Guidelines
+1. **Audit Every Line**: Always open and review the raw source code of `.ps1` and `.py` scripts before adding them to your `commands\` or script directories.
+2. **Review AI Outputs**: Treat AI-generated scripts as unverified drafts. Never run AI-generated commands without thoroughly understanding every flag and parameter.
+3. **Test in Isolation**: Execute new commands or maintenance scripts in an isolated terminal or test directory first.
+4. **Use `-WhatIf` Testing**: When writing or testing commands that modify the filesystem or services, use PowerShell's built-in `-WhatIf` or `-Confirm` parameters.
+
 ## Requirements
 
 - Windows 10/11
@@ -211,15 +257,36 @@ npm run typecheck
 
 ## Build & Packaging
 
-```sh
-# Bundle main, preload, and renderer processes (into out/)
-npm run build
+### Build Commands
 
-# Bundle and build the Windows NSIS installer (into dist/)
-npm run build:win
+| Command | Action | Output Directory | Output Artifacts |
+|---|---|---|---|
+| `npm run build` | Compiles TypeScript and bundles main, preload, and renderer processes via `electron-vite` | `out/` | `out/main/index.js`<br>`out/preload/index.js`<br>`out/renderer/` (HTML, JS, CSS) |
+| `npm run build:win` | Bundles the application (`npm run build`) and creates a Windows installer & standalone binaries via `electron-builder` | `dist/` | `dist/SudoLaunch-<version>-setup.exe`<br>`dist/win-unpacked/` |
+| `npm run typecheck` | Runs TypeScript type checking across node (main/preload) and web (renderer) without emitting output | — | Terminal diagnostic output (0 errors expected) |
+| `npm run postinstall` | Rebuilds native C++ modules (`node-window-manager`, `electron-clipboard-ex`, `node-pty`) for Electron ABI | `node_modules/` | Native `.node` binaries |
+| `npm run profile:repair-env` | Diagnostic script that verifies environment tools, clears security locks, recompiles C# binaries, and rebuilds native addons | `resources/bin/` | `resources/bin/sendkey.exe`<br>`resources/bin/swaphook.exe` |
+
+### Output Directories
+
+| Directory | Purpose | Contents |
+|---|---|---|
+| **`out/`** | Bundled Electron runtime code produced by `npm run build` | • `out/main/index.js`: Main Electron process bundle<br>• `out/preload/index.js`: Preload script exposing secure IPC APIs<br>• `out/renderer/`: Compiled React application, styling, and web bundle |
+| **`dist/`** | Distribution artifacts produced by `npm run build:win` | • `dist/SudoLaunch-<version>-setup.exe`: Self-contained NSIS per-user Windows installer<br>• `dist/win-unpacked/`: Standalone unpacked application folder containing `SudoLaunch.exe`, bundled Electron runtime, and unpacked dependencies<br>• `dist/builder-effective-config.yaml`: Resolved build and packaging manifest |
+| **`resources/bin/`** | Native pre-compiled auxiliary Win32 executables packaged with the application | • `resources/bin/sendkey.exe`: Background keystroke injection & window focus activator<br>• `resources/bin/swaphook.exe`: High-performance Raw Input forwarder & low-level hook for `/swap` input sharing |
+
+### Native C# Helper Compilation
+
+SudoLaunch includes high-performance native Win32 helpers for background keystroke simulation and low-level mouse/keyboard input forwarding:
+
+```powershell
+# Automated rebuild of all native tools via maintenance script:
+npm run profile:repair-env
+
+# Or manual compilation using the .NET Framework C# compiler (csc.exe):
+C:\Windows\Microsoft.NET\Framework64\v4.0.30319\csc.exe /target:winexe /out:resources\bin\sendkey.exe /optimize+ src\main\tools\sendkey.cs
+C:\Windows\Microsoft.NET\Framework64\v4.0.30319\csc.exe /target:exe /out:resources\bin\swaphook.exe /optimize+ src\main\tools\swaphook.cs
 ```
-
-Packaged installers will be generated at `dist/SudoLaunch-<version>-setup.exe`.
 
 ## Auto-start
 

@@ -1,8 +1,43 @@
+# Dependencies
 node_modules/
+
+# Build & packaging outputs
 out/
 dist/
+dist.zip
+*.zip
+*.tar.gz
+
+# TypeScript / Vite caches
 *.tsbuildinfo
+.vite/
+
+# Compiled binaries & artifacts
+resources/bin/*.exe
+!resources/bin/sendkey.exe
+*.exe
+*.dll
+*.pdb
+
+# Test logs & scratch files
 scratch/
 *.log
+*_test_log.txt
+raw_and_hook_test.txt
+warp_filter_test.txt
+
+# OS & Editor files
 .DS_Store
+Thumbs.db
+.vscode/
+.idea/
+*.suo
+*.user
+
+# Environment & local configurations
+.env
+.env.local
+.env.*.local
+resources/team_list.csv
+
 

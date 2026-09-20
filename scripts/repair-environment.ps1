@@ -114,7 +114,7 @@ if ($env:NoDefaultCurrentDirectoryInExePath) {
 # 3. Recompile sendkey.exe
 if (-not $SkipSendKey -and $cscPath) {
     Write-Host ""
-    Write-Step "2. Verifying and compiling Win32 sendkey utility..."
+    Write-Step "2. Verifying and compiling Win32 sendkey and swaphook utilities..."
     $sendkeySource = Join-Path $PSScriptRoot "..\src\main\tools\sendkey.cs"
     $sendkeyBin = Join-Path $PSScriptRoot "..\resources\bin\sendkey.exe"
 
@@ -131,6 +131,31 @@ if (-not $SkipSendKey -and $cscPath) {
         }
     } else {
         Write-WarningMsg "sendkey.cs source not found at: $sendkeySource"
+    }
+
+    $swaphookSource = Join-Path $PSScriptRoot "..\src\main\tools\swaphook.cs"
+    $swaphookBin = Join-Path $PSScriptRoot "..\resources\bin\swaphook.exe"
+    $swaphookManifest = Join-Path $PSScriptRoot "..\src\main\tools\swaphook.manifest"
+
+    if (Test-Path $swaphookSource) {
+        $binDir = Split-Path -Parent $swaphookBin
+        if (-not (Test-Path $binDir)) { New-Item -Path $binDir -ItemType Directory -Force | Out-Null }
+
+        $cscArgs = @("/target:exe", "/out:$swaphookBin", "/optimize+")
+        if (Test-Path $swaphookManifest) {
+            $cscArgs += "/win32manifest:$swaphookManifest"
+        }
+        $cscArgs += $swaphookSource
+
+        & $cscPath $cscArgs | Out-Null
+        if (Test-Path $swaphookBin) {
+            $binInfo = Get-Item $swaphookBin
+            Write-Success "swaphook.exe compiled ($([Math]::Round($binInfo.Length / 1KB, 1)) KB) -> $swaphookBin"
+        } else {
+            Write-WarningMsg "swaphook.exe compilation did not produce an output file."
+        }
+    } else {
+        Write-WarningMsg "swaphook.cs source not found at: $swaphookSource"
     }
 }
 

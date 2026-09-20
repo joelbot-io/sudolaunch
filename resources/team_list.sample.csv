@@ -1,0 +1,23 @@
+[
+  {
+    "DisplayName": "General",
+    "Description": "General team discussion and announcements",
+    "Id": "00000000-0000-0000-0000-000000000001",
+    "InternalId": "19:example1@thread.tacv2",
+    "WebUrl": "https://teams.microsoft.com/l/team/19%3aexample1%40thread.tacv2/conversations?groupId=00000000-0000-0000-0000-000000000001"
+  },
+  {
+    "DisplayName": "Engineering",
+    "Description": "Software development, architecture, and code reviews",
+    "Id": "00000000-0000-0000-0000-000000000002",
+    "InternalId": "19:example2@thread.tacv2",
+    "WebUrl": "https://teams.microsoft.com/l/team/19%3aexample2%40thread.tacv2/conversations?groupId=00000000-0000-0000-0000-000000000002"
+  },
+  {
+    "DisplayName": "Product Support",
+    "Description": "Customer feedback, bug triage, and release updates",
+    "Id": "00000000-0000-0000-0000-000000000003",
+    "InternalId": "19:example3@thread.tacv2",
+    "WebUrl": "https://teams.microsoft.com/l/team/19%3aexample3%40thread.tacv2/conversations?groupId=00000000-0000-0000-0000-000000000003"
+  }
+]

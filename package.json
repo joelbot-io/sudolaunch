@@ -28,7 +28,11 @@
     "profile:apps": "powershell -ExecutionPolicy Bypass -File ./scripts/reindex-apps.ps1",
     "profile:clean-procs": "powershell -ExecutionPolicy Bypass -File ./scripts/clean-processes.ps1",
     "profile:shell-sync": "powershell -ExecutionPolicy Bypass -File ./scripts/sync-terminal-profile.ps1",
-    "profile:manage": "powershell -ExecutionPolicy Bypass -File ./scripts/manage-profile.ps1"
+    "profile:manage": "powershell -ExecutionPolicy Bypass -File ./scripts/manage-profile.ps1",
+    "setup:uiaccess": "powershell -ExecutionPolicy Bypass -File ./scripts/setup-uiaccess.ps1",
+    "uac:status": "powershell -ExecutionPolicy Bypass -File ./scripts/manage-secure-desktop.ps1 -Status",
+    "uac:disable": "powershell -ExecutionPolicy Bypass -File ./scripts/manage-secure-desktop.ps1 -Disable",
+    "uac:enable": "powershell -ExecutionPolicy Bypass -File ./scripts/manage-secure-desktop.ps1 -Enable"
   },
   "dependencies": {
     "@electron-toolkit/utils": "^3.0.0",

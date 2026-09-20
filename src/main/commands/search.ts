@@ -8,6 +8,7 @@ import * as teams from './teams'
 import * as mail from './mail'
 import * as snippet from './snippet'
 import * as fav from './fav'
+import * as g from './g'
 import * as app from './app'
 import * as custom from './custom'
 import * as focus from './focus'
@@ -49,6 +50,7 @@ const SEARCHABLE: Searchable[] = [
   { name: 'mail', search: mail.search, execute: mail.execute },
   { name: 'snippet', search: snippet.search, execute: snippet.execute },
   { name: 'fav', search: fav.search, execute: fav.execute },
+  { name: 'g', search: g.search, execute: g.execute },
   { name: 'app', search: app.search, execute: app.execute },
   { name: 'custom', search: custom.search, execute: custom.execute },
   { name: 'focus', search: focus.search, execute: focus.execute },

@@ -40,6 +40,7 @@ import {
   repositionBarForDisplayChange,
   sendToBar
 } from './barWindow'
+import { initSwap, shutdownSwap, startSwapServer } from './swap/swapManager'
 import type { CommandName, SearchResultItem, ConfigType, ConfigEntry } from '../shared/types'
 
 let mainWindow: BrowserWindow | null = null
@@ -266,6 +267,7 @@ app.whenReady().then(() => {
   registerFixedTerminalHotkeys()
   applyAutoStart(initialSettings.autoStart)
   setBarVisible(initialSettings.barEnabled)
+  initSwap()
 
   screen.on('display-metrics-changed', () => repositionBarForDisplayChange())
 
@@ -279,6 +281,9 @@ app.whenReady().then(() => {
     terminalHotkey.register(settings.terminalHotkey)
     applyAutoStart(settings.autoStart)
     setBarVisible(settings.barEnabled)
+    if (settings.swapEnabled !== false) {
+      startSwapServer(settings.swapPort)
+    }
     mainWindow?.webContents.send('config-changed')
     sendToBar('config-changed')
   })
@@ -305,4 +310,5 @@ app.on('window-all-closed', () => {
 app.on('will-quit', () => {
   globalShortcut.unregisterAll()
   killPty()
+  shutdownSwap()
 })

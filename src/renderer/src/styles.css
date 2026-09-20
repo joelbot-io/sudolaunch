@@ -393,14 +393,14 @@ body::-webkit-scrollbar,
 
 .palette-item-sublabel {
   font-size: 12px;
-  color: #f6ad55;
+  color: #a0aec0;
   line-height: 1.35;
   margin-top: 1px;
 }
 
 .palette-item.active .palette-item-sublabel,
 .palette-item:hover .palette-item-sublabel {
-  color: #fef08a;
+  color: #e2e8f0;
 }
 
 .palette-empty {

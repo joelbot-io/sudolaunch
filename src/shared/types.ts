@@ -23,6 +23,13 @@ export interface TeamLink {
   description?: string
 }
 
+export interface SwapPeer {
+  id: number
+  name: string
+  host: string
+  port: number
+}
+
 export interface HistoryEntry {
   command: CommandName
   query: string
@@ -82,6 +89,11 @@ export interface Settings {
   // Top-left of the expanded terminal window when moved via its drag handle —
   // null means "open centered relative to the dock icon".
   termWindowPosition: { x: number; y: number } | null
+  // Input sharing settings (/swap #)
+  swapEnabled: boolean
+  swapMachineId: number
+  swapPort: number
+  swapToggleHotkey: string
 }
 
 // The currently registered global accelerators, as Electron accelerator strings (e.g.
@@ -117,6 +129,7 @@ export type CommandName =
   | 'emoji'
   | 'fav'
   | 'focus'
+  | 'g'
   | 'gif'
   | 'git'
   | 'hash'
@@ -143,6 +156,9 @@ export type CommandName =
   | 'url'
   | 'uuid'
   | 'view'
+  | 'swap'
+  | 'release'
+  | 'exit'
   | 'settings'
 
 export interface CommandDef {
@@ -160,8 +176,10 @@ export const COMMANDS: CommandDef[] = [
   { name: 'custom', description: 'Run a custom command, or browse a folder of scripts' },
   { name: 'default', description: 'Set the default command that shows first in suggestions' },
   { name: 'emoji', description: 'Search and copy Unicode emojis by name, keyword, or shortcode' },
+  { name: 'exit', description: 'Exit and close the application (alias: /quit)' },
   { name: 'fav', description: 'Open a saved link in the browser' },
   { name: 'focus', description: 'Bring an open window to the front' },
+  { name: 'g', description: 'Open a Google search in your browser (alias: /google)' },
   { name: 'gif', description: 'Copy a GIF from your GIF folder to the clipboard' },
   { name: 'git', description: 'Search common Git recipes, recovery shortcuts, and commands' },
   { name: 'hash', description: 'Generate hashes (SHA-256, MD5) and decode Base64, URL, or JWT' },
@@ -177,6 +195,7 @@ export const COMMANDS: CommandDef[] = [
   { name: 'pwd', description: 'Generate secure passwords, passphrases, PINs, and API tokens' },
   { name: 'qr', description: 'Generate QR codes from URLs or text with clipboard copy' },
   { name: 'regex', description: 'Library of standard regex patterns and live regex tester' },
+  { name: 'release', description: 'Release keyboard and mouse input sharing from /swap' },
   { name: 'restart', description: 'Relaunch the application' },
   { name: 'search', description: 'Search across other commands at once' },
   { name: 'settings', description: 'Open settings and configuration manager' },
@@ -188,14 +207,15 @@ export const COMMANDS: CommandDef[] = [
   { name: 'unit', description: 'Convert data units, bandwidth, physical units, and number bases' },
   { name: 'url', description: 'Parse URL components, extract query parameters, and build cURL snippets' },
   { name: 'uuid', description: 'Generate UUIDs/GUIDs in multiple formats and inspect IDs' },
-  { name: 'view', description: 'Toggle the command bar or change its position' }
+  { name: 'view', description: 'Toggle the command bar or change its position' },
+  { name: 'swap', description: 'Toggle active keyboard and mouse input sharing with another computer (/swap #)' }
 ]
 
 // Commands that participate in the "search" command's fan-out — everything except
 // "calc" (not search-shaped) and "search" itself. Used both to build the SEARCHABLE
 // dispatch table in commands/search.ts and to drive the "Search Commands" toggle
 // screen in ConfigManager.tsx.
-export const SEARCHABLE_COMMAND_NAMES: Exclude<CommandName, 'calc' | 'search' | 'view' | 'term' | 'restart' | 'default' | 'settings'>[] = [
+export const SEARCHABLE_COMMAND_NAMES: Exclude<CommandName, 'calc' | 'search' | 'view' | 'term' | 'restart' | 'default' | 'settings' | 'swap' | 'release'>[] = [
   'app',
   'case',
   'chmod',
@@ -205,6 +225,7 @@ export const SEARCHABLE_COMMAND_NAMES: Exclude<CommandName, 'calc' | 'search' | 
   'emoji',
   'fav',
   'focus',
+  'g',
   'gif',
   'git',
   'hash',
@@ -259,7 +280,7 @@ export interface CustomCommand {
   parameters: CustomCommandParam[]
 }
 
-export type ConfigType = 'contacts' | 'snippets' | 'links' | 'teamLinks' | 'settings'
+export type ConfigType = 'contacts' | 'snippets' | 'links' | 'teamLinks' | 'settings' | 'peers'
 
 export type ConfigEntry = Record<string, string | number | boolean | string[]>
 
@@ -329,6 +350,19 @@ export const CONFIG_TYPES: ConfigTypeDef[] = [
     ]
   },
   {
+    type: 'peers',
+    label: 'Swap Peers',
+    description: 'Computers configured for input sharing via /swap #',
+    titleField: 'name',
+    subtitleField: 'host',
+    fields: [
+      { key: 'id', label: 'Machine #', type: 'number' },
+      { key: 'name', label: 'Computer Name', type: 'text' },
+      { key: 'host', label: 'IP Address / Hostname', type: 'text' },
+      { key: 'port', label: 'Port (default 41234)', type: 'number' }
+    ]
+  },
+  {
     type: 'settings',
     label: 'Settings',
     description: 'Hotkey, history limit, auto-start, and command shortcuts',
@@ -346,7 +380,11 @@ export const CONFIG_TYPES: ConfigTypeDef[] = [
       { key: 'favShortcut', label: 'Fav shortcut (e.g. f)', type: 'text' },
       { key: 'snippetShortcut', label: 'Snippet shortcut (e.g. s)', type: 'text' },
       { key: 'gifFolder', label: 'GIF folder (relative to ~/.sudolaunch, e.g. "gif")', type: 'text' },
-      { key: 'lookupFolder', label: 'Lookup folder (relative to ~/.sudolaunch, e.g. "lookup")', type: 'text' }
+      { key: 'lookupFolder', label: 'Lookup folder (relative to ~/.sudolaunch, e.g. "lookup")', type: 'text' },
+      { key: 'swapEnabled', label: 'Enable Input Sharing (/swap)', type: 'boolean' },
+      { key: 'swapMachineId', label: 'This Machine # (e.g. 1)', type: 'number' },
+      { key: 'swapPort', label: 'Swap Port (default 41234)', type: 'number' },
+      { key: 'swapToggleHotkey', label: 'Swap Toggle Hotkey (ScrollLock / Pause / Control+Alt+S)', type: 'text' }
     ]
   }
 ]

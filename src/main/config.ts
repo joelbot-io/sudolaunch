@@ -10,7 +10,8 @@ import type {
   HistoryEntry,
   Settings,
   ConfigType,
-  ConfigEntry
+  ConfigEntry,
+  SwapPeer
 } from '../shared/types'
 
 export const CONFIG_DIR = join(app.getPath('home'), '.sudolaunch')
@@ -20,6 +21,7 @@ const PATHS = {
   snippets: join(CONFIG_DIR, 'snippets.json'),
   links: join(CONFIG_DIR, 'links.json'),
   teamLinks: join(CONFIG_DIR, 'teamLinks.json'),
+  peers: join(CONFIG_DIR, 'peers.json'),
   history: join(CONFIG_DIR, 'history.json'),
   settings: join(CONFIG_DIR, 'settings.json')
 }
@@ -43,8 +45,16 @@ const DEFAULT_SETTINGS: Settings = {
   barEnabled: true,
   barPosition: null,
   termPosition: null,
-  termWindowPosition: null
+  termWindowPosition: null,
+  swapEnabled: true,
+  swapMachineId: 1,
+  swapPort: 41234,
+  swapToggleHotkey: 'ScrollLock'
 }
+
+const SEED_PEERS: SwapPeer[] = [
+  { id: 2, name: 'Secondary PC', host: '192.168.1.105', port: 41234 }
+]
 
 const SEED_CONTACTS: Contact[] = [
   { name: 'Jane Doe', alias: 'jane.doe', email: 'jane.doe@example.com', teamsId: 'jane.doe@example.com' }
@@ -64,6 +74,7 @@ export function ensureConfigDir(): void {
   seedFile(PATHS.snippets, [] as Snippet[])
   seedFile(PATHS.links, [] as Link[])
   seedFile(PATHS.teamLinks, [] as TeamLink[])
+  seedFile(PATHS.peers, SEED_PEERS)
   seedFile(PATHS.history, [] as HistoryEntry[])
   seedFile(PATHS.settings, DEFAULT_SETTINGS)
 }
@@ -91,6 +102,10 @@ export function readLinks(): Link[] {
 
 export function readTeamLinks(): TeamLink[] {
   return readJson<TeamLink[]>(PATHS.teamLinks, [])
+}
+
+export function readPeers(): SwapPeer[] {
+  return readJson<SwapPeer[]>(PATHS.peers, [])
 }
 
 export function readSettings(): Settings {
@@ -121,6 +136,10 @@ export function writeTeamLinks(teamLinks: TeamLink[]): void {
   writeFileSync(PATHS.teamLinks, JSON.stringify(teamLinks, null, 2), 'utf-8')
 }
 
+export function writePeers(peers: SwapPeer[]): void {
+  writeFileSync(PATHS.peers, JSON.stringify(peers, null, 2), 'utf-8')
+}
+
 export function writeSettings(settings: Settings): void {
   writeFileSync(PATHS.settings, JSON.stringify(settings, null, 2), 'utf-8')
 }
@@ -138,6 +157,8 @@ export function getConfigEntries(type: ConfigType): ConfigEntry[] {
       return readLinks() as unknown as ConfigEntry[]
     case 'teamLinks':
       return readTeamLinks() as unknown as ConfigEntry[]
+    case 'peers':
+      return readPeers() as unknown as ConfigEntry[]
     case 'settings':
       return [readSettings() as unknown as ConfigEntry]
   }
@@ -153,6 +174,8 @@ function writeConfigList(type: Exclude<ConfigType, 'settings'>, list: ConfigEntr
       return writeLinks(list as unknown as Link[])
     case 'teamLinks':
       return writeTeamLinks(list as unknown as TeamLink[])
+    case 'peers':
+      return writePeers(list as unknown as SwapPeer[])
   }
 }
 
@@ -191,7 +214,7 @@ function watchFiles(paths: string[], onChange: (path: string) => void): void {
 }
 
 export function watchConfig(onChange: () => void): void {
-  watchFiles([PATHS.contacts, PATHS.snippets, PATHS.links, PATHS.teamLinks], () => onChange())
+  watchFiles([PATHS.contacts, PATHS.snippets, PATHS.links, PATHS.teamLinks, PATHS.peers], () => onChange())
 }
 
 export function watchSettings(onChange: (settings: Settings) => void): void {

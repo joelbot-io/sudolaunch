@@ -22,7 +22,7 @@ type Level =
   | { kind: 'searchCommands' }
   | { kind: 'hiddenCommands' }
   | { kind: 'defaultCommand' }
-  | { kind: 'form'; typeDef: ConfigTypeDef; index: number | null; draft: ConfigEntry }
+  | { kind: 'form'; typeDef: ConfigTypeDef; index: number | null; draft: ConfigEntry; focusFieldKey?: string }
 
 // The apps screen is appended after CONFIG_TYPES as one more row in the "types" list,
 // rather than living in CONFIG_TYPES itself — its list isn't add/edit/delete entries,
@@ -67,6 +67,7 @@ interface Row {
   key: string
   label: string
   sublabel?: string
+  keywords?: string
   onSelect: () => void
 }
 
@@ -91,19 +92,29 @@ export default function ConfigManager({ initialFilter, onExit }: Props): JSX.Ele
   const [pendingDeleteIndex, setPendingDeleteIndex] = useState<number | null>(null)
   const pendingDeleteTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const filterRef = useRef<HTMLInputElement>(null)
-  const firstFieldRef = useRef<HTMLInputElement | HTMLTextAreaElement>(null)
+  const firstFieldRef = useRef<HTMLInputElement | HTMLTextAreaElement | HTMLButtonElement | null>(null)
+  const targetFieldRef = useRef<HTMLInputElement | HTMLTextAreaElement | HTMLButtonElement | null>(null)
   const activeItemRef = useRef<HTMLLIElement>(null)
 
   useEffect(() => {
     if (level.kind === 'form') {
-      firstFieldRef.current?.focus()
+      const el = (level.focusFieldKey && targetFieldRef.current) ? targetFieldRef.current : firstFieldRef.current
+      el?.focus()
+      if (level.focusFieldKey && targetFieldRef.current) {
+        targetFieldRef.current.scrollIntoView({ block: 'center' })
+      }
     } else {
       filterRef.current?.focus()
     }
     // Deliberately keyed on level.kind (+ which form) rather than `level` itself —
     // every keystroke replaces `level.draft` with a new object, and re-running this
     // on that would steal focus back to the first field on every character typed.
-  }, [level.kind, level.kind === 'form' ? level.typeDef.type : null, level.kind === 'form' ? level.index : null])
+  }, [
+    level.kind,
+    level.kind === 'form' ? level.typeDef.type : null,
+    level.kind === 'form' ? level.index : null,
+    level.kind === 'form' ? level.focusFieldKey : null
+  ])
 
   useEffect(() => {
     activeItemRef.current?.scrollIntoView({ block: 'nearest' })
@@ -170,12 +181,12 @@ export default function ConfigManager({ initialFilter, onExit }: Props): JSX.Ele
     }
   }, [level])
 
-  function openTypeList(typeDef: ConfigTypeDef): void {
+  function openTypeList(typeDef: ConfigTypeDef, focusFieldKey?: string): void {
     setError(null)
     setFilter('')
     if (typeDef.singleton) {
       window.api.getConfigEntries(typeDef.type).then((list) => {
-        setLevel({ kind: 'form', typeDef, index: 0, draft: { ...list[0] } })
+        setLevel({ kind: 'form', typeDef, index: 0, draft: { ...list[0] }, focusFieldKey })
       })
       return
     }
@@ -278,7 +289,7 @@ export default function ConfigManager({ initialFilter, onExit }: Props): JSX.Ele
     clearPendingDelete()
     if (level.kind === 'form') {
       if (level.typeDef.singleton) {
-        onExit('/settings')
+        setLevel({ kind: 'types' })
         return
       }
       setLevel({ kind: 'list', typeDef: level.typeDef })
@@ -308,7 +319,7 @@ export default function ConfigManager({ initialFilter, onExit }: Props): JSX.Ele
     }
     await window.api.saveConfigEntry(typeDef.type, draft, index)
     if (typeDef.singleton) {
-      onExit('/settings')
+      setLevel({ kind: 'types' })
       return
     }
     setLevel({ kind: 'list', typeDef })
@@ -349,39 +360,60 @@ export default function ConfigManager({ initialFilter, onExit }: Props): JSX.Ele
   // by construction — no separate index bookkeeping to keep aligned with a filtered view.
   const typesRows: Row[] = fuzzyFilter(
     [
-      ...CONFIG_TYPES.map((t) => ({
-        key: t.type,
-        label: t.label,
-        sublabel: t.description,
-        onSelect: () => openTypeList(t)
-      })),
-      { key: '__apps', label: APPS_ROW_LABEL, sublabel: APPS_ROW_DESCRIPTION, onSelect: openAppsScreen },
+      ...CONFIG_TYPES.map((t) => {
+        const needle = filter.trim().toLowerCase()
+        const matchedField = needle
+          ? t.fields?.find(
+              (f) =>
+                f.label.toLowerCase().includes(needle) ||
+                f.key.toLowerCase().includes(needle)
+            )
+          : undefined
+        return {
+          key: t.type,
+          label: t.label,
+          sublabel: matchedField ? `${t.description} · Matches: ${matchedField.label}` : t.description,
+          keywords: t.fields ? t.fields.map((f) => `${f.label} ${f.key}`).join(' ') : '',
+          onSelect: () => openTypeList(t, matchedField?.key)
+        }
+      }),
+      {
+        key: '__apps',
+        label: APPS_ROW_LABEL,
+        sublabel: APPS_ROW_DESCRIPTION,
+        keywords: 'applications visibility launcher show hide filter apps',
+        onSelect: openAppsScreen
+      },
       {
         key: '__searchCommands',
         label: SEARCH_COMMANDS_ROW_LABEL,
         sublabel: SEARCH_COMMANDS_ROW_DESCRIPTION,
+        keywords: 'search fanout commands include exclude query',
         onSelect: openSearchCommandsScreen
       },
       {
         key: '__hiddenCommands',
         label: HIDDEN_COMMANDS_ROW_LABEL,
         sublabel: HIDDEN_COMMANDS_ROW_DESCRIPTION,
+        keywords: 'hide show palette commands visibility toggle ui',
         onSelect: openHiddenCommandsScreen
       },
       {
         key: '__defaultCommand',
         label: DEFAULT_COMMAND_ROW_LABEL,
         sublabel: DEFAULT_COMMAND_ROW_DESCRIPTION,
+        keywords: 'default priority suggestions order initial fallback',
         onSelect: openDefaultCommandScreen
       },
       {
         key: '__openConfigFolder',
         label: 'Open Config Folder',
         sublabel: 'Open %USERPROFILE%\\.sudolaunch in File Explorer',
+        keywords: 'folder explorer directory path config json configuration files',
         onSelect: () => window.api.openConfigFolder()
       }
     ],
-    ['label', 'sublabel'],
+    ['label', 'sublabel', 'keywords'],
     filter
   )
 
@@ -410,6 +442,11 @@ export default function ConfigManager({ initialFilter, onExit }: Props): JSX.Ele
     if (e.key === 'Escape') {
       e.preventDefault()
       e.stopPropagation()
+      if (filter !== '' && level.kind !== 'form') {
+        setFilter('')
+        setActiveIndex(0)
+        return
+      }
       backOneLevel()
       return
     }
@@ -555,7 +592,7 @@ export default function ConfigManager({ initialFilter, onExit }: Props): JSX.Ele
       <input
         ref={filterRef}
         className="palette-input"
-        value={level.kind === 'types' ? (filter ? `/settings ${filter}` : '/settings') : filter}
+        value={filter}
         placeholder={
           level.kind === 'types'
             ? '/settings — type to filter config...'
@@ -573,9 +610,17 @@ export default function ConfigManager({ initialFilter, onExit }: Props): JSX.Ele
             } else if (val === '/settings' || val === '/config') {
               setFilter('')
               setActiveIndex(0)
-            } else {
+            } else if (val.startsWith('/settings') || val.startsWith('/config')) {
+              const prefix = val.startsWith('/settings') ? '/settings' : '/config'
+              setFilter(val.slice(prefix.length).trim())
+              setActiveIndex(0)
+            } else if (val.startsWith('/') && val !== '/') {
               onExit(val)
-              return
+            } else if (val === '/') {
+              onExit('/')
+            } else {
+              setFilter(val)
+              setActiveIndex(0)
             }
           } else {
             setFilter(val)
@@ -809,76 +854,83 @@ export default function ConfigManager({ initialFilter, onExit }: Props): JSX.Ele
 
       {level.kind === 'form' && (
         <div className="config-form">
-          {level.typeDef.fields.map((field, idx) => (
-            <label key={field.key} className="config-field">
-              <span className="config-field-label">{field.label}</span>
-              {field.type === 'textarea' ? (
-                <textarea
-                  ref={idx === 0 ? (firstFieldRef as React.RefObject<HTMLTextAreaElement>) : undefined}
-                  className="config-field-input"
-                  rows={3}
-                  value={String(level.draft[field.key] ?? '')}
-                  onChange={(e) => setLevel({ ...level, draft: { ...level.draft, [field.key]: e.target.value } })}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Backspace' && e.currentTarget.value === '') {
-                      e.preventDefault()
-                      backOneLevel()
-                    }
-                  }}
-                />
-              ) : field.type === 'boolean' ? (
-                <button
-                  type="button"
-                  ref={idx === 0 ? (firstFieldRef as React.RefObject<HTMLButtonElement>) : undefined}
-                  className={`config-toggle-badge config-toggle-button ${Boolean(level.draft[field.key]) ? 'config-toggle-on' : 'config-toggle-off'}`}
-                  onClick={() =>
-                    setLevel({
-                      ...level,
-                      draft: { ...level.draft, [field.key]: !Boolean(level.draft[field.key]) }
-                    })
-                  }
-                  onKeyDown={(e) => {
-                    if (e.key === ' ' || e.key === 'Enter') {
-                      e.preventDefault()
+          {level.typeDef.fields.map((field, idx) => {
+            const isTarget = level.focusFieldKey ? field.key === level.focusFieldKey : idx === 0
+            const assignRef = (el: HTMLInputElement | HTMLTextAreaElement | HTMLButtonElement | null) => {
+              if (idx === 0) (firstFieldRef as React.MutableRefObject<any>).current = el
+              if (isTarget) (targetFieldRef as React.MutableRefObject<any>).current = el
+            }
+            return (
+              <label key={field.key} className="config-field">
+                <span className="config-field-label">{field.label}</span>
+                {field.type === 'textarea' ? (
+                  <textarea
+                    ref={assignRef}
+                    className="config-field-input"
+                    rows={3}
+                    value={String(level.draft[field.key] ?? '')}
+                    onChange={(e) => setLevel({ ...level, draft: { ...level.draft, [field.key]: e.target.value } })}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Backspace' && e.currentTarget.value === '') {
+                        e.preventDefault()
+                        backOneLevel()
+                      }
+                    }}
+                  />
+                ) : field.type === 'boolean' ? (
+                  <button
+                    type="button"
+                    ref={assignRef}
+                    className={`config-toggle-badge config-toggle-button ${Boolean(level.draft[field.key]) ? 'config-toggle-on' : 'config-toggle-off'}`}
+                    onClick={() =>
                       setLevel({
                         ...level,
                         draft: { ...level.draft, [field.key]: !Boolean(level.draft[field.key]) }
                       })
                     }
-                  }}
-                >
-                  {Boolean(level.draft[field.key]) ? 'Enabled' : 'Disabled'}
-                </button>
-              ) : (
-                <input
-                  ref={idx === 0 ? (firstFieldRef as React.RefObject<HTMLInputElement>) : undefined}
-                  type={field.type === 'number' ? 'number' : 'text'}
-                  className="config-field-input"
-                  value={String(level.draft[field.key] ?? '')}
-                  onChange={(e) =>
-                    setLevel({
-                      ...level,
-                      draft: {
-                        ...level.draft,
-                        [field.key]: field.type === 'number' ? Number(e.target.value) : e.target.value
+                    onKeyDown={(e) => {
+                      if (e.key === ' ' || e.key === 'Enter') {
+                        e.preventDefault()
+                        setLevel({
+                          ...level,
+                          draft: { ...level.draft, [field.key]: !Boolean(level.draft[field.key]) }
+                        })
                       }
-                    })
-                  }
-                  onKeyDown={(e) => {
-                    if (e.key === 'Backspace' && e.currentTarget.value === '') {
-                      e.preventDefault()
-                      backOneLevel()
-                      return
+                    }}
+                  >
+                    {Boolean(level.draft[field.key]) ? 'Enabled' : 'Disabled'}
+                  </button>
+                ) : (
+                  <input
+                    ref={assignRef}
+                    type={field.type === 'number' ? 'number' : 'text'}
+                    className="config-field-input"
+                    value={String(level.draft[field.key] ?? '')}
+                    onChange={(e) =>
+                      setLevel({
+                        ...level,
+                        draft: {
+                          ...level.draft,
+                          [field.key]: field.type === 'number' ? Number(e.target.value) : e.target.value
+                        }
+                      })
                     }
-                    if (e.key === 'Enter') {
-                      e.preventDefault()
-                      saveDraft()
-                    }
-                  }}
-                />
-              )}
-            </label>
-          ))}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Backspace' && e.currentTarget.value === '') {
+                        e.preventDefault()
+                        backOneLevel()
+                        return
+                      }
+                      if (e.key === 'Enter') {
+                        e.preventDefault()
+                        saveDraft()
+                      }
+                    }}
+                  />
+                )}
+              </label>
+            )
+          })}
           <div className="config-form-actions">
             <button type="button" className="config-btn config-btn-primary" onClick={saveDraft}>
               Save

@@ -52,14 +52,20 @@ function parseInput(
     if (name === 'settings' || name === 'config') {
       return { command: 'settings', query: '' }
     }
+    if (name === 'g' || name === 'google') {
+      return { command: 'g', query: '' }
+    }
     if (name === 'powertoys' || name === 'pt') {
       return { command: 'pt', query: '' }
+    }
+    if (name === 'exit' || name === 'quit') {
+      return { command: 'exit', query: '' }
     }
     if (customNames.has(name)) {
       return { command: 'custom', query: name }
     }
-    const matchedCmd = COMMANDS.find((c) => c.name === name)?.name ?? shortcuts[name]
-    const nonZeroArg = new Set<CommandName>(['calc', 'search', 'restart', 'default', 'view', 'term'])
+    const matchedCmd = COMMANDS.find((c) => c.name === name)?.name
+    const nonZeroArg = new Set<CommandName>(['calc', 'search', 'restart', 'default', 'view', 'term', 'swap', 'release', 'exit', 'settings'])
     if (matchedCmd && !nonZeroArg.has(matchedCmd)) {
       return { command: matchedCmd, query: '' }
     }
@@ -68,7 +74,9 @@ function parseInput(
   const name = raw.slice(1, spaceIdx)
   const rest = raw.slice(spaceIdx + 1)
   if (name === 'settings' || name === 'config') return { command: 'settings', query: rest }
+  if (name === 'google') return { command: 'g', query: rest }
   if (name === 'powertoys') return { command: 'pt', query: rest }
+  if (name === 'exit' || name === 'quit') return { command: 'exit', query: rest }
   if (customNames.has(name)) return { command: 'custom', query: `${name} ${rest}`.trim() }
   const command = COMMANDS.find((c) => c.name === name)?.name ?? shortcuts[name] ?? null
   return { command, query: rest }
@@ -349,7 +357,7 @@ export default function CommandPalette(): JSX.Element {
 
   useEffect(() => {
     const handler = (e: KeyboardEvent): void => {
-      if (e.key !== 'Escape') return
+      if (e.key !== 'Escape' || e.defaultPrevented) return
       const defVal = getDefaultValue()
       if (valueRef.current.startsWith('/custom ') && valueRef.current.length > '/custom '.length) {
         setValue('/custom ')
@@ -357,6 +365,14 @@ export default function CommandPalette(): JSX.Element {
       }
       if (valueRef.current.startsWith('/gif ') && valueRef.current.length > '/gif '.length) {
         setValue('/gif ')
+        return
+      }
+      if (valueRef.current.startsWith('/g ') && valueRef.current.length > '/g '.length) {
+        setValue('/g ')
+        return
+      }
+      if (valueRef.current.startsWith('/google ') && valueRef.current.length > '/google '.length) {
+        setValue('/google ')
         return
       }
       if (valueRef.current.startsWith('/lookup ') && valueRef.current.length > '/lookup '.length) {
@@ -453,6 +469,10 @@ export default function CommandPalette(): JSX.Element {
       }
       if (valueRef.current.startsWith('/uuid ') && valueRef.current.length > '/uuid '.length) {
         setValue('/uuid ')
+        return
+      }
+      if (valueRef.current.startsWith('/swap ') && valueRef.current.length > '/swap '.length) {
+        setValue('/swap ')
         return
       }
       if (valueRef.current !== '' && valueRef.current !== defVal) {

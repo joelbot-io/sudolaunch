@@ -4,6 +4,7 @@ import * as teams from './teams'
 import * as mail from './mail'
 import * as snippet from './snippet'
 import * as fav from './fav'
+import * as g from './g'
 import * as app from './app'
 import * as calc from './calc'
 import * as custom from './custom'
@@ -38,6 +39,9 @@ import * as defaultCmd from './defaultCmd'
 import * as settingsCmd from './settings'
 import * as text from './text'
 import * as url from './url'
+import * as swap from './swap'
+import * as release from './release'
+import * as exitCmd from './exit'
 
 const searchers: Record<Exclude<CommandName, 'calc'>, (query: string) => SearchResultItem[]> = {
   app: app.search,
@@ -48,8 +52,10 @@ const searchers: Record<Exclude<CommandName, 'calc'>, (query: string) => SearchR
   custom: custom.search,
   default: defaultCmd.search,
   emoji: emoji.search,
+  exit: exitCmd.search,
   fav: fav.search,
   focus: focus.search,
+  g: g.search,
   gif: gif.search,
   git: git.search,
   hash: hash.search,
@@ -76,7 +82,9 @@ const searchers: Record<Exclude<CommandName, 'calc'>, (query: string) => SearchR
   unit: unit.search,
   url: url.search,
   uuid: uuid.search,
-  view: view.search
+  view: view.search,
+  swap: swap.search,
+  release: release.search
 }
 
 const executors: Record<CommandName, (item: SearchResultItem, query: string) => Promise<void>> = {
@@ -89,8 +97,10 @@ const executors: Record<CommandName, (item: SearchResultItem, query: string) => 
   custom: custom.execute,
   default: defaultCmd.execute,
   emoji: emoji.execute,
+  exit: exitCmd.execute,
   fav: fav.execute,
   focus: focus.execute,
+  g: g.execute,
   gif: gif.execute,
   git: git.execute,
   hash: hash.execute,
@@ -117,7 +127,9 @@ const executors: Record<CommandName, (item: SearchResultItem, query: string) => 
   unit: unit.execute,
   url: url.execute,
   uuid: uuid.execute,
-  view: view.execute
+  view: view.execute,
+  swap: swap.execute,
+  release: release.execute
 }
 
 export function search(command: CommandName, query: string): SearchResultItem[] {
