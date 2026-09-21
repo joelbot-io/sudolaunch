@@ -3,7 +3,7 @@ import { Terminal as XTerm } from '@xterm/xterm'
 import { FitAddon } from '@xterm/addon-fit'
 import '@xterm/xterm/css/xterm.css'
 import { formatAccelerator } from './accelerator'
-import type { GrowOrigin } from '../../shared/types'
+import { useGrowAnimation } from './useGrowAnimation'
 
 export default function Terminal(): JSX.Element {
   const containerRef = useRef<HTMLDivElement>(null)
@@ -11,33 +11,30 @@ export default function Terminal(): JSX.Element {
   const fitRef = useRef<FitAddon | null>(null)
   // Authoritative state lives in main (see terminalWindow.ts's termExpanded) — this just
   // mirrors it via 'term-expanded', so window bounds and this UI can never disagree.
+  const [dockLayout, setDockLayout] = useState<'horizontal' | 'circle' | 'shelf'>('shelf')
   const [expanded, setExpanded] = useState(false)
   const [moveMode, setMoveMode] = useState(false)
   const [termHotkey, setTermHotkey] = useState('')
-  // Set only once a shell that *was* running has exited (user typed "exit", or it died) —
-  // never before the first spawn, since "no session yet" is the normal resting state and
-  // shouldn't wear a warning. Cleared when the next expand spawns a replacement.
   const [sessionEnded, setSessionEnded] = useState(false)
-  // Grow-from-the-icon geometry and playback phase — same two-step as the bar's palette
-  // (see CommandPalette.tsx): mount invisible for a frame, then animate against a warm
-  // layer. Here the cold-start cost is xterm.js's canvas/rows rather than a React subtree.
-  const [growOrigin, setGrowOrigin] = useState<GrowOrigin | null>(null)
-  const [growPhase, setGrowPhase] = useState<'pending' | 'running' | 'collapsing' | null>(null)
+  const [hasUnread, setHasUnread] = useState(false)
+  const [summonPulse, setSummonPulse] = useState(false)
+  const [summonColor, setSummonColor] = useState<string | null>(null)
+  const [summonGlow, setSummonGlow] = useState<string | null>(null)
+  const [dockFading, setDockFading] = useState(false)
+  const { growOrigin, growPhase, setGrowOrigin, setGrowPhase, growClassNames, growStyle, onGrowEnd } =
+    useGrowAnimation()
   const [shimmerInfo, setShimmerInfo] = useState<{
     corner: 'tl' | 'tr' | 'br' | 'bl'
     color: string
     gradient: string
     flickerType: number | null
   } | null>(null)
-  // We don't have real visibility into the shell's readline buffer — this just tracks what
-  // we've sent it since the last Enter/Ctrl+C, as a best-effort proxy for "is there
-  // unsubmitted input on the current line" (used to gate Escape's collapse-on-empty below).
   const pendingInputRef = useRef('')
 
-  // Mounted once for the window's lifetime — the pty session (and its scrollback) persist
-  // in the background across collapse/expand, so the xterm.js instance mirrors that by
-  // never being torn down either; only its visibility toggles via CSS (see .term-collapsed).
   useEffect(() => {
+    window.api.getSettings?.().then((s) => {
+      if (s?.dockLayout) setDockLayout(s.dockLayout)
+    })
     const term = new XTerm({
       convertEol: true,
       fontSize: 13,
@@ -130,6 +127,16 @@ export default function Terminal(): JSX.Element {
       }, 50)
     })
     const unsubMoveMode = window.api.onTermMoveModeChanged((active) => setMoveMode(active))
+    const unsubUnread = window.api.onTermUnreadActivity?.((unread) => {
+      setHasUnread(unread)
+    })
+    const unsubSummoned = window.api.onDockSummoned?.((data) => {
+      if (data?.color) setSummonColor(data.color)
+      if (data?.glow) setSummonGlow(data.glow)
+      setSummonPulse(true)
+      setTimeout(() => setSummonPulse(false), 900)
+    })
+    const unsubFade = window.api.onDockFade?.((dir) => setDockFading(dir === 'out'))
     // Collapse on Escape, but only once the current line is empty — otherwise Escape
     // should reach the shell like any other key (e.g. PSReadLine uses it too).
     term.attachCustomKeyEventHandler((event) => {
@@ -151,6 +158,9 @@ export default function Terminal(): JSX.Element {
       unsubExited()
       unsubRespawned()
       unsubMoveMode()
+      unsubUnread?.()
+      unsubSummoned?.()
+      unsubFade?.()
       term.dispose()
     }
   }, [])
@@ -160,15 +170,8 @@ export default function Terminal(): JSX.Element {
   }, [])
 
   useEffect(() => {
-    if (growPhase !== 'pending') return
-    const timer = setTimeout(() => {
-      setGrowPhase('running')
-    }, 80)
-    return () => clearTimeout(timer)
-  }, [growPhase])
-
-  useEffect(() => {
     if (!expanded) return
+    setHasUnread(false)
     window.api.termInput('\x1b')
     pendingInputRef.current = ''
 
@@ -274,46 +277,49 @@ export default function Terminal(): JSX.Element {
       className={[
         'term-shell',
         expanded ? 'term-expanded' : 'term-collapsed',
+        hasUnread ? 'term-unread' : '',
+        summonPulse ? 'summon-pulse' : '',
+        !expanded && dockFading ? 'dock-fading' : '',
         !expanded && shimmerInfo ? `icon-shimmer shimmer-${shimmerInfo.corner}${shimmerInfo.flickerType ? ` has-flicker-${shimmerInfo.flickerType}` : ''}` : '',
-        growPhase === 'pending' ? 'grow-pending' : '',
-        growPhase === 'running' ? 'grow-in' : '',
-        growPhase === 'collapsing' ? 'grow-out' : ''
+        growClassNames
       ]
         .filter(Boolean)
         .join(' ')}
       style={{
-        ...(growOrigin
-          ? {
-              '--grow-origin-x': `${growOrigin.originX}%`,
-              '--grow-origin-y': `${growOrigin.originY}%`,
-              '--grow-scale': growOrigin.scale
-            }
-          : {}),
+        ...growStyle,
         ...(!expanded && shimmerInfo
           ? { '--shimmer-color': shimmerInfo.color, '--shimmer-gradient': shimmerInfo.gradient }
-          : {})
+          : {}),
+        ...(summonColor ? { '--summon-color': summonColor } : {}),
+        ...(summonGlow ? { '--summon-glow-color': summonGlow } : {})
       } as React.CSSProperties}
       // Scoped to this element's own animation — animationend bubbles, and the icon's
       // "session ended" glow is a descendant animation that must not clear the grow state.
-      onAnimationEnd={(e) => {
-        if (e.target !== e.currentTarget) return
-        setGrowOrigin(null)
-        setGrowPhase(null)
-      }}
+      onAnimationEnd={onGrowEnd}
     >
-      <button
-        className={sessionEnded ? 'term-icon term-icon-ended' : 'term-icon'}
-        title={
-          sessionEnded
-            ? `Shell session ended — opens a new one${termHotkey ? ` (${termHotkey})` : ''}`
-            : termHotkey
-              ? `Open terminal (${termHotkey})`
-              : 'Open terminal'
-        }
-        onClick={toggle}
-      >
-        {'>_'}
-      </button>
+      {dockLayout !== 'shelf' && (
+        <button
+          className={[
+            'term-icon',
+            sessionEnded ? 'term-icon-ended' : '',
+            hasUnread && !expanded ? 'term-icon-unread' : ''
+          ]
+            .filter(Boolean)
+            .join(' ')}
+          title={
+            sessionEnded
+              ? `Shell session ended — opens a new one${termHotkey ? ` (${termHotkey})` : ''}`
+              : hasUnread
+                ? `Unread terminal output${termHotkey ? ` (${termHotkey})` : ''}`
+                : termHotkey
+                  ? `Open terminal (${termHotkey})`
+                  : 'Open terminal'
+          }
+          onClick={toggle}
+        >
+          {'>_'}
+        </button>
+      )}
       <div className="term-header" title="Drag to move PowerShell window">
         <div className="term-header-left">
           <span className="term-drag-handle" title="Drag to move window">

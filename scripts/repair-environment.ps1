@@ -157,6 +157,24 @@ if (-not $SkipSendKey -and $cscPath) {
     } else {
         Write-WarningMsg "swaphook.cs source not found at: $swaphookSource"
     }
+
+    $cursorhookSource = Join-Path $PSScriptRoot "..\src\main\tools\cursorhook.cs"
+    $cursorhookBin = Join-Path $PSScriptRoot "..\resources\bin\cursorhook.exe"
+
+    if (Test-Path $cursorhookSource) {
+        $binDir = Split-Path -Parent $cursorhookBin
+        if (-not (Test-Path $binDir)) { New-Item -Path $binDir -ItemType Directory -Force | Out-Null }
+
+        & $cscPath /target:winexe /out:$cursorhookBin /optimize+ $cursorhookSource | Out-Null
+        if (Test-Path $cursorhookBin) {
+            $binInfo = Get-Item $cursorhookBin
+            Write-Success "cursorhook.exe compiled ($([Math]::Round($binInfo.Length / 1KB, 1)) KB) -> $cursorhookBin"
+        } else {
+            Write-WarningMsg "cursorhook.exe compilation did not produce an output file."
+        }
+    } else {
+        Write-WarningMsg "cursorhook.cs source not found at: $cursorhookSource"
+    }
 }
 
 # 4. Clean Caches if requested

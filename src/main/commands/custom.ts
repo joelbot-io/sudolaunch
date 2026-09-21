@@ -1,6 +1,6 @@
 import Fuse from 'fuse.js'
 import type { CustomCommand, SearchResultItem } from '../../shared/types'
-import { loadCustomCommands, runAndNotify, notifyMissingParams } from '../customCommands'
+import { loadCustomCommands, runAndNotify, notifyMissingParams, executeCustomAction } from '../customCommands'
 import { browseFolder, resolveFolderRoot, runScript, SCRIPT_EXTENSIONS } from '../folderBrowse'
 
 function splitNameAndArgs(query: string): { name: string; argsStr: string } {
@@ -92,7 +92,7 @@ export function search(query: string): SearchResultItem[] {
   }))
 }
 
-export async function execute(item: SearchResultItem): Promise<void> {
+export async function execute(item: SearchResultItem, _query?: string, elevated?: boolean): Promise<void> {
   const commands = loadCustomCommands()
   const { name, argsStr } = splitNameAndArgs(item.value)
   const cmd = commands.find((c) => c.command === name)
@@ -105,7 +105,7 @@ export async function execute(item: SearchResultItem): Promise<void> {
     if (!root) {
       throw new Error('Folder must be inside ~/.sudolaunch')
     }
-    runScript(root, argsStr)
+    runScript(root, argsStr, elevated, cmd.showTerminal)
     return
   }
 
@@ -116,5 +116,5 @@ export async function execute(item: SearchResultItem): Promise<void> {
     return
   }
 
-  runAndNotify(cmd, substitute(cmd.action!, filled))
+  executeCustomAction(cmd, substitute(cmd.action!, filled), elevated)
 }

@@ -2,6 +2,7 @@ import { app } from 'electron'
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'fs'
 import { join } from 'path'
 import { watch as chokidarWatch } from 'chokidar'
+import { DEFAULT_SHELF_ICONS } from '../shared/types'
 import type {
   Contact,
   Snippet,
@@ -11,10 +12,13 @@ import type {
   Settings,
   ConfigType,
   ConfigEntry,
-  SwapPeer
+  SwapPeer,
+  ShelfModuleId
 } from '../shared/types'
 
 export const CONFIG_DIR = join(app.getPath('home'), '.sudolaunch')
+export const ARCHIVES_DIR = join(app.getPath('home'), '.sudolaunch-archives')
+export const PROFILES_DIR = join(app.getPath('home'), '.sudolaunch-profiles')
 
 const PATHS = {
   contacts: join(CONFIG_DIR, 'contacts.json'),
@@ -26,22 +30,27 @@ const PATHS = {
   settings: join(CONFIG_DIR, 'settings.json')
 }
 
-const DEFAULT_SETTINGS: Settings = {
+export const DEFAULT_SETTINGS: Settings = {
   hotkey: 'CommandOrControl+Space',
-  terminalHotkey: 'Control+Alt+T',
+  terminalHotkey: 'CommandOrControl+`',
+  paletteHotkey: 'CommandOrControl+Space',
+  termHotkey: 'CommandOrControl+`',
   historyEnabled: true,
-  historyLimit: 25,
-  autoStart: true,
+  historyLimit: 100,
+  autoStart: false,
   disableMouseInput: false,
   defaultCommand: '',
   disabledApps: [],
   teamsShortcut: 't',
   favShortcut: 'f',
   snippetShortcut: 's',
-  searchExcludedCommands: [],
+  searchExcludedCommands: ['tz', 'ip', 'uuid', 'pwd', 'lorem', 'case', 'hash', 'qr'],
   hiddenCommands: [],
-  gifFolder: 'gif',
-  lookupFolder: 'lookup',
+  gifFolder: '',
+  lookupFolder: '',
+  appFolder: '',
+  theme: 'dark',
+  dockLayout: 'shelf',
   barEnabled: true,
   barPosition: null,
   termPosition: null,
@@ -49,14 +58,23 @@ const DEFAULT_SETTINGS: Settings = {
   swapEnabled: true,
   swapMachineId: 1,
   swapPort: 41234,
-  swapToggleHotkey: 'ScrollLock'
+  swapToggleHotkey: 'ScrollLock',
+  ctrlRightClickSummon: true,
+  autoReturnHome: true,
+  autoReturnDelaySec: 8,
+  shelfIcons: DEFAULT_SHELF_ICONS,
+  activeProfile: 'default',
+  terminalWidth: 800,
+  monitor: 1,
+  dockGlowColor: '#5aa0ff',
+  dockGlowStyle: 'breathing'
 }
 
-const SEED_PEERS: SwapPeer[] = [
+export const SEED_PEERS: SwapPeer[] = [
   { id: 2, name: 'Secondary PC', host: '192.168.1.105', port: 41234 }
 ]
 
-const SEED_CONTACTS: Contact[] = [
+export const SEED_CONTACTS: Contact[] = [
   { name: 'Jane Doe', alias: 'jane.doe', email: 'jane.doe@example.com', teamsId: 'jane.doe@example.com' }
 ]
 

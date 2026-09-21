@@ -15,6 +15,7 @@ dist.zip
 # Compiled binaries & artifacts
 resources/bin/*.exe
 !resources/bin/sendkey.exe
+resources/native-prebuilds/
 *.exe
 *.dll
 *.pdb

@@ -31,3 +31,14 @@ export function getHistory(): HistoryEntry[] {
     .filter((e) => !!e.value)
     .slice(0, historyLimit)
 }
+
+export function deleteHistoryEntry(timestamp: string): HistoryEntry[] {
+  const entries = readHistory().filter((e) => e.timestamp !== timestamp)
+  writeHistory(entries)
+  return getHistory()
+}
+
+export function clearHistory(): void {
+  writeHistory([])
+}
+

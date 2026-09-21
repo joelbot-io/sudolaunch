@@ -5,7 +5,10 @@ A global-hotkey command palette, persistent command bar, and drop-down terminal 
 ## Contents
 
 - [Commands](#commands)
-- [Input Sharing (`/swap`)](#input-sharing-swap)
+- [Execution Modes & Elevation (`Ctrl+Enter`)](#execution-modes--elevation-ctrlenter)
+- [Three-Button Dock & Notifications](#three-button-dock--notifications)
+- [Command Layout & Subfolders](#command-layout--subfolders)
+- [Input Sharing (`/control`)](#input-sharing-control)
 - [Command bar](#command-bar)
 - [Terminal](#terminal)
 - [Lookup tables](#lookup-tables)
@@ -51,6 +54,7 @@ A global-hotkey command palette, persistent command bar, and drop-down terminal 
 | `/lorem [count|type]` | Generate placeholder text (paragraphs, sentences) and mock data (names, emails, phones, addresses, companies) |
 | `/mime <query>` | Two-way lookup between file extensions and standard MIME content types (e.g. `.webp`, `application/pdf`, `text/html`) |
 | `/port [port]` | Inspect active listening TCP ports and running processes; Enter kills the blocking process or copies PID |
+| `/profile [action]` | Manage, backup, restore, clean history, validate, or reset user profile and configuration |
 | `/pt [query]` | Launch Microsoft PowerToys utilities & tools (Hosts, FancyZones, OCR, Ruler, ColorPicker, Awake, etc., alias: `/powertoys`) |
 | `/pwd [length|type]` | Generate cryptographically secure passwords, Diceware passphrases, PINs, and 256-bit API secrets |
 | `/qr [url|text]` | Generate QR codes from URLs or text with clipboard copy for SVG Data URI, SVG XML, or ASCII terminal art |
@@ -59,52 +63,127 @@ A global-hotkey command palette, persistent command bar, and drop-down terminal 
 | `/unit <expr>` | Unit converter for data storage (GB/MB), bandwidth (Mbps), physical units, and number bases (dec/hex/bin/oct) |
 | `/url <url>` | Parse URL components (host, path, port), extract individual query params, and generate cURL / fetch / PowerShell snippets |
 | `/uuid [id]` | Generate UUIDs/GUIDs in multiple formats (standard, uppercase, no-hyphens, C# GUID, Base64, UUIDv7) or inspect existing IDs |
-| `/settings` | Open the interactive configuration manager (alias: `/config`) |
-| `/swap [#]` | Toggle active keyboard/mouse input sharing with another computer (e.g. `/swap 2` or `/swap 192.168.1.105`) |
+| `/settings` | Open interactive configuration manager (alias: `/config`). Supports typing subcommands like `/settings layout`, `/settings edit`, `/settings contacts` |
+| `/control [#]` | Toggle active keyboard/mouse input sharing with another computer (e.g. `/control 2` or `/control 192.168.1.105`) |
 | `/release` | Release input sharing connection and restore local control regardless of whether input is local or remote |
 | `/term [command]` | Expand/collapse the persistent terminal, or execute a shell command directly (e.g. `/term git status`) |
-| `/view` | Toggle the persistent command bar on/off; `/view reset` returns both buttons to their default dock |
-| `/move` | Interactively drag the command bar and terminal icons to new positions on screen |
-| `/default` | Set or clear the default command prioritized at the top of the suggestions list |
+| `/view` | Toggle persistent command bar on/off; `/view reset` returns all buttons to default dock |
+| `/move` | Interactively drag command bar, terminal, and notification icons to new positions |
+| `/default` | Set or clear default command prioritized at top of suggestions list |
 | `/restart` | Relaunch the application |
 | `/exit` | Exit and close the application (alias: `/quit`) |
 
+- **Execution Modes**: Press <kbd>Enter</kbd> to run in the visible embedded terminal session, or <kbd>Ctrl+Enter</kbd> to run with elevated Administrator privileges ("Sudo").
 - **Unprefixed Search**: Typing text without a leading slash (e.g. `chrome`, `github`, `project`) automatically falls back to universal search (`/search`), or your chosen default command.
 - **Shortcuts**: `/teams` (`/t`), `/fav` (`/f`), `/snippet` (`/s`), and `/settings` (`/config`) provide fast single/short aliases.
 - **Recent History**: When opened with an empty input, the palette displays your most recent executed commands, re-runnable with Enter.
 - **Empty Folder Helper**: If `~/.sudolaunch/gif` or `~/.sudolaunch/lookup` is empty, selecting `/gif` or `/lookup` displays an actionable prompt; pressing Enter opens the folder in Explorer.
 
-## Input Sharing (`/swap`)
+## Execution Modes & Elevation (`Ctrl+Enter`)
+
+SudoLaunch provides seamless execution controls right from the palette footer:
+
+- **Visible Terminal Execution (<kbd>Enter</kbd>)**:
+  - By default, custom PowerShell commands and scripts execute visibly inside SudoLaunch's persistent PowerShell terminal session (`runInTerminal`).
+  - Command output streams in real-time with full ANSI color support, scrollback, and standard PowerShell interactivity.
+- **Elevated Execution (<kbd>Ctrl+Enter</kbd> / "Sudo")**:
+  - Pressing <kbd>Ctrl+Enter</kbd> on any command runs it with elevated Windows Administrator rights via Windows User Account Control (UAC).
+  - Uses `Start-Process powershell.exe -Verb RunAs` with a safely Base64-encoded command payload (`-EncodedCommand`) to avoid escaping and injection issues.
+  - An interactive Windows desktop and Notification Window alert informs you of elevated execution status.
+- **Footer Hints**:
+  - The palette footer dynamically displays `↵ Run in Terminal` alongside `Ctrl+↵ Run Elevated` for immediate keyboard feedback.
+
+## Three-Button Dock & Notifications
+
+Alongside the hotkey popup, SudoLaunch features a sleek frosted-glass acrylic dock:
+
+```
+[ >_ ] [ / ] [ 🔔 ]
+```
+
+1. **Terminal (`>_`)**: Toggles the interactive PowerShell drop-down console.
+2. **Command Palette (`/`)**: Toggles the centered command palette and search bar.
+3. **Notification Window (`🔔`)**: Toggles the dedicated acrylic Notification Center with an active unread counter badge (`1`, `2`, `9+`).
+
+### Instant Dock Summon (<kbd>Ctrl+Right Click</kbd>)
+
+- **Summon Directly to Cursor**: Press <kbd>Ctrl</kbd> + **Right Click** anywhere across Windows to summon the 3-button dock icon cluster immediately beside your mouse pointer.
+- **Context Menu Suppression**: SudoLaunch intercepts low-level right-clicks when <kbd>Ctrl</kbd> is depressed, suppressing the standard Windows desktop/app context menu so only the SudoLaunch dock appears.
+- **Multi-Monitor Safe Clamping**: Positions are automatically clamped to the active display's work area, ensuring the entire 3-icon footprint (`Terminal`, `Palette`, `Notifications`) remains 100% visible on screen.
+- **Persistent Anchor**: The newly summoned position is automatically persisted to `~/.sudolaunch/settings.json` (`barPosition`). Can be toggled on/off in Settings via `ctrlRightClickSummon`.
+
+### Acrylic Notification Center
+
+- **Rich Acrylic Design**: A 480×380px floating glassmorphic card anchored to your desktop with real-time status glow accents:
+  - 🟢 **Emerald**: Successful command completions and clean executions.
+  - 🔴 **Coral/Crimson**: Failed commands, errors, and non-zero exit codes.
+  - 🔵 **Blue/Cyan**: Informational updates, profile syncs, and system notices.
+- **Interactive Accordion with Dual Input & Output**:
+  - Each notification entry features an interactive accordion header displaying execution status, title, command tag (`/<name>`), and timestamp.
+  - **Command Input Section**: Dedicated monospace container showing the executed PowerShell / elevated command text, with an instant `Copy Input` button.
+  - **Command Output Section**: Monospace container streaming `stdout` and `stderr` execution results with syntax-colored borders, plus an instant `Copy Output` button.
+  - **Expand All / Collapse All**: Header toolbar toggle to quickly collapse or expand all notification cards at once.
+- **Dismiss & Clear All**: Dismiss individual cards (`✕`) or clear all notifications with a single click.
+- **Badge Counter**: The dock bell icon updates dynamically with an unread badge counter that clears automatically when opened.
+
+## Command Layout & Subfolders
+
+Organize, group, and reorder all commands within your palette via `~/.sudolaunch/command-layout.json` or the interactive `/settings layout` manager:
+
+- **Subfolder Grouping**:
+  - Create nested command categories (e.g. `📁 Developer/`, `📁 Utilities/`, `📁 Network/`).
+  - Drill into folders with `/<FolderName>/` (e.g. `/Developer/`) to view and run only the commands contained within that folder.
+  - Press <kbd>Backspace</kbd> or <kbd>Escape</kbd> to navigate back up to the root palette.
+- **Global Search Across Folders**:
+  - Typing a search query at the root palette automatically searches across **all folders**, allowing instant execution without navigating into subfolders first.
+- **Interactive Reordering (`/settings layout`)**:
+  - Open `/settings layout` to rearrange command and folder sequence using <kbd>Alt+Up</kbd> / <kbd>Alt+Down</kbd> shortcuts or visual up/down buttons.
+  - Drag or move items into folders, create new folders, or remove folders.
+- **Direct JSON Editing & Live Reload**:
+  - Click **"Edit JSON in Editor"** to open `command-layout.json` in your favorite external editor (VS Code, Notepad).
+  - Chokidar watches `command-layout.json` live—any changes saved externally take effect instantly in SudoLaunch.
+- **Recursive Command Scanning**:
+  - Custom command `.json` files placed inside subdirectories of `~/.sudolaunch/commands/` (e.g. `commands/dev/test.json`) are discovered automatically and mapped into corresponding palette folders.
+
+## Input Sharing (`/control`)
 
 Toggle active keyboard and mouse control between multiple SudoLaunch instances across your local network via direct TCP/IP:
 
 - **Usage**:
-  - `/swap`: Displays configured peer computers and their status. Press Enter on any computer or toggle option.
-  - `/swap <#>`: Directly swaps input to the specified machine number (e.g. `/swap 2`). Running `/swap 2` again toggles input back to your local computer.
-  - `/swap <ip>`: Directly connects and shares input with a specified IP address or hostname (e.g. `/swap 192.168.1.105` or `/swap 192.168.1.105:41234`).
-  - `/release` or `/swap release` / `/swap back` / `/swap off` / `/swap 0`: Releases any active input sharing session (both outgoing controller session and incoming receiver connection) and restores local control.
+  - `/control`: Displays configured peer computers and their status. Press Enter on any computer or toggle option.
+  - `/control <#>`: Directly swaps input to the specified machine number (e.g. `/control 2`). Running `/control 2` again toggles input back to your local computer.
+  - `/control <ip>`: Directly connects and shares input with a specified IP address or hostname (e.g. `/control 192.168.1.105` or `/control 192.168.1.105:41234`).
+  - `/release` or `/control release` / `/control back` / `/control off` / `/control 0`: Releases any active input sharing session (both outgoing controller session and incoming receiver connection) and restores local control.
 - **Safety Escape Toggles**:
   - While input is swapped to another computer, local mouse and keyboard events are captured and forwarded without interacting with local windows.
   - Pressing **`ScrollLock`**, **`Pause/Break`**, or **`Ctrl+Alt+S`** immediately releases the input hook and restores control to the host computer.
   - A sleek floating banner is displayed at the top of the screen: `[ ⇄ Input Swapped to #2 (Laptop) · Press ScrollLock to Return ]` with a clickable "Return Input" button.
+- **Authentication**: Connections are mutually authenticated over TLS — each machine generates its own persistent identity certificate on first run (`~/.sudolaunch/control-identity.{key,crt}`), and a connection is only trusted if the peer's certificate fingerprint matches what's configured for it. There's no shared CA; every peer relationship is pinned explicitly, the same way you'd add an SSH host key.
+  - Run `/control` with no arguments on a machine to see **"This machine's fingerprint"** at the top of the results — press Enter to copy it.
+  - Paste that fingerprint into the **Expected Fingerprint** field of that machine's peer entry on the *other* computer (and vice versa — both directions need to trust each other).
+  - A peer with no fingerprint configured, or a connection whose fingerprint doesn't match, is refused before any input is shared.
 - **Configuration (`/settings -> Swap Peers`)**:
   - Configured in `~/.sudolaunch/peers.json` or through the interactive `/settings` UI:
     ```json
     [
-      { "id": 1, "name": "Desktop PC", "host": "192.168.1.100", "port": 41234 },
-      { "id": 2, "name": "Laptop", "host": "192.168.1.105", "port": 41234 }
+      { "id": 1, "name": "Desktop PC", "host": "192.168.1.100", "port": 41234, "expectedFingerprint": "AB:12:...:CD" },
+      { "id": 2, "name": "Laptop", "host": "192.168.1.105", "port": 41234, "expectedFingerprint": "EF:34:...:56" }
     ]
     ```
 
 ## Command bar
 
-Alongside the hotkey popup, a second window sits as a frosted-glass icon dock (bottom-center by default) and stays docked on screen — it's on by default and doesn't hide when you click away.
+Alongside the hotkey popup, a frosted-glass icon dock sits on screen (`[ >_ ] [ / ] [ 🔔 ]` — bottom-center by default) and stays docked on screen — it's on by default and doesn't hide when you click away.
 
+- **Three Integrated Actions**:
+  - `>_` toggles the persistent drop-down PowerShell terminal.
+  - `/` toggles the centered command palette.
+  - `🔔` toggles the floating notification center with active unread counter badge.
 - **Expand**: Click the `/` icon or press `Ctrl+Space` (when the bar is enabled) to open the palette. The window smoothly expands and hovers above the docked icon without obscuring the dock buttons or taskbar.
 - **Collapse**: Executing a command or pressing Escape collapses the palette back to the docked icon.
-- **Reposition (`/move`)**: Type `/move` to enter move mode where you can drag the `/` and `>_` buttons anywhere on screen (or move them individually via `/move-bar` and `/move-term`). Positions are saved in `settings.json` and restored across restarts.
+- **Reposition (`/move`)**: Type `/move` to enter move mode where you can drag the dock buttons anywhere on screen (or move them individually via `/move-bar` and `/move-term`). Positions are saved in `settings.json` and restored across restarts.
 - **Edge-Aware Docking**: When docked near the left or right edges of the screen, the dock buttons automatically switch to a vertical layout to prevent off-screen clipping.
-- **Reset (`/view reset`)**: Returns both the command bar and terminal buttons back to their default dock.
+- **Reset (`/view reset`)**: Returns the command bar, terminal, and notification buttons back to their default dock.
 - **Toggle Visibility (`/view`)**: Toggles the persistent bar on/off entirely. When disabled, `Ctrl+Space` opens the centered standalone popup window instead.
 
 ## Terminal
@@ -131,30 +210,32 @@ A real, interactive PowerShell session (powered by `node-pty` + `xterm.js`) is i
 
 Type `/settings` (or `/config`) into the command palette to open the interactive configuration manager:
 
-- **Contacts**: Add, edit, or delete contacts (`name`, `alias`, `email`, `teamsId`).
-- **Snippets**: Add, edit, or delete reusable text snippets (`name`, `text`).
-- **Links**: Add, edit, or delete browser bookmarks (`name`, `url`).
-- **Teams Links**: Add, edit, or delete direct deep links to Teams channels and teams (`name`, `url`, `description`).
-- **Settings**: Configure global hotkeys, history tracking & limit, auto-start on login, mouse input toggle, default command, single-character shortcuts (`/t`, `/f`, `/s`), and the GIF/lookup folder paths.
+- **Command Layout (`/settings layout`)**: Visually reorder palette commands, organize commands into subfolders, and open layout JSON in external editors.
+- **Contacts (`/settings contacts`)**: Add, edit, or delete contacts (`name`, `alias`, `email`, `teamsId`).
+- **Snippets (`/settings snippets`)**: Add, edit, or delete reusable text snippets (`name`, `text`).
+- **Links (`/settings links`)**: Add, edit, or delete browser bookmarks (`name`, `url`).
+- **Teams Links (`/settings team-links`)**: Add, edit, or delete direct deep links to Teams channels and teams (`name`, `url`, `description`).
+- **Settings (`/settings edit`)**: Configure global hotkeys, history tracking & limit, auto-start on login, mouse input toggle, default command, single-character shortcuts (`/t`, `/f`, `/s`), and the GIF/lookup folder paths.
 - **Interactive Toggle Screens**:
   - **App Visibility**: Choose which Windows applications appear in `/app`.
   - **Search Commands**: Choose which commands participate in `/search` fan-out.
   - **Command Visibility**: Choose which commands appear in palette suggestions.
   - **Default Command**: Choose which command is prioritized at the top of the suggestions list.
 
-Keyboard navigation in `/settings`: Arrow keys + Enter to navigate/select, `Delete` to remove entries, and `Escape` to go back a level or exit.
+Keyboard navigation in `/settings`: Arrow keys + Enter to navigate/select, `Delete` to remove entries, and `Escape` to go back a level or exit. Typing `/settings <subcommand>` (e.g. `/settings layout`, `/settings edit`) navigates straight to that section.
 
 ## Configuration Files
 
 Configuration files are stored in `%USERPROFILE%\.sudolaunch\`. On first run, SudoLaunch seeds this directory with:
 
+- `command-layout.json` — Custom root order and nested folder layout (`{ "rootOrder": [...], "folders": [...] }`)
 - `contacts.json` — Contacts list for `/teams` and `/mail` (`[{ "name", "alias", "email", "teamsId" }]`)
 - `snippets.json` — Snippets list for `/snippet` (`[{ "name", "text" }]`)
 - `links.json` — Saved links for `/fav` (`[{ "name", "url" }]`)
 - `teamLinks.json` — Direct channel/team deep links for `/teams` (`[{ "name", "url", "description" }]`)
 - `settings.json` — App preferences (`hotkey`, `terminalHotkey`, `historyEnabled`, `historyLimit`, `autoStart`, `disableMouseInput`, `defaultCommand`, `disabledApps`, `teamsShortcut`, `favShortcut`, `snippetShortcut`, `searchExcludedCommands`, `hiddenCommands`, `gifFolder`, `lookupFolder`, `barEnabled`, `barPosition`, `termPosition`, `termWindowPosition`)
 - `history.json` — App-managed execution history of recent commands
-- `commands\` — Folder containing custom command `.json` files (seeded with `example.json` and `maint.json`)
+- `commands\` — Folder containing custom command `.json` files (supports subfolders for category-based organization)
 - `maintenance\` — Folder containing script examples (seeded with `example-update-modules.ps1`)
 - `gif\` — Default folder for storing `.gif` files used by `/gif`
 - `lookup\` — Default folder for JSON table files (each a flat array of objects) used by `/lookup`
@@ -175,6 +256,7 @@ Each custom command is defined as a `.json` file in `%USERPROFILE%\.sudolaunch\c
   "Command": "example",
   "Action": "Invoke-WebRequest 'https://www.google.com'",
   "Label": "Ping Google",
+  "ShowTerminal": true,
   "Parameters": [
     { "Name": "url", "Description": "Optional description shown in the palette" }
   ]
@@ -183,9 +265,10 @@ Each custom command is defined as a `.json` file in `%USERPROFILE%\.sudolaunch\c
 
 - `Command`: The command name typed after `/` (a leading `/` in the file is automatically stripped).
 - `Action`: PowerShell command string; use `{paramName}` for parameter substitution.
+- `ShowTerminal` *(optional, boolean)*: When set to `true`, automatically expands and brings up SudoLaunch's console window to display real-time output or interactive prompts (e.g. `Read-Host` or browser logins).
 - `Parameters` *(optional)*: Defines named parameters for palette auto-completion.
 - **Usage**: `/example url=https://example.com` or, for values with spaces, `/example url='https://example.com/some path'`. If a parameter is omitted, selecting it in suggestions fills `paramName=` into the palette for quick input.
-- **Execution**: Runs silently in the background via `powershell.exe -NoProfile -NonInteractive` and displays a Windows desktop notification on completion (or failure).
+- **Execution**: Dispatches to SudoLaunch's persistent PowerShell session. If `ShowTerminal` is not set, runs in the background and signals unread activity on the dock icon with a notification.
 
 > [!WARNING]
 > **Security Note**: Parameters are substituted directly into the PowerShell `Action` string before execution. Avoid pasting untrusted inputs into custom command parameters.
@@ -273,7 +356,7 @@ npm run typecheck
 |---|---|---|
 | **`out/`** | Bundled Electron runtime code produced by `npm run build` | • `out/main/index.js`: Main Electron process bundle<br>• `out/preload/index.js`: Preload script exposing secure IPC APIs<br>• `out/renderer/`: Compiled React application, styling, and web bundle |
 | **`dist/`** | Distribution artifacts produced by `npm run build:win` | • `dist/SudoLaunch-<version>-setup.exe`: Self-contained NSIS per-user Windows installer<br>• `dist/win-unpacked/`: Standalone unpacked application folder containing `SudoLaunch.exe`, bundled Electron runtime, and unpacked dependencies<br>• `dist/builder-effective-config.yaml`: Resolved build and packaging manifest |
-| **`resources/bin/`** | Native pre-compiled auxiliary Win32 executables packaged with the application | • `resources/bin/sendkey.exe`: Background keystroke injection & window focus activator<br>• `resources/bin/swaphook.exe`: High-performance Raw Input forwarder & low-level hook for `/swap` input sharing |
+| **`resources/bin/`** | Native pre-compiled auxiliary Win32 executables packaged with the application | • `resources/bin/sendkey.exe`: Background keystroke injection & window focus activator<br>• `resources/bin/swaphook.exe`: High-performance Raw Input forwarder & low-level hook for `/control` input sharing |
 
 ### Native C# Helper Compilation
 
@@ -294,7 +377,7 @@ When installed via the packaged installer, SudoLaunch registers to launch automa
 
 ## Profile Backup & Maintenance
 
-SudoLaunch stores user settings, contacts, snippets, team links, history, custom commands, lookups, and assets in `~/.sudolaunch`. A complete suite of enterprise-grade maintenance, diagnostic, and migration tools is included in `scripts/`:
+SudoLaunch stores user settings, contacts, snippets, team links, history, custom commands, lookups, and assets in `~/.sudolaunch`. Profile operations can be performed directly within the running application using the `/profile` command palette command (e.g. `/profile reset`, `/profile backup`, `/profile restore`, `/profile clean-history`, `/profile validate`, `/profile open-profile`), or externally using the enterprise-grade maintenance and migration suite in `scripts/`:
 
 ### Quick Reference
 

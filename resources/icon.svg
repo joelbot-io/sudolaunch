@@ -1,36 +1,46 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" fill="none">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" width="100%" height="100%" fill="none">
   <defs>
-    <!-- Background Gradient -->
-    <radialGradient id="slBgGrad" cx="50%" cy="30%" r="70%">
-      <stop offset="0%" stop-color="#1e293b" />
-      <stop offset="60%" stop-color="#0f172a" />
-      <stop offset="100%" stop-color="#020617" />
-    </radialGradient>
-
-    <!-- Glowing Chevron Gradients -->
-    <linearGradient id="slGlowGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="#00f2fe" />
-      <stop offset="40%" stop-color="#38bdf8" />
-      <stop offset="80%" stop-color="#3b82f6" />
-      <stop offset="100%" stop-color="#8b5cf6" />
+    <!-- Background Canvas Gradients -->
+    <linearGradient id="slTileBg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#0f172a" />
+      <stop offset="50%" stop-color="#0b1120" />
+      <stop offset="100%" stop-color="#070a12" />
     </linearGradient>
 
-    <linearGradient id="slCursorGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+    <!-- Radial Neon Glow Pool (SecurityStudio signature) -->
+    <radialGradient id="slGlowPool" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#00f2fe" stop-opacity="0.36" />
+      <stop offset="45%" stop-color="#38bdf8" stop-opacity="0.18" />
+      <stop offset="75%" stop-color="#818cf8" stop-opacity="0.06" />
+      <stop offset="100%" stop-color="#070a12" stop-opacity="0" />
+    </radialGradient>
+
+    <!-- Cyber Squircle Glass Rim -->
+    <linearGradient id="slRimGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#38bdf8" stop-opacity="0.8" />
+      <stop offset="40%" stop-color="#818cf8" stop-opacity="0.4" />
+      <stop offset="80%" stop-color="#1e293b" stop-opacity="0.2" />
+      <stop offset="100%" stop-color="#34d399" stop-opacity="0.7" />
+    </linearGradient>
+
+    <!-- Glowing Chevron Gradient -->
+    <linearGradient id="slChevronNeon" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#00f2fe" />
+      <stop offset="45%" stop-color="#38bdf8" />
+      <stop offset="80%" stop-color="#818cf8" />
+      <stop offset="100%" stop-color="#10b981" />
+    </linearGradient>
+
+    <!-- Glowing Cursor Gradient -->
+    <linearGradient id="slCursorNeon" x1="0%" y1="0%" x2="100%" y2="0%">
       <stop offset="0%" stop-color="#00f2fe" />
       <stop offset="100%" stop-color="#10b981" />
     </linearGradient>
 
-    <!-- Glass Rim Gradient -->
-    <linearGradient id="slBorderGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="rgba(56, 189, 248, 0.9)" />
-      <stop offset="50%" stop-color="rgba(255, 255, 255, 0.25)" />
-      <stop offset="100%" stop-color="rgba(139, 92, 246, 0.6)" />
-    </linearGradient>
-
     <!-- Multi-stage Glow Filter -->
-    <filter id="slGlowFilter" x="-40%" y="-40%" width="180%" height="180%">
-      <feGaussianBlur stdDeviation="2" result="blur1" />
-      <feGaussianBlur stdDeviation="0.8" result="blur2" />
+    <filter id="slGlow" x="-30%" y="-30%" width="160%" height="160%">
+      <feGaussianBlur stdDeviation="3.5" result="blur1" />
+      <feGaussianBlur stdDeviation="1.5" result="blur2" />
       <feMerge>
         <feMergeNode in="blur1" />
         <feMergeNode in="blur2" />
@@ -38,67 +48,81 @@
       </feMerge>
     </filter>
 
-    <filter id="slBackGlow" x="-30%" y="-30%" width="160%" height="160%">
-      <feGaussianBlur stdDeviation="3" result="backBlur" />
+    <!-- Drop Shadow Filter -->
+    <filter id="slTileShadow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="4" stdDeviation="6" flood-color="#000000" flood-opacity="0.75" />
     </filter>
   </defs>
 
-  <!-- Ambient Backdrop Glow -->
-  <rect x="6" y="6" width="52" height="52" rx="14" fill="#00f2fe" opacity="0.18" filter="url(#slBackGlow)" />
-
-  <!-- Background Squircle Tile -->
-  <rect x="5" y="5" width="54" height="54" rx="13" fill="url(#slBgGrad)" />
-  <rect x="5" y="5" width="54" height="54" rx="13" stroke="url(#slBorderGrad)" stroke-width="1.5" />
-
-  <!-- Launch Thrust / Grid Accent Lines -->
-  <path d="M14 32h8" stroke="#38bdf8" stroke-width="1.5" stroke-linecap="round" opacity="0.4" />
-  <path d="M12 26h6" stroke="#38bdf8" stroke-width="1" stroke-linecap="round" opacity="0.25" />
-  <path d="M12 38h6" stroke="#38bdf8" stroke-width="1" stroke-linecap="round" opacity="0.25" />
-
-  <!-- Glowing Terminal Launch Chevron ">" & Cursor "_" -->
-  <g filter="url(#slGlowFilter)">
-    <!-- Neon Glow Base for Chevron -->
-    <path
-      d="M20 20L33 32L20 44"
-      stroke="url(#slGlowGrad)"
-      stroke-width="5"
-      stroke-linecap="round"
-      stroke-linejoin="round"
-    />
-    <!-- Core Bright Line for Chevron -->
-    <path
-      d="M20 20L33 32L20 44"
-      stroke="#ffffff"
-      stroke-width="2"
-      stroke-linecap="round"
-      stroke-linejoin="round"
-      opacity="0.9"
-    />
-
-    <!-- Neon Glow Base for Underscore Cursor -->
-    <line
-      x1="36"
-      y1="44"
-      x2="46"
-      y2="44"
-      stroke="url(#slCursorGrad)"
-      stroke-width="5"
-      stroke-linecap="round"
-    />
-    <!-- Core Bright Line for Underscore Cursor -->
-    <line
-      x1="36"
-      y1="44"
-      x2="46"
-      y2="44"
-      stroke="#ffffff"
-      stroke-width="2"
-      stroke-linecap="round"
-      opacity="0.9"
-    />
+  <!-- 1. Ambient Tile Drop Shadow & Base -->
+  <g filter="url(#slTileShadow)">
+    <rect x="8" y="8" width="112" height="112" rx="26" fill="url(#slTileBg)" />
+    <rect x="8" y="8" width="112" height="112" rx="26" stroke="url(#slRimGrad)" stroke-width="1.75" />
   </g>
 
-  <!-- Sparkle Accent -->
-  <circle cx="47" cy="17" r="1.5" fill="#00f2fe" filter="url(#slGlowFilter)" />
-  <circle cx="47" cy="17" r="0.75" fill="#ffffff" />
+  <!-- 2. SecurityStudio Grid Pattern Lines -->
+  <g opacity="0.08" stroke="#38bdf8" stroke-width="0.75">
+    <line x1="24" y1="8" x2="24" y2="120" />
+    <line x1="48" y1="8" x2="48" y2="120" />
+    <line x1="64" y1="8" x2="64" y2="120" />
+    <line x1="80" y1="8" x2="80" y2="120" />
+    <line x1="104" y1="8" x2="104" y2="120" />
+    <line x1="8" y1="24" x2="120" y2="24" />
+    <line x1="8" y1="48" x2="120" y2="48" />
+    <line x1="8" y1="64" x2="120" y2="64" />
+    <line x1="8" y1="80" x2="120" y2="80" />
+    <line x1="8" y1="104" x2="120" y2="104" />
+    <!-- Concentric radar ring accent -->
+    <circle cx="64" cy="64" r="38" fill="none" stroke-dasharray="3 3" />
+  </g>
+
+  <!-- 3. Central Radial Glow Pool -->
+  <circle cx="64" cy="64" r="44" fill="url(#slGlowPool)" />
+
+  <!-- 4. Hypersonic Neon Terminal Chevron ">" and Cursor "_" -->
+  <g filter="url(#slGlow)">
+    <!-- Neon Outer Halo: Chevron -->
+    <path
+      d="M40 38 L68 64 L40 90"
+      stroke="url(#slChevronNeon)"
+      stroke-width="10"
+      stroke-linecap="round"
+      stroke-linejoin="round"
+      opacity="0.85"
+    />
+    <!-- Sharp Core Line: Chevron -->
+    <path
+      d="M40 38 L68 64 L40 90"
+      stroke="#ffffff"
+      stroke-width="3"
+      stroke-linecap="round"
+      stroke-linejoin="round"
+    />
+
+    <!-- Neon Outer Halo: Terminal Cursor -->
+    <line
+      x1="76"
+      y1="89"
+      x2="98"
+      y2="89"
+      stroke="url(#slCursorNeon)"
+      stroke-width="9"
+      stroke-linecap="round"
+      opacity="0.85"
+    />
+    <!-- Sharp Core Line: Terminal Cursor -->
+    <line
+      x1="76"
+      y1="89"
+      x2="98"
+      y2="89"
+      stroke="#ffffff"
+      stroke-width="2.5"
+      stroke-linecap="round"
+    />
+
+    <!-- Elevated Privilege Spark Node -->
+    <circle cx="94" cy="38" r="3" fill="#00f2fe" />
+    <circle cx="94" cy="38" r="1.5" fill="#ffffff" />
+  </g>
 </svg>

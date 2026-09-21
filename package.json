@@ -8,8 +8,12 @@
     "dev": "electron-vite dev",
     "build": "electron-vite build",
     "build:win": "electron-vite build && electron-builder --win",
+    "bundle": "powershell -ExecutionPolicy Bypass -File ./scripts/bundle-repo.ps1",
+    "bundle:native": "powershell -ExecutionPolicy Bypass -File ./scripts/bundle-repo.ps1 -IncludeNative",
+    "bundle:zip": "powershell -ExecutionPolicy Bypass -File ./scripts/bundle-repo.ps1",
     "typecheck": "tsc --noEmit -p tsconfig.node.json && tsc --noEmit -p tsconfig.web.json",
-    "postinstall": "electron-rebuild -f -w node-window-manager,electron-clipboard-ex,node-pty",
+    "postinstall": "node ./scripts/postinstall.js",
+    "rebuild:native": "electron-rebuild -f -o node-window-manager,electron-clipboard-ex,node-pty",
     "profile:backup": "powershell -ExecutionPolicy Bypass -File ./scripts/backup-profile.ps1",
     "profile:restore": "powershell -ExecutionPolicy Bypass -File ./scripts/restore-profile.ps1",
     "profile:list": "powershell -ExecutionPolicy Bypass -File ./scripts/manage-profile.ps1 list",
@@ -42,9 +46,10 @@
     "electron-clipboard-ex": "^1.3.3",
     "electron-updater": "^6.3.9",
     "fuse.js": "^7.0.0",
-    "mathjs": "^13.2.0",
+    "mathjs": "^15.2.0",
     "node-pty": "^1.1.0",
-    "node-window-manager": "^2.2.4"
+    "node-window-manager": "^2.2.4",
+    "selfsigned": "^5.5.0"
   },
   "devDependencies": {
     "@types/node": "^22.10.2",

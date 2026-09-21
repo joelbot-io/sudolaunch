@@ -29,17 +29,6 @@ param(
 
 $ErrorActionPreference = "Stop"
 
-# Ensure Certificate module and PSDrive are loaded
-Import-Module Microsoft.PowerShell.Security -ErrorAction SilentlyContinue
-Import-Module PKI -ErrorAction SilentlyContinue
-if (-not (Get-PSDrive -Name Cert -ErrorAction SilentlyContinue)) {
-    try {
-        New-PSDrive -Name Cert -PSProvider Certificate -Root "\" -ErrorAction SilentlyContinue | Out-Null
-    } catch {
-        # ignore
-    }
-}
-
 function Test-IsAdmin {
     $currentPrincipal = New-Object Security.Principal.WindowsPrincipal([Security.Principal.WindowsIdentity]::GetCurrent())
     return $currentPrincipal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
@@ -49,6 +38,12 @@ function Test-IsAdmin {
 if (-not (Test-IsAdmin)) {
     Write-Host "Elevated administrator privileges required to install certificates and write to Program Files." -ForegroundColor Yellow
     Write-Host "Requesting elevation..." -ForegroundColor Cyan
+    
+    $currentHostExe = (Get-Process -Id $PID).Path
+    if (-not $currentHostExe -or -not (Test-Path $currentHostExe)) {
+        $currentHostExe = if ($PSVersionTable.PSEdition -eq "Core") { "pwsh.exe" } else { "powershell.exe" }
+    }
+    
     $procArgs = @(
         "-ExecutionPolicy", "Bypass",
         "-File", "`"$PSCommandPath`""
@@ -57,8 +52,40 @@ if (-not (Test-IsAdmin)) {
         $procArgs += "-InstallDir"
         $procArgs += "`"$InstallDir`""
     }
-    $process = Start-Process -FilePath "powershell.exe" -ArgumentList $procArgs -Verb RunAs -PassThru -Wait
+    $process = Start-Process -FilePath $currentHostExe -ArgumentList $procArgs -Verb RunAs -PassThru -Wait
     exit $process.ExitCode
+}
+
+# Sanitize PSModulePath if Windows PowerShell inherited PowerShell 7 paths from pwsh / VS Code terminal
+if ($PSVersionTable.PSEdition -ne "Core") {
+    $cleanPaths = ($env:PSModulePath -split ';') | Where-Object { 
+        $_ -and ($_ -notmatch '(?i)PowerShell[\\/]7') 
+    }
+    $env:PSModulePath = $cleanPaths -join ';'
+}
+
+# Ensure Certificate module and PSDrive are loaded
+if (-not (Get-Module -Name Microsoft.PowerShell.Security)) {
+    try {
+        Import-Module Microsoft.PowerShell.Security -ErrorAction SilentlyContinue
+    } catch {
+        # ignore if already loaded or type data collision occurs
+    }
+}
+
+if (-not (Get-Module -Name PKI)) {
+    try {
+        Import-Module PKI -ErrorAction SilentlyContinue
+    } catch {
+        # ignore
+    }
+}
+if (-not (Get-PSDrive -Name Cert -ErrorAction SilentlyContinue)) {
+    try {
+        New-PSDrive -Name Cert -PSProvider Certificate -Root "\" -ErrorAction SilentlyContinue | Out-Null
+    } catch {
+        # ignore
+    }
 }
 
 Write-Host "`n========================================================" -ForegroundColor Magenta
@@ -176,7 +203,9 @@ Write-Host " [v] Installed to: $targetExe" -ForegroundColor Green
 # Verify execution from Program Files
 Write-Host "`n [+] Verifying execution from secure location..." -ForegroundColor Cyan
 try {
-    $proc = Start-Process -FilePath $targetExe -ArgumentList "test" -Wait -PassThru -NoNewWindow
+    # uiAccess applications require ShellExecuteEx (UseShellExecute = true).
+    # -NoNewWindow forces UseShellExecute = false (CreateProcess), which Windows blocks with error 740.
+    $proc = Start-Process -FilePath $targetExe -ArgumentList "test" -Wait -PassThru -WindowStyle Hidden
     Write-Host " [v] swaphook.exe successfully launched with uiAccess privileges (Exit code: $($proc.ExitCode))" -ForegroundColor Green
 } catch {
     Write-Host " [X] Failed to launch swaphook.exe from secure location: $_" -ForegroundColor Red

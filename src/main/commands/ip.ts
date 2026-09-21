@@ -65,7 +65,7 @@ export function search(query: string): SearchResultItem[] {
     const filtered = allItems.filter(
       (item) => item.label.toLowerCase().includes(q) || (item.sublabel && item.sublabel.toLowerCase().includes(q))
     )
-    if (filtered.length > 0) return filtered
+    return filtered
   }
 
   return allItems.length > 0

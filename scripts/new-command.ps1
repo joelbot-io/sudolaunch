@@ -28,6 +28,9 @@
 .PARAMETER TestRun
     Immediately dry-runs the PowerShell action to verify syntax.
 
+.PARAMETER ShowTerminal
+    Switch to automatically expand and bring up the console window when the command runs.
+
 .PARAMETER ProfileDir
     Path to SudoLaunch profile directory. Defaults to ~/.sudolaunch.
 
@@ -61,6 +64,9 @@ param(
 
     [Parameter()]
     [string[]]$Params,
+
+    [Parameter()]
+    [switch]$ShowTerminal,
 
     [Parameter()]
     [switch]$TestRun,
@@ -195,6 +201,10 @@ if ($Type -eq "Action") {
         [System.IO.File]::WriteAllText($sampleScriptPath, $sampleContent, [System.Text.Encoding]::UTF8)
         Write-Step "Created starter script: $sampleScriptPath"
     }
+}
+
+if ($ShowTerminal) {
+    $cmdObject["ShowTerminal"] = $true
 }
 
 $jsonText = $cmdObject | ConvertTo-Json -Depth 5

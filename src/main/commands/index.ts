@@ -39,9 +39,11 @@ import * as defaultCmd from './defaultCmd'
 import * as settingsCmd from './settings'
 import * as text from './text'
 import * as url from './url'
-import * as swap from './swap'
+import * as control from './control'
 import * as release from './release'
 import * as exitCmd from './exit'
+import * as profile from './profile'
+import * as historyCmd from './historyCmd'
 
 const searchers: Record<Exclude<CommandName, 'calc'>, (query: string) => SearchResultItem[]> = {
   app: app.search,
@@ -59,6 +61,7 @@ const searchers: Record<Exclude<CommandName, 'calc'>, (query: string) => SearchR
   gif: gif.search,
   git: git.search,
   hash: hash.search,
+  history: historyCmd.search,
   http: http.search,
   ip: ip.search,
   json: json.search,
@@ -67,6 +70,7 @@ const searchers: Record<Exclude<CommandName, 'calc'>, (query: string) => SearchR
   mail: mail.search,
   mime: mime.search,
   port: port.search,
+  profile: profile.search,
   pt: pt.search,
   pwd: pwd.search,
   qr: qr.search,
@@ -83,11 +87,11 @@ const searchers: Record<Exclude<CommandName, 'calc'>, (query: string) => SearchR
   url: url.search,
   uuid: uuid.search,
   view: view.search,
-  swap: swap.search,
+  control: control.search,
   release: release.search
 }
 
-const executors: Record<CommandName, (item: SearchResultItem, query: string) => Promise<void>> = {
+const executors: Record<CommandName, (item: SearchResultItem, query: string, elevated?: boolean) => Promise<void>> = {
   app: app.execute,
   calc: calc.execute,
   case: caseCmd.execute,
@@ -104,6 +108,7 @@ const executors: Record<CommandName, (item: SearchResultItem, query: string) => 
   gif: gif.execute,
   git: git.execute,
   hash: hash.execute,
+  history: historyCmd.execute,
   http: http.execute,
   ip: ip.execute,
   json: json.execute,
@@ -112,6 +117,7 @@ const executors: Record<CommandName, (item: SearchResultItem, query: string) => 
   mail: mail.execute,
   mime: mime.execute,
   port: port.execute,
+  profile: profile.execute,
   pt: pt.execute,
   pwd: pwd.execute,
   qr: qr.execute,
@@ -128,7 +134,7 @@ const executors: Record<CommandName, (item: SearchResultItem, query: string) => 
   url: url.execute,
   uuid: uuid.execute,
   view: view.execute,
-  swap: swap.execute,
+  control: control.execute,
   release: release.execute
 }
 
@@ -138,10 +144,10 @@ export function search(command: CommandName, query: string): SearchResultItem[] 
   return fn ? fn(query) : []
 }
 
-export async function execute(command: CommandName, item: SearchResultItem, query: string): Promise<void> {
+export async function execute(command: CommandName, item: SearchResultItem, query: string, elevated?: boolean): Promise<void> {
   const fn = executors[command]
   if (fn) {
-    await fn(item, query)
+    await fn(item, query, elevated)
   }
   recordHistory(command, query, item.label, item.value)
 }

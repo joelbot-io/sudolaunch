@@ -1,8 +1,10 @@
 import { spawn } from 'child_process'
 import Fuse from 'fuse.js'
 import { readdirSync, statSync } from 'fs'
-import { dirname, extname, join, resolve, sep } from 'path'
+import { dirname, extname, join, resolve, sep, basename } from 'path'
 import { CONFIG_DIR } from './config'
+import { runInTerminal, openTerminal } from './terminalWindow'
+import { runElevated } from './elevation'
 import type { SearchResultItem } from '../shared/types'
 
 // Backs any custom command whose JSON defines "Folder" instead of "Action" — one
@@ -125,34 +127,32 @@ export function resolveFileWithin(root: string, relPath: string): string | null 
   return absPath && stat?.isFile() ? absPath : null
 }
 
-export function runScript(root: string, relPath: string): void {
+export function runScript(root: string, relPath: string, elevated?: boolean, showTerminal?: boolean): void {
   const absPath = resolveFileWithin(root, relPath)
   if (!absPath) {
     throw new Error('Script no longer exists or is outside the configured folder')
   }
 
   const ext = extname(absPath).toLowerCase()
-  const quotedPath = quoteArg(absPath)
-  const inner =
-    ext === '.py'
-      ? ['cmd.exe', '/k', 'python', quotedPath]
-      : ext === '.ps1'
-        ? ['powershell', '-NoExit', '-File', quotedPath]
-        : null
-  if (!inner) {
-    throw new Error('Unsupported script type')
+  const scriptName = basename(absPath)
+  let cmdStr = ''
+  if (ext === '.ps1') {
+    cmdStr = `& '${absPath.replace(/'/g, "''")}'`
+  } else if (ext === '.py') {
+    cmdStr = `python '${absPath.replace(/'/g, "''")}'`
+  } else {
+    cmdStr = `& '${absPath.replace(/'/g, "''")}'`
   }
 
-  // Wrapping in `cmd /c start ""` guarantees a brand-new, visible console window
-  // regardless of whether Electron itself has a console attached (dev vs packaged).
-  // windowsVerbatimArguments disables Node's automatic argv quoting (which only quotes
-  // args containing whitespace) so our own quoting of `quotedPath` and the literal `""`
-  // title placeholder reach cmd.exe exactly as written, instead of being re-escaped.
-  spawn('cmd.exe', ['/c', 'start', '""', ...inner], {
-    cwd: dirname(absPath),
-    detached: true,
-    stdio: 'ignore',
-    windowsHide: false,
-    windowsVerbatimArguments: true
-  }).unref()
+  if (elevated) {
+    runElevated(cmdStr, scriptName)
+    return
+  }
+
+  if (showTerminal) {
+    openTerminal()
+  }
+
+  // Default: run visibly in SudoLaunch's own persistent terminal
+  runInTerminal(cmdStr)
 }

@@ -1,10 +1,12 @@
 import { spawn } from 'child_process'
-import { Notification } from 'electron'
 import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from 'fs'
 import { join } from 'path'
 import { watch as chokidarWatch } from 'chokidar'
 import { CONFIG_DIR } from './config'
 import { getAppIconPath } from './icon'
+import { addNotification } from './notifications'
+import { runInTerminal, openTerminal } from './terminalWindow'
+import { runElevated } from './elevation'
 import type { CustomCommand, CustomCommandParam } from '../shared/types'
 
 export const COMMANDS_DIR = join(CONFIG_DIR, 'commands')
@@ -53,39 +55,53 @@ function normalizeParams(raw: unknown): CustomCommandParam[] {
   return out
 }
 
-export function loadCustomCommands(): CustomCommand[] {
-  let files: string[] = []
+function findJsonFiles(dir: string): string[] {
   try {
-    files = readdirSync(COMMANDS_DIR).filter((f) => f.toLowerCase().endsWith('.json'))
+    const entries = readdirSync(dir, { withFileTypes: true })
+    const files: string[] = []
+    for (const entry of entries) {
+      const full = join(dir, entry.name)
+      if (entry.isDirectory()) {
+        files.push(...findJsonFiles(full))
+      } else if (entry.isFile() && entry.name.toLowerCase().endsWith('.json')) {
+        files.push(full)
+      }
+    }
+    return files
   } catch {
     return []
   }
+}
 
+export function loadCustomCommands(): CustomCommand[] {
+  const files = findJsonFiles(COMMANDS_DIR)
   const out: CustomCommand[] = []
-  for (const file of files) {
+  for (const fullPath of files) {
     try {
-      const content = readFileSync(join(COMMANDS_DIR, file), 'utf-8').replace(/^\uFEFF/, '')
+      const content = readFileSync(fullPath, 'utf-8').replace(/^\uFEFF/, '')
       const raw = JSON.parse(content)
       const hasAction = typeof raw.Action === 'string' && raw.Action.trim()
       const hasFolder = typeof raw.Folder === 'string' && raw.Folder.trim()
       if (typeof raw.Command !== 'string' || hasAction === hasFolder) {
-        console.warn(`Skipping invalid custom command file (needs exactly one of Action/Folder): ${file}`)
+        console.warn(`Skipping invalid custom command file (needs exactly one of Action/Folder): ${fullPath}`)
         continue
       }
       const command = raw.Command.trim().replace(/^\/+/, '')
       if (!command) {
-        console.warn(`Skipping custom command file with empty command name: ${file}`)
+        console.warn(`Skipping custom command file with empty command name: ${fullPath}`)
         continue
       }
+      const showTerminal = Boolean(raw.ShowTerminal ?? raw.showTerminal ?? raw.OpenTerminal ?? raw.openTerminal)
       out.push({
         command,
         action: hasAction ? raw.Action : undefined,
         folder: hasFolder ? raw.Folder : undefined,
         label: typeof raw.Label === 'string' ? raw.Label : undefined,
-        parameters: normalizeParams(raw.Parameters)
+        parameters: normalizeParams(raw.Parameters),
+        showTerminal
       })
     } catch (err) {
-      console.warn(`Failed to parse custom command file ${file}:`, err)
+      console.warn(`Failed to parse custom command file ${fullPath}:`, err)
     }
   }
   return out
@@ -102,22 +118,74 @@ export function watchCustomCommands(onChange: () => void): void {
     .on('unlink', onChange)
 }
 
-function notify(cmd: CustomCommand, success: boolean, detail?: string): void {
-  new Notification({
-    title: `${cmd.label ?? cmd.command} ${success ? 'succeeded' : 'failed'}`,
-    body: detail ?? (success ? 'Completed successfully' : 'Command failed'),
-    icon: getAppIconPath()
-  }).show()
+function notify(cmd: CustomCommand, success: boolean, detail?: string, commandInput?: string): void {
+  const title = `${cmd.label ?? cmd.command} ${success ? 'succeeded' : 'failed'}`
+  const body = detail ?? (success ? 'Completed successfully' : 'Command failed')
+  addNotification({
+    title,
+    body,
+    type: success ? 'success' : 'error',
+    commandName: cmd.command,
+    commandInput,
+    showNativeToast: true
+  })
 }
 
 export function runAndNotify(cmd: CustomCommand, action: string): void {
   const child = spawn('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', action], {
     windowsHide: true
   })
-  child.on('error', (err) => notify(cmd, false, err.message))
-  child.on('exit', (code) => notify(cmd, code === 0, code === 0 ? undefined : `Exited with code ${code}`))
+  let stdout = ''
+  let stderr = ''
+
+  child.stdout?.setEncoding('utf-8')
+  child.stderr?.setEncoding('utf-8')
+
+  child.stdout?.on('data', (data: string) => {
+    stdout += data
+  })
+  child.stderr?.on('data', (data: string) => {
+    stderr += data
+  })
+
+  child.on('error', (err) => notify(cmd, false, err.message, action))
+  child.on('exit', (code) => {
+    const success = code === 0
+    const out = stdout.trim()
+    const err = stderr.trim()
+    let detail: string
+    if (success) {
+      detail = out || 'Completed successfully'
+    } else {
+      detail = err || out || `Exited with code ${code}`
+    }
+    if (detail.length > 500) {
+      detail = detail.slice(0, 497) + '...'
+    }
+    notify(cmd, success, detail, action)
+  })
 }
 
 export function notifyMissingParams(cmd: CustomCommand, missing: string[]): void {
-  notify(cmd, false, `Missing required parameter${missing.length > 1 ? 's' : ''}: ${missing.join(', ')}`)
+  notify(cmd, false, `Missing required parameter${missing.length > 1 ? 's' : ''}: ${missing.join(', ')}`, cmd.command)
+}
+
+export function executeCustomAction(cmd: CustomCommand, action: string, elevated?: boolean): void {
+  if (elevated) {
+    runElevated(action, cmd.label ?? cmd.command, cmd.command)
+    return
+  }
+
+  if (cmd.showTerminal) {
+    openTerminal()
+  }
+
+  // Default behavior: dispatch to SudoLaunch's built-in terminal (signals unread output glow)
+  runInTerminal(action)
+  addNotification({
+    title: cmd.label ?? cmd.command,
+    type: 'info',
+    commandName: cmd.command,
+    showNativeToast: false
+  })
 }

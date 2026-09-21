@@ -3,6 +3,9 @@ import { join } from 'path'
 import { is } from '@electron-toolkit/utils'
 import { readSettings, writeSettings } from './config'
 import { ensurePty, writeToPty, resizePty, onPtyData, onPtyExit } from './terminal'
+import { DockGeometry } from './dock/DockGeometry'
+import { dockManager } from './dock/DockManager'
+import { getDockDisplay } from './display'
 
 let termWindow: BrowserWindow | null = null
 // Whether the panel is currently pulled out (full size, above/below the icon) vs. collapsed to
@@ -11,106 +14,81 @@ let termExpanded = false
 let termMoveModeActive = false
 let lastBarBounds: Rectangle | null = null
 
-const ICON_SIZE = { width: 44, height: 44 }
-// Fixed by design (see Settings answer #15) — the panel always resets to this size and
-// position on every expand, it doesn't remember a user-resized/moved state.
-const PANEL_SIZE = { width: 640, height: 360 }
-const GAP = 8
-const IDLE_BOTTOM_MARGIN = 8
 // Rough monospace cell size used only to size the pty at first spawn, before the
 // renderer's real xterm.js fit measurement arrives via 'term-resize'.
 const CHAR_CELL = { width: 8, height: 17 }
 
-function clampRect(rect: Rectangle, workArea: Rectangle): Rectangle {
-  const maxX = Math.max(workArea.x, workArea.x + workArea.width - rect.width)
-  const maxY = Math.max(workArea.y, workArea.y + workArea.height - rect.height)
-  return {
-    x: Math.min(Math.max(rect.x, workArea.x), maxX),
-    y: Math.min(Math.max(rect.y, workArea.y), maxY),
-    width: rect.width,
-    height: rect.height
+function getLiveBarBounds(bar?: Rectangle | null): Rectangle | null {
+  if (bar) return bar
+  if (lastBarBounds) return lastBarBounds
+  const barWin = dockManager.getBarWindow()
+  if (barWin && !barWin.isDestroyed() && barWin.isVisible()) {
+    return barWin.getBounds()
   }
-}
-
-function defaultAttachedBounds(bar: Rectangle): Rectangle {
-  const { workArea } = screen.getDisplayNearestPoint({ x: bar.x, y: bar.y })
-  const distLeft = bar.x - workArea.x
-  const distRight = workArea.x + workArea.width - (bar.x + bar.width)
-  const distTop = bar.y - workArea.y
-  const distBottom = workArea.y + workArea.height - (bar.y + bar.height)
-
-  // If docked near the left or right edge, or if horizontal spacing would cause clipping on the left
-  const isLeftEdge = distLeft < 80 || bar.x - ICON_SIZE.width - GAP < workArea.x
-  const isRightEdge = distRight < 80
-  const isVertical = isLeftEdge || isRightEdge
-
-  if (isVertical) {
-    // Stack buttons vertically along the edge so neither button clips off-screen
-    const x = bar.x
-    // If near the top edge, place terminal below the bar; otherwise place above
-    const y =
-      distTop < distBottom && distTop < ICON_SIZE.height + GAP + 20
-        ? bar.y + bar.height + GAP
-        : bar.y - ICON_SIZE.height - GAP
-    return clampRect({ x, y, width: ICON_SIZE.width, height: ICON_SIZE.height }, workArea)
-  }
-
-  // Default horizontal layout (terminal to the left of the command bar)
-  const x = bar.x - ICON_SIZE.width - GAP
-  const y = Math.round(bar.y + (bar.height - ICON_SIZE.height) / 2)
-  return clampRect({ x, y, width: ICON_SIZE.width, height: ICON_SIZE.height }, workArea)
+  return dockManager.getLastBarBounds()
 }
 
 function idleBounds(bar?: Rectangle | null): Rectangle {
-  const { termPosition } = readSettings()
-  if (termPosition) {
-    const { workArea } = screen.getDisplayNearestPoint({ x: termPosition.x, y: termPosition.y })
-    return clampRect({ x: termPosition.x, y: termPosition.y, ...ICON_SIZE }, workArea)
+  const settings = readSettings()
+  const activeBar = getLiveBarBounds(bar)
+  const display = activeBar
+    ? screen.getDisplayNearestPoint({
+        x: activeBar.x + activeBar.width / 2,
+        y: activeBar.y + activeBar.height / 2
+      })
+    : getDockDisplay(settings.monitor)
+
+  if (settings.dockLayout === 'shelf') {
+    const slotCount = settings.shelfIcons?.length ?? 7
+    const shelfBar = activeBar ?? DockGeometry.calculateShelfBarBounds(display.workArea, slotCount)
+    return DockGeometry.calculateShelfIconBounds(shelfBar, 'terminal', settings.shelfIcons)
   }
 
-  const activeBar = bar ?? lastBarBounds
+  if (settings.termPosition) {
+    const { workArea: ptArea } = screen.getDisplayNearestPoint({
+      x: settings.termPosition.x,
+      y: settings.termPosition.y
+    })
+    return DockGeometry.clampRect(
+      { x: settings.termPosition.x, y: settings.termPosition.y, ...DockGeometry.ICON_SIZE },
+      ptArea
+    )
+  }
+
   if (activeBar) {
-    return defaultAttachedBounds(activeBar)
+    return DockGeometry.calculateAttachedBounds(
+      activeBar,
+      'terminal',
+      settings.dockLayout ?? 'shelf',
+      display.workArea
+    )
   }
 
-  const { workArea } = screen.getPrimaryDisplay()
-  const { width, height } = ICON_SIZE
-  return {
-    x: Math.round(workArea.x + (workArea.width - width) / 2) - width - GAP,
-    y: workArea.y + workArea.height - height - IDLE_BOTTOM_MARGIN,
-    width,
-    height
-  }
+  return DockGeometry.calculateDefaultIdleBounds(
+    display.workArea,
+    'terminal',
+    settings.dockLayout ?? 'shelf'
+  )
 }
 
 function expandedBounds(bar?: Rectangle | null): Rectangle {
-  const { termWindowPosition } = readSettings()
-  if (termWindowPosition) {
-    const { workArea } = screen.getDisplayNearestPoint({ x: termWindowPosition.x, y: termWindowPosition.y })
-    return clampRect({ x: termWindowPosition.x, y: termWindowPosition.y, ...PANEL_SIZE }, workArea)
-  }
-
+  const settings = readSettings()
   const icon = idleBounds(bar)
   const { workArea } = screen.getDisplayNearestPoint({ x: icon.x, y: icon.y })
-  const { width, height } = PANEL_SIZE
-  const screenCenterY = workArea.y + workArea.height / 2
-  const iconCenterX = icon.x + icon.width / 2
-  const iconCenterY = icon.y + icon.height / 2
-
-  // Center horizontally over the icon's position, clamped to work area
-  const targetX = Math.round(iconCenterX - width / 2)
-
-  // Vertical popout:
-  // If in the bottom half of the screen, open upwards above the dock.
-  // If in the top half of the screen, open downwards below the dock.
-  let targetY: number
-  if (iconCenterY >= screenCenterY) {
-    targetY = icon.y - GAP - height
-  } else {
-    targetY = icon.y + icon.height + GAP
+  const width = Math.max(
+    480,
+    Math.min(settings.terminalWidth ?? DockGeometry.TERMINAL_PANEL_SIZE.width, workArea.width - 32)
+  )
+  const panelSize = {
+    width,
+    height: DockGeometry.TERMINAL_PANEL_SIZE.height
   }
-
-  return clampRect({ x: targetX, y: targetY, width, height }, workArea)
+  return DockGeometry.calculateExpandedBounds(
+    icon,
+    panelSize,
+    workArea,
+    settings.termWindowPosition
+  )
 }
 
 function loadRenderer(win: BrowserWindow): void {
@@ -155,11 +133,19 @@ export function createTerminalWindow(icon: NativeImage): BrowserWindow {
   termWindow.on('closed', () => {
     termWindow = null
   })
+  termWindow.on('focus', () => {
+    termWindow?.webContents.send('term-unread-activity', false)
+    dockManager.sendToBar('term-unread-activity', false)
+  })
   // Registered once for the window's lifetime — forwards pty output regardless of
   // expand state, so scrollback is never missed while the renderer is mounted but the
   // panel happens to be visually collapsed.
   onPtyData((data) => {
     termWindow?.webContents.send('term-data', data)
+    if (!termExpanded && termWindow) {
+      termWindow.webContents.send('term-unread-activity', true)
+      dockManager.sendToBar('term-unread-activity', true)
+    }
   })
   // The shell can end on its own (the user typing "exit", or a crash) while the panel is
   // open or collapsed. Collapse back to the icon so the panel isn't left showing a dead
@@ -174,6 +160,14 @@ export function createTerminalWindow(icon: NativeImage): BrowserWindow {
     }
     termWindow.webContents.send('term-exited')
   })
+
+  dockManager.registerTerminal(termWindow, {
+    reposition: repositionTerminal,
+    show: showTerminalWindow,
+    hide: hideTerminalWindow,
+    reset: resetTermPosition
+  })
+
   return termWindow
 }
 
@@ -192,6 +186,13 @@ export function repositionTerminal(barBounds?: Rectangle): void {
 
 export function showTerminalWindow(): void {
   if (!termWindow) return
+  const settings = readSettings()
+  if (settings.dockLayout === 'shelf') {
+    termExpanded = false
+    termWindow.webContents.send('term-expanded', false)
+    termWindow.hide()
+    return
+  }
   termExpanded = false
   termWindow.setBounds(idleBounds(lastBarBounds))
   termWindow.webContents.send('term-expanded', false)
@@ -224,6 +225,10 @@ export function toggleTermMoveMode(): void {
   termWindow.webContents.send('term-move-mode-changed', termMoveModeActive)
 }
 
+export function notifyTerminalDockSummoned(pos: { x: number; y: number }): void {
+  termWindow?.webContents.send('dock-summoned', pos)
+}
+
 export function resetTermPosition(): void {
   const settings = readSettings()
   writeSettings({ ...settings, termPosition: null, termWindowPosition: null })
@@ -248,6 +253,9 @@ export function toggleTerminal(): void {
 
   termExpanded = !termExpanded
   if (termExpanded) {
+    dockManager.notifyPanelExpanded()
+    termWindow.webContents.send('term-unread-activity', false)
+    dockManager.sendToBar('term-unread-activity', false)
     if (!termWindow.isVisible()) {
       termWindow.setBounds(idleBounds(lastBarBounds))
       termWindow.showInactive()
@@ -257,31 +265,32 @@ export function toggleTerminal(): void {
     // Tell the renderer to switch to the (opacity-0, grow-pending) expanded layout and
     // arm the animation *before* the OS window actually grows.
     termWindow.webContents.send('term-expanded', true)
-    termWindow.webContents.send('term-grow-origin', {
-      originX: ((icon.x + icon.width / 2 - panel.x) / panel.width) * 100,
-      originY: ((icon.y + icon.height / 2 - panel.y) / panel.height) * 100,
-      scale: icon.width / panel.width
-    })
+    termWindow.webContents.send('term-grow-origin', DockGeometry.calculateGrowOrigin(icon, panel))
     termExpandTimeout = setTimeout(() => {
       termExpandTimeout = null
       if (!termWindow || !termExpanded) return
       termWindow.setBounds(panel)
       termWindow.focus()
-      ensurePty(Math.floor(PANEL_SIZE.width / CHAR_CELL.width), Math.floor(PANEL_SIZE.height / CHAR_CELL.height))
+      ensurePty(
+        Math.floor(panel.width / CHAR_CELL.width),
+        Math.floor(panel.height / CHAR_CELL.height)
+      )
       termWindow.webContents.send('term-respawned')
     }, 30)
   } else {
+    dockManager.notifyPanelCollapsed()
     const icon = idleBounds(lastBarBounds)
     const panel = expandedBounds(lastBarBounds)
-    termWindow.webContents.send('term-collapsing', {
-      originX: ((icon.x + icon.width / 2 - panel.x) / panel.width) * 100,
-      originY: ((icon.y + icon.height / 2 - panel.y) / panel.height) * 100,
-      scale: icon.width / panel.width
-    })
+    termWindow.webContents.send('term-collapsing', DockGeometry.calculateGrowOrigin(icon, panel))
     termCollapseTimeout = setTimeout(() => {
       termCollapseTimeout = null
       if (!termWindow) return
-      termWindow.setBounds(idleBounds(lastBarBounds))
+      const settings = readSettings()
+      if (settings.dockLayout === 'shelf') {
+        termWindow.hide()
+      } else {
+        termWindow.setBounds(idleBounds(lastBarBounds))
+      }
       termWindow.webContents.send('term-expanded', false)
     }, 160)
   }
@@ -300,14 +309,25 @@ export function openTerminal(): void {
 
 export function runInTerminal(commandText: string): void {
   if (!termWindow) return
-  if (!termWindow.isVisible()) {
+  const settings = readSettings()
+  if (settings.dockLayout !== 'shelf' && !termWindow.isVisible()) {
     termWindow.setBounds(idleBounds(lastBarBounds))
     termWindow.showInactive()
   }
+
+  // Ensure PTY is initialized in the background
+  const panel = expandedBounds(lastBarBounds)
+  ensurePty(
+    Math.floor(panel.width / CHAR_CELL.width),
+    Math.floor(panel.height / CHAR_CELL.height)
+  )
+
+  // Write command directly to PTY session
+  writeToPty(commandText + '\r')
+
+  // If the terminal is not expanded, signal unread activity for the glowing indicator
   if (!termExpanded) {
-    toggleTerminal()
+    termWindow.webContents.send('term-unread-activity', true)
+    dockManager.sendToBar('term-unread-activity', true)
   }
-  setTimeout(() => {
-    writeToPty(commandText + '\r')
-  }, 120)
 }
