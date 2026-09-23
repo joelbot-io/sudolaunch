@@ -187,8 +187,8 @@ try {
 
         # A. Merge array JSON files (snippets, links, teamLinks)
         $arrayFiles = @(
-            @{ File = "snippets.json"; Key = "trigger" },
-            @{ File = "links.json"; Key = "id" },
+            @{ File = "snippets.json"; Key = "name" },
+            @{ File = "links.json"; Key = "name" },
             @{ File = "teamLinks.json"; Key = "name" }
         )
 

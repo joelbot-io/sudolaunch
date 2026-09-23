@@ -19,9 +19,12 @@ function searchTeamLinks(query: string): SearchResultItem[] {
   return fuse.search(query).map((r) => toResultItem(r.item))
 }
 
-export function search(query: string): SearchResultItem[] {
-  // Team/channel deep links first, then 1:1 chat contacts — mirrors how a user picks a
+export function search(query: string, options?: { excludeTeamLinks?: boolean }): SearchResultItem[] {
+  // Team/channel deep links first (unless excluded), then 1:1 chat contacts — mirrors how a user picks a
   // destination in Teams itself (teams/channels above the DM list).
+  if (options?.excludeTeamLinks) {
+    return searchContacts(query)
+  }
   return [...searchTeamLinks(query), ...searchContacts(query)]
 }
 

@@ -44,8 +44,20 @@ import * as release from './release'
 import * as exitCmd from './exit'
 import * as profile from './profile'
 import * as historyCmd from './historyCmd'
+import * as repo from './repo'
+import * as notifications from './notifications'
+import * as timer from './timer'
+import * as docker from './docker'
+import * as env from './env'
+import * as diff from './diff'
+import * as cert from './cert'
+import * as curl from './curl'
+import * as dns from './dns'
+import * as key from './key'
+import * as show from './show'
+import * as hide from './hide'
 
-const searchers: Record<Exclude<CommandName, 'calc'>, (query: string) => SearchResultItem[]> = {
+const searchers: Record<Exclude<CommandName, 'calc'>, (query: string) => SearchResultItem[] | Promise<SearchResultItem[]>> = {
   app: app.search,
   case: caseCmd.search,
   chmod: chmod.search,
@@ -88,7 +100,19 @@ const searchers: Record<Exclude<CommandName, 'calc'>, (query: string) => SearchR
   uuid: uuid.search,
   view: view.search,
   control: control.search,
-  release: release.search
+  release: release.search,
+  repo: repo.search,
+  notifications: notifications.search,
+  timer: timer.search,
+  docker: docker.search,
+  env: env.search,
+  diff: diff.search,
+  cert: cert.search,
+  curl: curl.search,
+  dns: dns.search,
+  key: key.search,
+  show: show.search,
+  hide: hide.search
 }
 
 const executors: Record<CommandName, (item: SearchResultItem, query: string, elevated?: boolean) => Promise<void>> = {
@@ -122,6 +146,7 @@ const executors: Record<CommandName, (item: SearchResultItem, query: string, ele
   pwd: pwd.execute,
   qr: qr.execute,
   regex: regex.execute,
+  repo: repo.execute,
   restart: restart.execute,
   search: searchCmd.execute,
   settings: settingsCmd.execute,
@@ -135,10 +160,21 @@ const executors: Record<CommandName, (item: SearchResultItem, query: string, ele
   uuid: uuid.execute,
   view: view.execute,
   control: control.execute,
-  release: release.execute
+  release: release.execute,
+  notifications: notifications.execute,
+  timer: timer.execute,
+  docker: docker.execute,
+  env: env.execute,
+  diff: diff.execute,
+  cert: cert.execute,
+  curl: curl.execute,
+  dns: dns.execute,
+  key: key.execute,
+  show: show.execute,
+  hide: hide.execute
 }
 
-export function search(command: CommandName, query: string): SearchResultItem[] {
+export function search(command: CommandName, query: string): SearchResultItem[] | Promise<SearchResultItem[]> {
   if (command === 'calc') return []
   const fn = searchers[command]
   return fn ? fn(query) : []
@@ -149,7 +185,13 @@ export async function execute(command: CommandName, item: SearchResultItem, quer
   if (fn) {
     await fn(item, query, elevated)
   }
-  recordHistory(command, query, item.label, item.value)
+  const isHistoryMutatingAction =
+    command === 'history' ||
+    item.value === '__clear_all' ||
+    (command === 'profile' && (item.value === 'clear-history' || item.value === 'clean-history'))
+  if (!isHistoryMutatingAction) {
+    recordHistory(command, query, item.label, item.value)
+  }
 }
 
 export { evaluateExpression } from './calc'

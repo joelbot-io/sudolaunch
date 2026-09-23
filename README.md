@@ -6,7 +6,8 @@ A global-hotkey command palette, persistent command bar, and drop-down terminal 
 
 - [Commands](#commands)
 - [Execution Modes & Elevation (`Ctrl+Enter`)](#execution-modes--elevation-ctrlenter)
-- [Three-Button Dock & Notifications](#three-button-dock--notifications)
+- [Modular Dock, Layouts & Notifications](#modular-dock-layouts--notifications)
+- [Focus & Pomodoro Timer Popout](#focus--pomodoro-timer-popout)
 - [Command Layout & Subfolders](#command-layout--subfolders)
 - [Input Sharing (`/control`)](#input-sharing-control)
 - [Command bar](#command-bar)
@@ -28,13 +29,14 @@ A global-hotkey command palette, persistent command bar, and drop-down terminal 
 
 | Command | Behavior |
 |---|---|
-| `/search <query>` | Universal multi-source search across contacts, links, snippets, apps, windows, custom commands, and GIFs |
+| `/search <query>` | Universal multi-source search across contacts, snippets, apps, windows, custom commands, and GIFs (excludes internal Teams links) |
 | `/app <query>` | Fuzzy-search Start Menu shortcuts and installed applications, launch (cached in-memory with a 10-minute TTL for fast typing) |
 | `/teams <query>` | Fuzzy-search contacts and team/channel deep links, open a Teams chat or navigate to a channel |
 | `/mail <query>` | Fuzzy-search contacts, compose an email in your default mail client |
 | `/snippet <query>` | Fuzzy-search snippets, copy text directly to clipboard |
 | `/fav <query>` | Fuzzy-search saved links, open URL in default browser |
 | `/g <query>` | Open a Google search in your default web browser (alias: `/google`, clipboard fallback) |
+| `/timer [minutes]` | Open the Focus & Pomodoro countdown timer panel with 5m/10m/15m/30m/45m/60m presets, arrow-key selector navigation, and session tracking (alias: `/focus`) |
 | `/focus <query>` | Fuzzy-search open desktop windows by title, restore and bring to front |
 | `/calc <expression>` | Evaluate a math expression inline; Enter copies the result to clipboard |
 | `/<custom name> <args>` | Run a user-defined custom PowerShell command, or browse a folder of scripts (see [Custom commands](#custom-commands)) |
@@ -68,6 +70,8 @@ A global-hotkey command palette, persistent command bar, and drop-down terminal 
 | `/release` | Release input sharing connection and restore local control regardless of whether input is local or remote |
 | `/term [command]` | Expand/collapse the persistent terminal, or execute a shell command directly (e.g. `/term git status`) |
 | `/view` | Toggle persistent command bar on/off; `/view reset` returns all buttons to default dock |
+| `/show` | Turn on and display the persistent command dock on screen |
+| `/hide` | Hide the persistent command dock from the screen |
 | `/move` | Interactively drag command bar, terminal, and notification icons to new positions |
 | `/default` | Set or clear default command prioritized at top of suggestions list |
 | `/restart` | Relaunch the application |
@@ -93,38 +97,74 @@ SudoLaunch provides seamless execution controls right from the palette footer:
 - **Footer Hints**:
   - The palette footer dynamically displays `↵ Run in Terminal` alongside `Ctrl+↵ Run Elevated` for immediate keyboard feedback.
 
-## Three-Button Dock & Notifications
+## Modular Dock, Layouts & Notifications
 
-Alongside the hotkey popup, SudoLaunch features a sleek frosted-glass acrylic dock:
+Alongside the hotkey popup, SudoLaunch features a sleek frosted-glass acrylic dock providing instant access to shell sessions, notifications, universal search, focus countdowns, and Git branch switching.
 
-```
-[ >_ ] [ / ] [ 🔔 ]
-```
+### 1. Three Dock Display Layout Modes
 
-1. **Terminal (`>_`)**: Toggles the interactive PowerShell drop-down console.
-2. **Command Palette (`/`)**: Toggles the centered command palette and search bar.
-3. **Notification Window (`🔔`)**: Toggles the dedicated acrylic Notification Center with an active unread counter badge (`1`, `2`, `9+`).
+SudoLaunch supports 3 configurable dock presentation modes (switchable via `/settings` or `/view`):
 
-### Instant Dock Summon (<kbd>Ctrl+Right Click</kbd>)
+- **Shelf Pill Tray Mode (`layout-shelf`)**:
+  - Displays modular interactive controls in a floating glass pill tray (`[ >_ ] [ 🔔 ] [ / ] [ ⏱️ ] [ 🔀 ]`).
+  - Features an ambient breathing glow bar along the top edge, collapsible idle state, and instant module popouts.
+- **Circular / Radial Orbit Mode (`layout-circle`)**:
+  - Arranges dock modules in a dynamic revolving planetary orbit around a central beacon.
+  - **Center Countdown Beacon**: When a Focus Timer session is active or paused, the live countdown (`MM:SS`) is rendered directly inside the central circular hub. Clicking the time toggles **Pause / Resume** with zero mouse travel.
+  - **Relaxed Spin Rate**: Refined, slower rotation rate (25% reduction) for a calm celestial aesthetic.
+  - **Idle Auto-Spin Gate**: The orbit only begins revolving after the dock has sat idle at its home position for 15+ seconds, keeping icons steady during active work.
+  - **Hover-Pause**: Hovering your cursor over the orbit dock or any satellite button freezes rotation in place via CSS `animation-play-state: paused` without resetting the angle. Moving away cleanly resumes spinning from the exact paused position.
+- **Horizontal Line Mode (`layout-horizontal`)**:
+  - Classic side-by-side dock icons with edge-aware docking and custom glow accents.
 
-- **Summon Directly to Cursor**: Press <kbd>Ctrl</kbd> + **Right Click** anywhere across Windows to summon the 3-button dock icon cluster immediately beside your mouse pointer.
-- **Context Menu Suppression**: SudoLaunch intercepts low-level right-clicks when <kbd>Ctrl</kbd> is depressed, suppressing the standard Windows desktop/app context menu so only the SudoLaunch dock appears.
-- **Multi-Monitor Safe Clamping**: Positions are automatically clamped to the active display's work area, ensuring the entire 3-icon footprint (`Terminal`, `Palette`, `Notifications`) remains 100% visible on screen.
-- **Persistent Anchor**: The newly summoned position is automatically persisted to `~/.sudolaunch/settings.json` (`barPosition`). Can be toggled on/off in Settings via `ctrlRightClickSummon`.
+### 2. Dock Glow Colors & Ambient Lighting
 
-### Acrylic Notification Center
+All dock modes honor your chosen **Dock Glow Color** with a refined 20% reduced glow intensity and customizable animations:
+- **Color Options**: Cyan (`#06b6d4`), Blue (`#5aa0ff`), Emerald (`#10b981`), Amber (`#f59e0b`), Pink (`#ec4899`), Violet (`#8b5cf6`), **Dark Purple (`#6b21a8`)**, and **Black (`#000000`)** (stealth obsidian halo).
+- **Lighting Styles**: `breathing` (gentle ambient pulse), `steady` (constant illumination), and `stealth` (subdued minimalist accent).
 
-- **Rich Acrylic Design**: A 480×380px floating glassmorphic card anchored to your desktop with real-time status glow accents:
+### 3. Dock Home Position Anchoring
+
+- **9-Point Screen Grid**: Anchor the resting home position to `top-left`, `top-center`, `top-right`, `center-left`, `center`, `center-right`, `bottom-left`, `bottom-center`, or `bottom-right`.
+- **Custom Coordinates**: Specify custom screen percentage coordinates (X, Y) for precise multi-monitor placement.
+- **Auto-Return Delay**: When summoned away via shortcut, the dock automatically returns to its designated home position after an idle timeout (`autoReturnDelaySec`).
+
+### 4. Dock Visibility Controls
+
+- `/show`: Instantly reveals and enables the persistent command dock on screen (`barEnabled: true`).
+- `/hide`: Hides the persistent command dock cluster completely from the screen (`barEnabled: false`). When hidden, pressing <kbd>Ctrl+Space</kbd> opens the centered standalone palette where typing `/show` brings the dock back.
+- `/view`: Toggles the dock on/off; `/view reset` returns all dock buttons back to their default home anchor.
+
+### 5. Instant Dock Summon (<kbd>Ctrl+Right Click</kbd>)
+
+- **Summon Directly to Cursor**: Press <kbd>Ctrl</kbd> + **Right Click** anywhere across Windows to summon the dock immediately beside your mouse pointer.
+- **Context Menu Suppression**: Intercepts low-level right-clicks when <kbd>Ctrl</kbd> is held down, suppressing standard Windows desktop/context menus.
+- **Multi-Monitor Safe Clamping**: Positions automatically clamp inside the active work area so all dock icons remain 100% visible on screen.
+
+### 6. Acrylic Notification Center
+
+- **Rich Acrylic Design**: Floating glassmorphic drawer anchored to your desktop with real-time status glow accents:
   - 🟢 **Emerald**: Successful command completions and clean executions.
   - 🔴 **Coral/Crimson**: Failed commands, errors, and non-zero exit codes.
   - 🔵 **Blue/Cyan**: Informational updates, profile syncs, and system notices.
-- **Interactive Accordion with Dual Input & Output**:
-  - Each notification entry features an interactive accordion header displaying execution status, title, command tag (`/<name>`), and timestamp.
-  - **Command Input Section**: Dedicated monospace container showing the executed PowerShell / elevated command text, with an instant `Copy Input` button.
-  - **Command Output Section**: Monospace container streaming `stdout` and `stderr` execution results with syntax-colored borders, plus an instant `Copy Output` button.
-  - **Expand All / Collapse All**: Header toolbar toggle to quickly collapse or expand all notification cards at once.
-- **Dismiss & Clear All**: Dismiss individual cards (`✕`) or clear all notifications with a single click.
-- **Badge Counter**: The dock bell icon updates dynamically with an unread badge counter that clears automatically when opened.
+- **Dual Monospace Accordion**: Each notification entry features an interactive header, command input snippet with one-click copy, and output stream container (`stdout`/`stderr`) with copy button.
+- **Toolbar Actions**: Expand all, collapse all, dismiss individual items, or clear all notifications.
+- **Unread Counter Badge**: Dock bell icon displays real-time unread badges (`1`, `2`, `9+`).
+
+## Focus & Pomodoro Timer Popout
+
+Stay in flow state without external browser tabs or distraction-heavy timer apps:
+
+- **Quick-Launch Presets**: Rapidly start **5m**, **10m**, **15m**, **30m**, **45m**, or **60m** sessions (with 30m designated as primary).
+- **Keyboard Navigation (<kbd>←</kbd> <kbd>→</kbd> <kbd>↑</kbd> <kbd>↓</kbd> & <kbd>Enter</kbd>)**:
+  - Full 2D highlighted selector outline (`.is-kbd-selected`) with illuminated accent glow ring and scale pop.
+  - Left/Right arrows navigate preset buttons and controls; Up/Down arrows jump between preset controls and custom minute input.
+  - Direct Hotkeys: <kbd>1</kbd>–<kbd>6</kbd> for presets, <kbd>Space</kbd> to pause/resume, <kbd>+</kbd> to add 5 minutes, <kbd>R</kbd> to reset, <kbd>/</kbd> for commands, and <kbd>Esc</kbd> to close.
+- **Ergonomic Window Height (380px)**: Compacted window height eliminates dead space, comfortably hugging all timer controls, custom duration fields, and hotkey hints right above the dock.
+- **Subdued Transparency**: High-contrast dark backdrop (`rgba(18, 18, 22, 0.94)` with `rgba(0, 0, 0, 0.35)` card) eliminates distracting text bleed-through from underlying desktop windows while retaining frosted-glass border aesthetics.
+- **Session Tracker**: Tracks completed focus sessions throughout the day.
+- **Circular Progress Ring**: High-contrast animated SVG ring tracking elapsed and remaining time.
+- **Palette Command**: Launch from anywhere via `/timer [minutes]` or alias `/focus`.
 
 ## Command Layout & Subfolders
 
@@ -214,7 +254,7 @@ Type `/settings` (or `/config`) into the command palette to open the interactive
 - **Contacts (`/settings contacts`)**: Add, edit, or delete contacts (`name`, `alias`, `email`, `teamsId`).
 - **Snippets (`/settings snippets`)**: Add, edit, or delete reusable text snippets (`name`, `text`).
 - **Links (`/settings links`)**: Add, edit, or delete browser bookmarks (`name`, `url`).
-- **Teams Links (`/settings team-links`)**: Add, edit, or delete direct deep links to Teams channels and teams (`name`, `url`, `description`).
+- **Edit Teams Links (`/settings team-links`)**: Manually add, edit, or delete direct deep links to Microsoft Teams channels and teams (`name`, `url`, `description`).
 - **Settings (`/settings edit`)**: Configure global hotkeys, history tracking & limit, auto-start on login, mouse input toggle, default command, single-character shortcuts (`/t`, `/f`, `/s`), and the GIF/lookup folder paths.
 - **Interactive Toggle Screens**:
   - **App Visibility**: Choose which Windows applications appear in `/app`.

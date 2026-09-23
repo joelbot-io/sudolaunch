@@ -54,9 +54,6 @@ export function resolveRepoCwd(): string {
   if (settings.gitRepoPath && existsSync(settings.gitRepoPath)) {
     return settings.gitRepoPath
   }
-  if (settings.appFolder && existsSync(settings.appFolder)) {
-    return settings.appFolder
-  }
   // Try current process directory or parent directories
   const candidate = process.cwd()
   if (existsSync(candidate)) return candidate

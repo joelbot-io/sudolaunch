@@ -11,7 +11,6 @@ export default function Terminal(): JSX.Element {
   const fitRef = useRef<FitAddon | null>(null)
   // Authoritative state lives in main (see terminalWindow.ts's termExpanded) — this just
   // mirrors it via 'term-expanded', so window bounds and this UI can never disagree.
-  const [dockLayout, setDockLayout] = useState<'horizontal' | 'circle' | 'shelf'>('shelf')
   const [expanded, setExpanded] = useState(false)
   const [moveMode, setMoveMode] = useState(false)
   const [termHotkey, setTermHotkey] = useState('')
@@ -20,8 +19,9 @@ export default function Terminal(): JSX.Element {
   const [summonPulse, setSummonPulse] = useState(false)
   const [summonColor, setSummonColor] = useState<string | null>(null)
   const [summonGlow, setSummonGlow] = useState<string | null>(null)
+  const [dockGlowColor, setDockGlowColor] = useState<string>('')
   const [dockFading, setDockFading] = useState(false)
-  const { growOrigin, growPhase, setGrowOrigin, setGrowPhase, growClassNames, growStyle, onGrowEnd } =
+  const { setGrowOrigin, setGrowPhase, growClassNames, growStyle, onGrowEnd } =
     useGrowAnimation()
   const [shimmerInfo, setShimmerInfo] = useState<{
     corner: 'tl' | 'tr' | 'br' | 'bl'
@@ -32,8 +32,15 @@ export default function Terminal(): JSX.Element {
   const pendingInputRef = useRef('')
 
   useEffect(() => {
-    window.api.getSettings?.().then((s) => {
-      if (s?.dockLayout) setDockLayout(s.dockLayout)
+    const loadSettings = (): void => {
+      window.api.getSettings?.().then((s) => {
+        if (s?.terminalHotkey) setTermHotkey(formatAccelerator(s.terminalHotkey))
+        if (typeof s?.dockGlowColor === 'string') setDockGlowColor(s.dockGlowColor.trim())
+      })
+    }
+    loadSettings()
+    const unsub = window.api.onConfigChanged?.(() => {
+      loadSettings()
     })
     const term = new XTerm({
       convertEol: true,
@@ -161,6 +168,7 @@ export default function Terminal(): JSX.Element {
       unsubUnread?.()
       unsubSummoned?.()
       unsubFade?.()
+      unsub?.()
       term.dispose()
     }
   }, [])
@@ -290,6 +298,7 @@ export default function Terminal(): JSX.Element {
         ...(!expanded && shimmerInfo
           ? { '--shimmer-color': shimmerInfo.color, '--shimmer-gradient': shimmerInfo.gradient }
           : {}),
+        ...(dockGlowColor ? { '--dock-glow-color': dockGlowColor } : {}),
         ...(summonColor ? { '--summon-color': summonColor } : {}),
         ...(summonGlow ? { '--summon-glow-color': summonGlow } : {})
       } as React.CSSProperties}
@@ -297,7 +306,7 @@ export default function Terminal(): JSX.Element {
       // "session ended" glow is a descendant animation that must not clear the grow state.
       onAnimationEnd={onGrowEnd}
     >
-      {dockLayout !== 'shelf' && (
+      {!expanded && (
         <button
           className={[
             'term-icon',

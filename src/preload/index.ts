@@ -39,6 +39,7 @@ const api = {
   // Bar-mode only: pulls the persistent bar down from its docked idle strip to full
   // palette size/position, or returns it back — see main/index.ts's setBarBounds.
   barActivate: (mode?: string): void => ipcRenderer.send('bar-activate', mode),
+  setPaletteModule: (mode?: string | null): void => ipcRenderer.send('palette-set-module', mode ?? 'bar'),
   barDeactivate: (): void => ipcRenderer.send('bar-deactivate'),
   // Bar-mode only: exits "/move" mode (see main/barWindow.ts's toggleMoveMode) from the
   // renderer's grab-handle click or Escape, persisting wherever it was dropped.
@@ -116,6 +117,12 @@ const api = {
     ipcRenderer.on('dock-fade', listener)
     return () => ipcRenderer.removeListener('dock-fade', listener)
   },
+  onDockHomeState: (callback: (isHome: boolean) => void): (() => void) => {
+    const listener = (_event: Electron.IpcRendererEvent, isHome: boolean): void => callback(isHome)
+    ipcRenderer.on('dock-home-state', listener)
+    return () => ipcRenderer.removeListener('dock-home-state', listener)
+  },
+  getDockIsHome: (): Promise<boolean> => ipcRenderer.invoke('dock-get-is-home'),
   onConfigChanged: (callback: () => void): (() => void) => {
     ipcRenderer.on('config-changed', callback)
     return () => ipcRenderer.removeListener('config-changed', callback)
@@ -197,6 +204,7 @@ const api = {
   },
   // Notification panel methods and events
   notifyToggle: (): void => ipcRenderer.send('notify-toggle'),
+  notifyOpen: (): void => ipcRenderer.send('notify-open'),
   getNotifications: (): Promise<SudoNotification[]> => ipcRenderer.invoke('notify-get-all'),
   clearNotifications: (): Promise<void> => ipcRenderer.invoke('notify-clear-all'),
   dismissNotification: (id: string): Promise<void> => ipcRenderer.invoke('notify-dismiss', id),
@@ -262,5 +270,3 @@ const api = {
 }
 
 contextBridge.exposeInMainWorld('api', api)
-
-export type PreloadApi = typeof api

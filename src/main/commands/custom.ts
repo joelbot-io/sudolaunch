@@ -1,6 +1,6 @@
 import Fuse from 'fuse.js'
 import type { CustomCommand, SearchResultItem } from '../../shared/types'
-import { loadCustomCommands, runAndNotify, notifyMissingParams, executeCustomAction } from '../customCommands'
+import { loadCustomCommands, notifyMissingParams, executeCustomAction } from '../customCommands'
 import { browseFolder, resolveFolderRoot, runScript, SCRIPT_EXTENSIONS } from '../folderBrowse'
 
 function splitNameAndArgs(query: string): { name: string; argsStr: string } {

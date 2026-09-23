@@ -20,12 +20,14 @@ const CHAR_CELL = { width: 8, height: 17 }
 
 function getLiveBarBounds(bar?: Rectangle | null): Rectangle | null {
   if (bar) return bar
-  if (lastBarBounds) return lastBarBounds
   const barWin = dockManager.getBarWindow()
   if (barWin && !barWin.isDestroyed() && barWin.isVisible()) {
     return barWin.getBounds()
   }
-  return dockManager.getLastBarBounds()
+  const last = dockManager.getLastBarBounds()
+  if (last) return last
+  if (lastBarBounds) return lastBarBounds
+  return null
 }
 
 function idleBounds(bar?: Rectangle | null): Rectangle {
@@ -38,10 +40,40 @@ function idleBounds(bar?: Rectangle | null): Rectangle {
       })
     : getDockDisplay(settings.monitor)
 
+  if (settings.dockLayout === 'circle') {
+    const dock =
+      activeBar ??
+      DockGeometry.calculateCircleOrbitBounds(
+        display.workArea,
+        settings.dockHomePosition,
+        settings.dockHomeCustomCoordinates
+      )
+    return DockGeometry.calculateCircleSatelliteBounds(
+      dock,
+      'terminal',
+      settings.shelfIcons,
+      settings.dockHomePosition,
+      settings.dockHomeCustomCoordinates
+    )
+  }
+
   if (settings.dockLayout === 'shelf') {
     const slotCount = settings.shelfIcons?.length ?? 7
-    const shelfBar = activeBar ?? DockGeometry.calculateShelfBarBounds(display.workArea, slotCount)
-    return DockGeometry.calculateShelfIconBounds(shelfBar, 'terminal', settings.shelfIcons)
+    const shelfBar =
+      activeBar ??
+      DockGeometry.calculateShelfBarBounds(
+        display.workArea,
+        slotCount,
+        settings.dockHomePosition,
+        settings.dockHomeCustomCoordinates
+      )
+    return DockGeometry.calculateShelfIconBounds(
+      shelfBar,
+      'terminal',
+      settings.shelfIcons,
+      settings.dockHomePosition,
+      settings.dockHomeCustomCoordinates
+    )
   }
 
   if (settings.termPosition) {
@@ -59,7 +91,7 @@ function idleBounds(bar?: Rectangle | null): Rectangle {
     return DockGeometry.calculateAttachedBounds(
       activeBar,
       'terminal',
-      settings.dockLayout ?? 'shelf',
+      settings.dockLayout ?? 'horizontal',
       display.workArea
     )
   }
@@ -67,7 +99,9 @@ function idleBounds(bar?: Rectangle | null): Rectangle {
   return DockGeometry.calculateDefaultIdleBounds(
     display.workArea,
     'terminal',
-    settings.dockLayout ?? 'shelf'
+    settings.dockLayout ?? 'horizontal',
+    settings.dockHomePosition,
+    settings.dockHomeCustomCoordinates
   )
 }
 
@@ -187,7 +221,7 @@ export function repositionTerminal(barBounds?: Rectangle): void {
 export function showTerminalWindow(): void {
   if (!termWindow) return
   const settings = readSettings()
-  if (settings.dockLayout === 'shelf') {
+  if (settings.dockLayout === 'shelf' || settings.dockLayout === 'circle') {
     termExpanded = false
     termWindow.webContents.send('term-expanded', false)
     termWindow.hide()
@@ -223,10 +257,6 @@ export function toggleTermMoveMode(): void {
     termWindow.focus()
   }
   termWindow.webContents.send('term-move-mode-changed', termMoveModeActive)
-}
-
-export function notifyTerminalDockSummoned(pos: { x: number; y: number }): void {
-  termWindow?.webContents.send('dock-summoned', pos)
 }
 
 export function resetTermPosition(): void {
@@ -286,7 +316,7 @@ export function toggleTerminal(): void {
       termCollapseTimeout = null
       if (!termWindow) return
       const settings = readSettings()
-      if (settings.dockLayout === 'shelf') {
+      if (settings.dockLayout === 'shelf' || settings.dockLayout === 'circle') {
         termWindow.hide()
       } else {
         termWindow.setBounds(idleBounds(lastBarBounds))

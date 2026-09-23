@@ -36,6 +36,9 @@ import * as qr from './qr'
 import * as regex from './regex'
 import * as text from './text'
 import * as url from './url'
+import * as diff from './diff'
+import * as env from './env'
+import * as key from './key'
 
 interface Searchable {
   name: CommandName
@@ -46,7 +49,7 @@ interface Searchable {
 // Imports each command module directly (same as commands/index.ts) rather than going
 // through that module's private searchers/executors maps, to avoid a circular import.
 const SEARCHABLE: Searchable[] = [
-  { name: 'teams', search: teams.search, execute: teams.execute },
+  { name: 'teams', search: (query) => teams.search(query, { excludeTeamLinks: true }), execute: teams.execute },
   { name: 'mail', search: mail.search, execute: mail.execute },
   { name: 'snippet', search: snippet.search, execute: snippet.execute },
   { name: 'fav', search: fav.search, execute: fav.execute },
@@ -77,7 +80,10 @@ const SEARCHABLE: Searchable[] = [
   { name: 'text', search: text.search, execute: text.execute },
   { name: 'unit', search: unit.search, execute: unit.execute },
   { name: 'url', search: url.search, execute: url.execute },
-  { name: 'uuid', search: uuid.search, execute: uuid.execute }
+  { name: 'uuid', search: uuid.search, execute: uuid.execute },
+  { name: 'diff', search: diff.search, execute: diff.execute },
+  { name: 'env', search: env.search, execute: env.execute },
+  { name: 'key', search: key.search, execute: key.execute }
 ]
 
 function getDirectResult(rawQuery: string): SearchResultItem | null {

@@ -32,7 +32,6 @@ import { ensureLookupDir } from './commands/lookup'
 import {
   createTerminalWindow,
   registerTerminalIpc,
-  openTerminal,
   toggleTerminal,
   repositionTerminal
 } from './terminalWindow'
@@ -201,7 +200,12 @@ function closePaletteWindow(win: BrowserWindow): void {
 }
 
 function createWindow(): BrowserWindow {
-  const win = createBaseWindow({ x: 0, y: 0, width: 640, height: 420 })
+  const win = createBaseWindow({
+    x: 0,
+    y: 0,
+    width: DockGeometry.BAR_ACTIVE_SIZE.width,
+    height: DockGeometry.BAR_ACTIVE_SIZE.height
+  })
   win.setOpacity(0)
   win.setIgnoreMouseEvents(true, { forward: true })
   win.showInactive()
@@ -215,10 +219,11 @@ function createWindow(): BrowserWindow {
 function centerOnActiveDisplay(win: BrowserWindow): void {
   const cursorPoint = screen.getCursorScreenPoint()
   const display = screen.getDisplayNearestPoint(cursorPoint)
-  const { width, height } = win.getBounds()
-  const x = Math.round(display.bounds.x + (display.bounds.width - width) / 2)
-  const y = Math.round(display.bounds.y + (display.bounds.height - height) / 3)
-  win.setPosition(x, y)
+  const width = Math.min(DockGeometry.BAR_ACTIVE_SIZE.width, Math.max(480, display.workArea.width - 32))
+  const height = Math.min(DockGeometry.BAR_ACTIVE_SIZE.height, Math.max(360, display.workArea.height - 80))
+  const x = Math.round(display.workArea.x + (display.workArea.width - width) / 2)
+  const y = Math.round(display.workArea.y + (display.workArea.height - height) / 2)
+  win.setBounds({ x, y, width, height })
 }
 
 let paletteReadyResolver: (() => void) | null = null
@@ -338,28 +343,25 @@ function revealPaletteWindow(targetMode?: string): void {
   }, 300)
 }
 
+function getPaletteSizeForMode(targetMode: string): { width: number; height: number } {
+  if (targetMode === 'focus') return DockGeometry.FOCUS_PANEL_SIZE
+  if (targetMode === 'git' || targetMode === 'profile' || targetMode === 'settings') {
+    return DockGeometry.MODULE_PANEL_SIZE
+  }
+  return DockGeometry.BAR_ACTIVE_SIZE
+}
+
 export function toggleShelfPalette(mode?: string): void {
   if (!mainWindow) return
   const targetMode = mode || 'bar'
-  if (paletteOpen) {
-    if (activeShelfMode === targetMode) {
-      closePaletteWindow(mainWindow)
-      return
-    }
-    activeShelfMode = targetMode
-    dockManager.sendToBar('shelf-palette-active', true, targetMode)
-    revealPaletteWindow(targetMode)
-    return
-  }
-
-  activeShelfMode = targetMode
+  const targetSize = getPaletteSizeForMode(targetMode)
+  const settings = readSettings()
   const dockWin = dockManager.getBarWindow()
   const dockBounds =
     dockWin && !dockWin.isDestroyed() && dockWin.isVisible()
       ? dockWin.getBounds()
       : dockManager.getLastBarBounds()
 
-  const settings = readSettings()
   const display = dockBounds
     ? screen.getDisplayNearestPoint({
         x: dockBounds.x + dockBounds.width / 2,
@@ -367,10 +369,71 @@ export function toggleShelfPalette(mode?: string): void {
       })
     : getDockDisplay(settings.monitor)
 
-  mainWindow.setBounds(DockGeometry.calculateShelfPaletteBounds(display.workArea, dockBounds))
+  if (paletteOpen) {
+    if (activeShelfMode === targetMode) {
+      closePaletteWindow(mainWindow)
+      return
+    }
+    activeShelfMode = targetMode
+    mainWindow.setBounds(
+      DockGeometry.calculateShelfPaletteBounds(
+        display.workArea,
+        dockBounds,
+        settings.shelfIcons?.length,
+        targetSize.height,
+        targetSize.width
+      )
+    )
+    dockManager.sendToBar('shelf-palette-active', true, targetMode)
+    revealPaletteWindow(targetMode)
+    return
+  }
+
+  activeShelfMode = targetMode
+  mainWindow.setBounds(
+    DockGeometry.calculateShelfPaletteBounds(
+      display.workArea,
+      dockBounds,
+      settings.shelfIcons?.length,
+      targetSize.height,
+      targetSize.width
+    )
+  )
   dockManager.sendToBar('shelf-palette-active', true, targetMode)
   revealPaletteWindow(targetMode)
 }
+
+ipcMain.on('palette-set-module', (_event, mode?: string) => {
+  if (!mainWindow || mainWindow.isDestroyed() || !paletteOpen) return
+  const targetMode = mode || 'bar'
+  if (activeShelfMode === targetMode) return
+  activeShelfMode = targetMode
+  const targetSize = getPaletteSizeForMode(targetMode)
+  const settings = readSettings()
+  const dockWin = dockManager.getBarWindow()
+  const dockBounds =
+    dockWin && !dockWin.isDestroyed() && dockWin.isVisible()
+      ? dockWin.getBounds()
+      : dockManager.getLastBarBounds()
+
+  const display = dockBounds
+    ? screen.getDisplayNearestPoint({
+        x: dockBounds.x + dockBounds.width / 2,
+        y: dockBounds.y + dockBounds.height / 2
+      })
+    : getDockDisplay(settings.monitor)
+
+  mainWindow.setBounds(
+    DockGeometry.calculateShelfPaletteBounds(
+      display.workArea,
+      dockBounds,
+      settings.shelfIcons?.length,
+      targetSize.height,
+      targetSize.width
+    )
+  )
+  dockManager.sendToBar('shelf-palette-active', true, targetMode)
+})
 
 // The hotkey's job is to get a query input in front of the user as fast as possible — when
 // the persistent bar is around, that means activating *it* rather than spawning a second,
@@ -378,7 +441,7 @@ export function toggleShelfPalette(mode?: string): void {
 // bar's been turned off (via "/view").
 function togglePalette(): void {
   const settings = readSettings()
-  if (settings.dockLayout === 'shelf' && settings.barEnabled) {
+  if ((settings.dockLayout === 'shelf' || settings.dockLayout === 'circle') && settings.barEnabled) {
     toggleShelfPalette('bar')
     return
   }
@@ -525,6 +588,7 @@ function registerIpcHandlers(): void {
     clearHistory()
     return []
   })
+  ipcMain.handle('dock-get-is-home', () => !dockManager.getIsSummonedAway())
   ipcMain.on('show-dock-context-menu', (event) => {
     const win = BrowserWindow.fromWebContents(event.sender)
     const settings = readSettings()
@@ -630,8 +694,12 @@ app.whenReady().then(() => {
 
   watchConfig(() => {
     mainWindow?.webContents.send('config-changed')
-    sendToBar('config-changed')
+    dockManager.broadcast('config-changed')
   })
+
+  let lastDockLayout = readSettings().dockLayout ?? 'shelf'
+  let lastHomePos = readSettings().dockHomePosition ?? 'middle'
+  let lastCustomCoords = JSON.stringify(readSettings().dockHomeCustomCoordinates ?? { x: 50, y: 80 })
 
   watchSettings((settings) => {
     paletteHotkey.register(settings.hotkey)
@@ -646,11 +714,30 @@ app.whenReady().then(() => {
     if (settings.swapEnabled !== false) {
       startSwapServer(settings.swapPort).catch((err) => console.error('[SwapServer] Failed to start:', err))
     }
-    repositionBarForShelfIcons()
-    repositionBarForDisplayChange()
-    repositionTerminal()
+
+    const currentLayout = settings.dockLayout ?? 'shelf'
+    const currentHomePos = settings.dockHomePosition ?? 'middle'
+    const currentCustomCoords = JSON.stringify(settings.dockHomeCustomCoordinates ?? { x: 50, y: 80 })
+
+    const layoutChanged = currentLayout !== lastDockLayout
+    const homePosChanged = currentHomePos !== lastHomePos || currentCustomCoords !== lastCustomCoords
+
+    lastDockLayout = currentLayout
+    lastHomePos = currentHomePos
+    lastCustomCoords = currentCustomCoords
+
+    if (layoutChanged) {
+      dockManager.setLayout(currentLayout, false)
+    } else if (homePosChanged) {
+      dockManager.resetPositions()
+    } else {
+      repositionBarForShelfIcons()
+      repositionBarForDisplayChange()
+      repositionTerminal()
+    }
+
     mainWindow?.webContents.send('config-changed')
-    sendToBar('config-changed')
+    dockManager.broadcast('config-changed')
   })
 
   watchCustomCommands(() => {

@@ -159,7 +159,7 @@ if ($ClearAll) {
     if ($KeepLast -gt 0 -and $history.Count -gt $KeepLast) {
         Write-Step "Capping history to most recent $KeepLast record(s)..."
         $cappedCount = $history.Count - $KeepLast
-        $history = @($history | Select-Object -Last $KeepLast)
+        $history = @($history | Select-Object -First $KeepLast)
         Write-Host "  [-] Truncated $cappedCount older record(s)." -ForegroundColor Gray
     }
 }

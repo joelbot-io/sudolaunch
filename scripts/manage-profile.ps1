@@ -254,7 +254,7 @@ switch ($Command.ToLowerInvariant()) {
     "import-teams" {
         $script = Join-Path $ScriptRoot "import-team-links.ps1"
         $p = @{ ProfileDir = $ProfileDir }
-        if ($CsvFile) { $p["CsvPath"] = $CsvFile }
+        if ($CsvFile) { $p["SourcePath"] = $CsvFile }
         if ($Replace) { $p["Replace"] = $true }
         & $script @p
         exit 0
@@ -492,7 +492,7 @@ while ($true) {
             $csvIn = Read-Host "Enter CSV path (default: resources/team_list.csv)"
             $script = Join-Path $ScriptRoot "import-team-links.ps1"
             $p = @{ ProfileDir = $ProfileDir }
-            if ($csvIn) { $p["CsvPath"] = $csvIn }
+            if ($csvIn) { $p["SourcePath"] = $csvIn }
             & $script @p
         }
         "19" {

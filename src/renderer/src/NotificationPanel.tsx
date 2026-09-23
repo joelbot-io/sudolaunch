@@ -20,22 +20,30 @@ function formatDateTime(ts: number): string {
 }
 
 export default function NotificationPanel(): JSX.Element {
-  const [dockLayout, setDockLayout] = useState<'horizontal' | 'circle' | 'shelf'>('shelf')
   const [expanded, setExpanded] = useState(false)
   const [notifications, setNotifications] = useState<SudoNotification[]>([])
-  const { growOrigin, growPhase, setGrowOrigin, setGrowPhase, growClassNames, growStyle, onGrowEnd } =
+  const { growPhase, setGrowOrigin, setGrowPhase, growClassNames, growStyle, onGrowEnd } =
     useGrowAnimation()
   const [collapsedIds, setCollapsedIds] = useState<Set<string>>(new Set())
   const [copiedTarget, setCopiedTarget] = useState<{ id: string; field: 'input' | 'output' } | null>(null)
+  const [activeIndex, setActiveIndex] = useState(0)
   const [summonPulse, setSummonPulse] = useState(false)
   const [summonColor, setSummonColor] = useState<string | null>(null)
   const [summonGlow, setSummonGlow] = useState<string | null>(null)
+  const [dockGlowColor, setDockGlowColor] = useState<string>('')
   const [dockFading, setDockFading] = useState(false)
   const listRef = useRef<HTMLDivElement>(null)
+  const activeCardRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
-    window.api.getSettings?.().then((s) => {
-      if (s?.dockLayout) setDockLayout(s.dockLayout)
+    const loadSettings = (): void => {
+      window.api.getSettings?.().then((s) => {
+        if (typeof s?.dockGlowColor === 'string') setDockGlowColor(s.dockGlowColor.trim())
+      })
+    }
+    loadSettings()
+    const unregConfig = window.api.onConfigChanged?.(() => {
+      loadSettings()
     })
     window.api.getNotifications().then(setNotifications)
 
@@ -91,6 +99,7 @@ export default function NotificationPanel(): JSX.Element {
       unregCollapsing()
       unregSummoned?.()
       unregFade?.()
+      unregConfig?.()
     }
   }, [])
 
@@ -106,17 +115,6 @@ export default function NotificationPanel(): JSX.Element {
     return () => clearTimeout(timer)
   }, [growPhase])
 
-  // Keyboard shortcut: Escape collapses the panel
-  useEffect(() => {
-    function handleKeyDown(e: KeyboardEvent): void {
-      if (e.key === 'Escape' && expanded) {
-        e.preventDefault()
-        window.api.notifyToggle()
-      }
-    }
-    window.addEventListener('keydown', handleKeyDown)
-    return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [expanded])
 
   // Collapse on blur when clicked away (only active once fully expanded and idle)
   useEffect(() => {
@@ -179,6 +177,96 @@ export default function NotificationPanel(): JSX.Element {
     }
   }
 
+  // Auto-clamp activeIndex if notification count changes
+  useEffect(() => {
+    setActiveIndex((prev) => {
+      if (notifications.length === 0) return 0
+      return Math.min(prev, Math.max(0, notifications.length - 1))
+    })
+  }, [notifications.length])
+
+  // Scroll active item into view
+  useEffect(() => {
+    if (activeCardRef.current) {
+      activeCardRef.current.scrollIntoView({ block: 'nearest', behavior: 'smooth' })
+    }
+  }, [activeIndex])
+
+  // Comprehensive keyboard navigation and actions
+  useEffect(() => {
+    function handleKeyDown(e: KeyboardEvent): void {
+      if (!expanded) return
+
+      const tag = (e.target as HTMLElement)?.tagName?.toLowerCase()
+      if (tag === 'input' || tag === 'textarea') return
+
+      if (e.key === 'Escape') {
+        e.preventDefault()
+        window.api.notifyToggle()
+        return
+      }
+
+      if (notifications.length === 0) return
+
+      if (e.key === 'ArrowDown' || e.key === 'j') {
+        e.preventDefault()
+        setActiveIndex((i) => (i + 1) % notifications.length)
+        return
+      }
+
+      if (e.key === 'ArrowUp' || e.key === 'k') {
+        e.preventDefault()
+        setActiveIndex((i) => (i - 1 + notifications.length) % notifications.length)
+        return
+      }
+
+      if (e.key === 'Enter' || e.key === ' ') {
+        e.preventDefault()
+        const activeItem = notifications[activeIndex]
+        if (activeItem) {
+          toggleCard(activeItem.id)
+        }
+        return
+      }
+
+      if (e.key === 'Delete' || e.key === 'Backspace' || e.key === 'd' || e.key === 'D') {
+        e.preventDefault()
+        const activeItem = notifications[activeIndex]
+        if (activeItem) {
+          window.api.dismissNotification(activeItem.id)
+        }
+        return
+      }
+
+      if (e.key === 'c' || e.key === 'C') {
+        const activeItem = notifications[activeIndex]
+        if (activeItem) {
+          const text = activeItem.body || activeItem.commandInput || ''
+          if (text) {
+            e.preventDefault()
+            handleCopy(activeItem.id, activeItem.body ? 'output' : 'input', text)
+          }
+        }
+        return
+      }
+
+      if (e.key === 'x' || e.key === 'X') {
+        e.preventDefault()
+        window.api.clearNotifications()
+        return
+      }
+
+      if (e.key === 'e' || e.key === 'E') {
+        e.preventDefault()
+        handleToggleAll()
+        return
+      }
+    }
+
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [expanded, notifications, activeIndex, areAllCollapsed])
+
   const unreadCount = notifications.filter((n) => !n.read).length
 
   return (
@@ -194,13 +282,14 @@ export default function NotificationPanel(): JSX.Element {
         .join(' ')}
       style={{
         ...growStyle,
+        ...(dockGlowColor ? { '--dock-glow-color': dockGlowColor } : {}),
         ...(summonColor ? { '--summon-color': summonColor } : {}),
         ...(summonGlow ? { '--summon-glow-color': summonGlow } : {})
       } as React.CSSProperties}
       onAnimationEnd={onGrowEnd}
     >
-      {/* Collapsed Idle Icon (only rendered in circle/horizontal modes; in shelf mode, the icon is in the shelf) */}
-      {dockLayout !== 'shelf' && (
+      {/* Collapsed Idle Icon (rendered whenever collapsed; in shelf/circle modes the window itself is hidden off-screen by main) */}
+      {!expanded && (
         <button
           type="button"
           className="notify-icon-btn"
@@ -318,7 +407,7 @@ export default function NotificationPanel(): JSX.Element {
               </div>
             </div>
           ) : (
-            notifications.map((item) => {
+            notifications.map((item, idx) => {
               const isSuccess = item.type === 'success'
               const isError = item.type === 'error'
               const badgeClass = isSuccess
@@ -347,7 +436,9 @@ export default function NotificationPanel(): JSX.Element {
               return (
                 <div
                   key={item.id}
-                  className={`notify-card ${badgeClass} ${!hasDetail ? 'notify-card-single' : isCollapsed ? 'notify-card-collapsed' : 'notify-card-expanded'}`}
+                  ref={idx === activeIndex ? activeCardRef : undefined}
+                  className={`notify-card ${badgeClass} ${!hasDetail ? 'notify-card-single' : isCollapsed ? 'notify-card-collapsed' : 'notify-card-expanded'} ${idx === activeIndex ? 'notify-card-active' : ''}`}
+                  onMouseEnter={() => setActiveIndex(idx)}
                 >
                   {/* Accordion Toggle or Static Header */}
                   <div
@@ -573,6 +664,30 @@ export default function NotificationPanel(): JSX.Element {
               )
             })
           )}
+        </div>
+
+        <div className="notify-footer-hints">
+          <span className="notify-footer-hint">
+            <kbd className="palette-kbd">↓/↑</kbd> Navigate
+          </span>
+          <span className="notify-footer-hint">
+            <kbd className="palette-kbd">↵</kbd> Toggle
+          </span>
+          <span className="notify-footer-hint">
+            <kbd className="palette-kbd">Del</kbd> Dismiss
+          </span>
+          <span className="notify-footer-hint">
+            <kbd className="palette-kbd">C</kbd> Copy
+          </span>
+          <span className="notify-footer-hint">
+            <kbd className="palette-kbd">E</kbd> {areAllCollapsed ? 'Expand' : 'Collapse'}
+          </span>
+          <span className="notify-footer-hint">
+            <kbd className="palette-kbd">X</kbd> Clear All
+          </span>
+          <span className="notify-footer-hint">
+            <kbd className="palette-kbd">Esc</kbd> Close
+          </span>
         </div>
       </div>
     </div>

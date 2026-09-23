@@ -5,9 +5,6 @@ import type { SudoNotification, NotificationType } from '../shared/types'
 const MAX_NOTIFICATIONS = 100
 let notifications: SudoNotification[] = []
 
-type Listener = (list: SudoNotification[]) => void
-const listeners = new Set<Listener>()
-
 function broadcast(): void {
   for (const win of BrowserWindow.getAllWindows()) {
     try {
@@ -17,20 +14,6 @@ function broadcast(): void {
     } catch {
       // window may be closing
     }
-  }
-  for (const listener of listeners) {
-    try {
-      listener(notifications)
-    } catch {
-      // ignore
-    }
-  }
-}
-
-export function onNotificationsChanged(cb: Listener): () => void {
-  listeners.add(cb)
-  return () => {
-    listeners.delete(cb)
   }
 }
 

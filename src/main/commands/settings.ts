@@ -50,10 +50,10 @@ const SETTINGS_ACTIONS: SettingsAction[] = [
     keywords: ['links', 'urls', 'bookmarks', 'favorites', 'web', 'browser', 'sites']
   },
   {
-    label: 'Teams Links',
-    sublabel: 'Deep links to actual Teams teams/channels',
+    label: 'Edit Teams Links',
+    sublabel: 'Manually add or edit deep links to actual Teams teams/channels',
     value: '__teamLinks',
-    keywords: ['teams', 'teams links', 'channels', 'deep links', 'chat', 'groups', 'microsoft teams']
+    keywords: ['teams', 'teams links', 'channels', 'deep links', 'chat', 'groups', 'microsoft teams', 'edit', 'manual']
   },
   {
     label: 'Swap Peers',

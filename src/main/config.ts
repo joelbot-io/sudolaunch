@@ -12,8 +12,7 @@ import type {
   Settings,
   ConfigType,
   ConfigEntry,
-  SwapPeer,
-  ShelfModuleId
+  SwapPeer
 } from '../shared/types'
 
 export const CONFIG_DIR = join(app.getPath('home'), '.sudolaunch')
@@ -33,8 +32,6 @@ const PATHS = {
 export const DEFAULT_SETTINGS: Settings = {
   hotkey: 'CommandOrControl+Space',
   terminalHotkey: 'CommandOrControl+`',
-  paletteHotkey: 'CommandOrControl+Space',
-  termHotkey: 'CommandOrControl+`',
   historyEnabled: true,
   historyLimit: 100,
   autoStart: false,
@@ -44,12 +41,10 @@ export const DEFAULT_SETTINGS: Settings = {
   teamsShortcut: 't',
   favShortcut: 'f',
   snippetShortcut: 's',
-  searchExcludedCommands: ['tz', 'ip', 'uuid', 'pwd', 'lorem', 'case', 'hash', 'qr'],
+  searchExcludedCommands: ['tz', 'ip', 'uuid', 'pwd', 'lorem', 'case', 'hash', 'qr', 'curl', 'diff', 'env', 'key'],
   hiddenCommands: [],
   gifFolder: '',
   lookupFolder: '',
-  appFolder: '',
-  theme: 'dark',
   dockLayout: 'shelf',
   barEnabled: true,
   barPosition: null,
@@ -62,6 +57,8 @@ export const DEFAULT_SETTINGS: Settings = {
   ctrlRightClickSummon: true,
   autoReturnHome: true,
   autoReturnDelaySec: 8,
+  dockHomePosition: 'middle',
+  dockHomeCustomCoordinates: { x: 50, y: 80 },
   shelfIcons: DEFAULT_SHELF_ICONS,
   activeProfile: 'default',
   terminalWidth: 800,
@@ -127,7 +124,19 @@ export function readPeers(): SwapPeer[] {
 }
 
 export function readSettings(): Settings {
-  return { ...DEFAULT_SETTINGS, ...readJson<Partial<Settings>>(PATHS.settings, {}) }
+  const loaded = { ...DEFAULT_SETTINGS, ...readJson<Partial<Settings>>(PATHS.settings, {}) }
+  if (
+    Array.isArray(loaded.shelfIcons) &&
+    loaded.shelfIcons.length === 5 &&
+    loaded.shelfIcons[0] === 'term' &&
+    loaded.shelfIcons[1] === 'bar' &&
+    loaded.shelfIcons[2] === 'notify' &&
+    loaded.shelfIcons[3] === 'focus' &&
+    loaded.shelfIcons[4] === 'git'
+  ) {
+    loaded.shelfIcons = [...DEFAULT_SHELF_ICONS]
+  }
+  return loaded
 }
 
 export function readHistory(): HistoryEntry[] {

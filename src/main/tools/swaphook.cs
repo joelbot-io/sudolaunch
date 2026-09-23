@@ -178,8 +178,6 @@ namespace SudoLaunch {
         private static int _origMouseX = -1;
         private static int _origMouseY = -1;
 
-        private static int _lastMouseX = -1;
-        private static int _lastMouseY = -1;
         private static volatile bool _shuttingDown = false;
         private static readonly object _queueLock = new object();
         private static readonly Queue<string> _eventQueue = new Queue<string>();
@@ -271,8 +269,6 @@ namespace SudoLaunch {
 
             // Immediately center cursor on primary display
             SetCursorPos(_centerX, _centerY);
-            _lastMouseX = _centerX;
-            _lastMouseY = _centerY;
 
             timeBeginPeriod(1);
 

@@ -37,25 +37,34 @@ export function search(query: string): SearchResultItem[] {
     value: 'reset'
   }
 
+  const shelfLayoutItem: SearchResultItem = {
+    label: 'Dock layout: Shelf pill tray mode',
+    sublabel: 'Arrange dock modules in a sleek floating glass pill tray above the taskbar',
+    value: 'layout-shelf'
+  }
+
   const circleLayoutItem: SearchResultItem = {
-    label: 'Dock layout: Circle / Radial mode',
-    sublabel: 'Arrange the 3 dock icons in a circle hovering around cursor / anchor',
+    label: 'Dock layout: Circle / Radial orbit mode',
+    sublabel: 'Arrange dock modules in a revolving circular radial orbit hovering around cursor / anchor',
     value: 'layout-circle'
   }
 
   const horizontalLayoutItem: SearchResultItem = {
     label: 'Dock layout: Horizontal line mode',
-    sublabel: 'Arrange the 3 dock icons side-by-side in a horizontal bar',
+    sublabel: 'Arrange the dock icons side-by-side in a horizontal bar',
     value: 'layout-horizontal'
   }
 
   if (!trimmed) {
-    return [toggleItem, circleLayoutItem, horizontalLayoutItem, moveAllItem, moveBarItem, moveTermItem, resetItem]
+    return [toggleItem, shelfLayoutItem, circleLayoutItem, horizontalLayoutItem, moveAllItem, moveBarItem, moveTermItem, resetItem]
   }
 
   const items: SearchResultItem[] = []
   if ('toggle'.startsWith(trimmed) || 'off'.startsWith(trimmed) || 'on'.startsWith(trimmed)) {
     items.push(toggleItem)
+  }
+  if ('shelf'.startsWith(trimmed) || 'pill'.startsWith(trimmed) || 'tray'.startsWith(trimmed)) {
+    items.push(shelfLayoutItem)
   }
   if ('circle'.startsWith(trimmed) || 'radial'.startsWith(trimmed) || 'orbit'.startsWith(trimmed)) {
     items.push(circleLayoutItem)
@@ -72,12 +81,16 @@ export function search(query: string): SearchResultItem[] {
     items.push(resetItem)
   }
 
-  return items.length > 0 ? items : [toggleItem, circleLayoutItem, horizontalLayoutItem, moveAllItem, moveBarItem, moveTermItem, resetItem]
+  return items.length > 0 ? items : [toggleItem, shelfLayoutItem, circleLayoutItem, horizontalLayoutItem, moveAllItem, moveBarItem, moveTermItem, resetItem]
 }
 
 export async function execute(item: SearchResultItem): Promise<void> {
   if (item.value === 'reset') {
     dockManager.resetPositions()
+    return
+  }
+  if (item.value === 'layout-shelf') {
+    dockManager.setLayout('shelf')
     return
   }
   if (item.value === 'layout-circle') {

@@ -2,6 +2,16 @@ import { BrowserWindow, screen, ipcMain, type NativeImage } from 'electron'
 
 let overlayWindow: BrowserWindow | null = null
 let onExitCallback: (() => void) | null = null
+let exitListenerRegistered = false
+
+function escapeHtml(text: string): string {
+  return text
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;')
+}
 
 export function getSwapOverlayBounds(): { x: number; y: number; width: number; height: number } {
   const { workArea } = screen.getPrimaryDisplay()
@@ -41,11 +51,14 @@ export function createSwapOverlay(appIcon?: NativeImage): BrowserWindow {
   overlayWindow.setAlwaysOnTop(true, 'screen-saver')
 
   // Register single IPC listener for exit click
-  ipcMain.on('swap-overlay-exit', () => {
-    if (onExitCallback) {
-      onExitCallback()
-    }
-  })
+  if (!exitListenerRegistered) {
+    exitListenerRegistered = true
+    ipcMain.on('swap-overlay-exit', () => {
+      if (onExitCallback) {
+        onExitCallback()
+      }
+    })
+  }
 
   return overlayWindow
 }
@@ -129,7 +142,7 @@ export function showSwapOverlay(
 <body>
   <div class="banner">
     <span class="icon">⇄</span>
-    <span class="text">Input Swapped to <span class="highlight">${targetText}</span><span class="hint">(${hotkeyText})</span></span>
+    <span class="text">Input Swapped to <span class="highlight">${escapeHtml(targetText)}</span><span class="hint">(${escapeHtml(hotkeyText)})</span></span>
     <button class="btn" onclick="require('electron').ipcRenderer.send('swap-overlay-exit')">Return Input</button>
   </div>
 </body>

@@ -1,12 +1,6 @@
 import { clipboard } from 'electron'
 import type { SearchResultItem } from '../../shared/types'
 
-const DOW_NAMES = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday']
-const MONTH_NAMES = [
-  'January', 'February', 'March', 'April', 'May', 'June',
-  'July', 'August', 'September', 'October', 'November', 'December'
-]
-
 const ALIASES: Record<string, string> = {
   '@yearly': '0 0 1 1 *',
   '@annually': '0 0 1 1 *',

@@ -5,7 +5,6 @@ import type { SearchResultItem } from '../../shared/types'
 export function search(query: string): SearchResultItem[] {
   const q = query.trim().toLowerCase()
   const interfaces = networkInterfaces()
-  const results: SearchResultItem[] = []
 
   const ipv4List: SearchResultItem[] = []
   const ipv6List: SearchResultItem[] = []

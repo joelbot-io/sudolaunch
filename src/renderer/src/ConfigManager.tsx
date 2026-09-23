@@ -13,18 +13,19 @@ import {
   type CommandFolder,
   type CustomCommand,
   type ShelfModuleId,
+  type Settings,
   DEFAULT_SHELF_ICONS,
   SHELF_MODULE_INFO
 } from '../../shared/types'
 
 interface Props {
-  initialFilter?: string
   initialTarget?: string
   onExit: (exitVal?: string) => void
 }
 
 type Level =
   | { kind: 'types' }
+  | { kind: 'settings' }
   | { kind: 'list'; typeDef: ConfigTypeDef }
   | { kind: 'apps' }
   | { kind: 'searchCommands' }
@@ -40,6 +41,7 @@ type Level =
 
 function getInitialLevel(target?: string): Level {
   if (!target || target === 'types' || target === 'all') return { kind: 'types' }
+  if (target === 'settings' || target === 'edit' || target === 'system') return { kind: 'settings' }
   if (target === 'apps') return { kind: 'apps' }
   if (target === 'searchCommands') return { kind: 'searchCommands' }
   if (target === 'hiddenCommands') return { kind: 'hiddenCommands' }
@@ -47,8 +49,9 @@ function getInitialLevel(target?: string): Level {
   if (target === 'dockSlots' || target === 'dock' || target === 'shelf' || target === 'modules') return { kind: 'dockSlots' }
   if (target === 'commandLayout' || target === 'layout' || target === 'folders') return { kind: 'commandLayout' }
   const typeDef = CONFIG_TYPES.find((t) => t.type === target)
-  if (typeDef && !typeDef.singleton) {
-    return { kind: 'list', typeDef }
+  if (typeDef) {
+    if (typeDef.type === 'settings') return { kind: 'settings' }
+    if (!typeDef.singleton) return { kind: 'list', typeDef }
   }
   return { kind: 'types' }
 }
@@ -102,6 +105,41 @@ function emptyDraft(typeDef: ConfigTypeDef): ConfigEntry {
   return draft
 }
 
+const GLOW_COLORS = [
+  { name: 'Sky Blue', hex: '#5aa0ff' },
+  { name: 'Purple', hex: '#a855f7' },
+  { name: 'Dark Purple', hex: '#6b21a8' },
+  { name: 'Emerald', hex: '#34d399' },
+  { name: 'Coral', hex: '#ff6b6b' },
+  { name: 'Amber', hex: '#fbbf24' },
+  { name: 'Teal', hex: '#50e3c2' },
+  { name: 'Pink', hex: '#ff6bb4' },
+  { name: 'White', hex: '#ffffff' },
+  { name: 'Black', hex: '#000000' }
+]
+
+const PALETTE_HOTKEYS = ['Alt+Space', 'Control+Space', 'Alt+K', 'Control+Alt+Space', 'Win+Space']
+const TERMINAL_HOTKEYS = ['Alt+`', 'Control+`', 'Alt+T', 'Control+T']
+const SWAP_HOTKEYS = ['ScrollLock', 'Pause', 'Control+Alt+S']
+const HISTORY_LIMITS = [25, 50, 100, 200]
+const RETURN_DELAYS = [4, 8, 12, 16, 30]
+const TERMINAL_WIDTHS = [600, 800, 1000, 1200]
+const MONITORS = [1, 2, 3]
+const DOCK_LAYOUTS: Array<'shelf' | 'horizontal' | 'circle'> = ['shelf', 'horizontal', 'circle']
+const DOCK_GLOW_STYLES: Array<'breathing' | 'steady' | 'stealth'> = ['breathing', 'steady', 'stealth']
+const DOCK_HOME_POSITIONS: Array<'middle' | 'right' | 'left' | 'custom'> = ['middle', 'right', 'left', 'custom']
+
+interface SettingRow {
+  key: string
+  label: string
+  sublabel: string
+  badge: string
+  badgeType: 'toggle-on' | 'toggle-off' | 'value' | 'color'
+  keywords: string
+  onSelect: () => void
+  onCycleBackward?: () => void
+}
+
 interface Row {
   key: string
   label: string
@@ -110,8 +148,9 @@ interface Row {
   onSelect: () => void
 }
 
-export default function ConfigManager({ initialFilter, initialTarget, onExit }: Props): JSX.Element {
+export default function ConfigManager({ initialTarget, onExit }: Props): JSX.Element {
   const [level, setLevel] = useState<Level>(() => getInitialLevel(initialTarget))
+  const [settings, setSettings] = useState<Settings | null>(null)
   const [entries, setEntries] = useState<ConfigEntry[]>([])
   const [apps, setApps] = useState<AppEntry[]>([])
   const [disabledApps, setDisabledApps] = useState<Set<string>>(new Set())
@@ -127,25 +166,49 @@ export default function ConfigManager({ initialFilter, initialTarget, onExit }: 
   const [newFolderName, setNewFolderName] = useState('')
   const [newFolderIcon, setNewFolderIcon] = useState('📁')
 
-  const refreshLayout = useCallback(() => {
-    window.api.getCommandLayout().then(setLayout)
-    window.api.listCustomCommands().then(setCustomCommands)
-    window.api.getSettings?.().then((s) => {
-      if (Array.isArray(s?.shelfIcons) && s.shelfIcons.length > 0) {
-        setShelfIcons(s.shelfIcons)
+  const refreshSettings = useCallback(() => {
+    window.api.getConfigEntries('settings').then((list) => {
+      if (list[0]) {
+        const s = list[0] as unknown as Settings
+        setSettings(s)
+        if (Array.isArray(s.shelfIcons) && s.shelfIcons.length > 0) {
+          setShelfIcons(s.shelfIcons)
+        }
+        if (typeof s.disableMouseInput === 'boolean') {
+          setDisableMouseInput(s.disableMouseInput)
+        }
+        if (typeof s.defaultCommand === 'string') {
+          setDefaultCommand(s.defaultCommand)
+        }
       }
     })
   }, [])
+
+  const updateSetting = useCallback(<K extends keyof Settings>(key: K, val: Settings[K]) => {
+    setSettings((prev) => {
+      const updated = { ...(prev ?? ({} as Settings)), [key]: val }
+      window.api.saveConfigEntry('settings', { [key]: val } as any, 0)
+      return updated
+    })
+  }, [])
+
+  const refreshLayout = useCallback(() => {
+    window.api.getCommandLayout().then(setLayout)
+    window.api.listCustomCommands().then(setCustomCommands)
+    refreshSettings()
+  }, [refreshSettings])
 
   useEffect(() => {
     refreshLayout()
     const unsubLayout = window.api.onCommandLayoutChanged(refreshLayout)
     const unsubCustom = window.api.onCustomCommandsChanged(refreshLayout)
+    const unsubConfig = window.api.onConfigChanged(refreshSettings)
     return () => {
       unsubLayout()
       unsubCustom()
+      unsubConfig()
     }
-  }, [refreshLayout])
+  }, [refreshLayout, refreshSettings])
 
   useEffect(() => {
     if (!initialTarget || initialTarget === 'types' || initialTarget === 'all') return
@@ -154,25 +217,26 @@ export default function ConfigManager({ initialFilter, initialTarget, onExit }: 
       return
     }
     if (initialTarget === 'settings' || initialTarget === 'edit' || initialTarget === 'system') {
-      const settingsTypeDef = CONFIG_TYPES.find((t) => t.type === 'settings')
-      if (settingsTypeDef) {
-        window.api.getConfigEntries('settings').then((list) => {
-          setLevel({ kind: 'form', typeDef: settingsTypeDef, index: 0, draft: { ...list[0] } })
-        })
-      }
+      setLevel({ kind: 'settings' })
       return
     }
     const typeDef = CONFIG_TYPES.find((t) => t.type === initialTarget)
-    if (typeDef && typeDef.singleton) {
-      window.api.getConfigEntries(typeDef.type).then((list) => {
-        setLevel({ kind: 'form', typeDef, index: 0, draft: { ...list[0] } })
-      })
+    if (typeDef) {
+      if (typeDef.type === 'settings') {
+        setLevel({ kind: 'settings' })
+        return
+      }
+      if (typeDef.singleton) {
+        window.api.getConfigEntries(typeDef.type).then((list) => {
+          setLevel({ kind: 'form', typeDef, index: 0, draft: { ...list[0] } })
+        })
+      }
     }
   }, [initialTarget])
   // Drives live filtering of whatever list is currently shown — the same role `value` plays
   // in CommandPalette.tsx's own input. Reset on every level change (see openXxx/backOneLevel)
   // so a filter typed on one screen doesn't leak into the next.
-  const [filter, setFilter] = useState(initialFilter ?? '')
+  const [filter, setFilter] = useState('')
   const [error, setError] = useState<string | null>(null)
   // Delete is destructive and irreversible, so the first press only "arms" the target
   // entry (shows "Confirm delete?") — a second press within the window actually deletes.
@@ -272,6 +336,10 @@ export default function ConfigManager({ initialFilter, initialTarget, onExit }: 
   function openTypeList(typeDef: ConfigTypeDef, focusFieldKey?: string): void {
     setError(null)
     setFilter('')
+    if (typeDef.type === 'settings') {
+      setLevel({ kind: 'settings' })
+      return
+    }
     if (typeDef.singleton) {
       window.api.getConfigEntries(typeDef.type).then((list) => {
         setLevel({ kind: 'form', typeDef, index: 0, draft: { ...list[0] }, focusFieldKey })
@@ -499,12 +567,25 @@ export default function ConfigManager({ initialFilter, initialTarget, onExit }: 
     setLevel({ kind: 'commandLayout' })
   }
 
+  const builtinCommandDescriptions = useMemo(() => {
+    const map = new Map<string, string>()
+    COMMANDS.forEach((c) => map.set(c.name, c.description))
+    return map
+  }, [])
+
+  const customCommandDescriptions = useMemo(() => {
+    const map = new Map<string, string>()
+    customCommands.forEach((c) =>
+      map.set(
+        c.command,
+        c.label ? `${c.label} — ${c.action ?? c.folder ?? ''}` : (c.action ?? c.folder ?? 'Custom command')
+      )
+    )
+    return map
+  }, [customCommands])
+
   function getCommandDescription(cmdName: string): string {
-    const builtin = COMMANDS.find((c) => c.name === cmdName)
-    if (builtin) return builtin.description
-    const custom = customCommands.find((c) => c.command === cmdName)
-    if (custom) return custom.label ? `${custom.label} — ${custom.action ?? custom.folder ?? ''}` : (custom.action ?? custom.folder ?? 'Custom command')
-    return 'Command'
+    return builtinCommandDescriptions.get(cmdName) ?? customCommandDescriptions.get(cmdName) ?? 'Command'
   }
 
   const allAvailableCommands = useMemo(() => {
@@ -531,6 +612,14 @@ export default function ConfigManager({ initialFilter, initialTarget, onExit }: 
     setFilter('')
     setActiveIndex(0)
     clearPendingDelete()
+    if (level.kind === 'settings') {
+      if (initialTarget === 'settings' || initialTarget === 'edit' || initialTarget === 'system') {
+        onExit('/')
+      } else {
+        setLevel({ kind: 'types' })
+      }
+      return
+    }
     if (level.kind === 'form') {
       if (level.typeDef.singleton) {
         setLevel({ kind: 'types' })
@@ -548,7 +637,11 @@ export default function ConfigManager({ initialFilter, initialTarget, onExit }: 
       level.kind === 'dockSlots' ||
       level.kind === 'commandLayout'
     ) {
-      setLevel({ kind: 'types' })
+      if (initialTarget === 'settings' || initialTarget === 'edit' || initialTarget === 'system') {
+        setLevel({ kind: 'settings' })
+      } else {
+        setLevel({ kind: 'types' })
+      }
       return
     }
     if (
@@ -616,7 +709,9 @@ export default function ConfigManager({ initialFilter, initialTarget, onExit }: 
   // a flat array of rows with their own onSelect, fuzzy-filtered by whatever's typed into
   // the top input. Keeps "/settings" navigation (arrows/Enter over `rows`) and rendering in sync
   // by construction — no separate index bookkeeping to keep aligned with a filtered view.
-  const typesRows: Row[] = fuzzyFilter(
+  const typesRows: Row[] = useMemo(() => {
+    if (level.kind !== 'types') return []
+    return fuzzyFilter(
     [
       ...CONFIG_TYPES.map((t) => {
         const needle = filter.trim().toLowerCase()
@@ -632,7 +727,15 @@ export default function ConfigManager({ initialFilter, initialTarget, onExit }: 
           label: t.label,
           sublabel: matchedField ? `${t.description} · Matches: ${matchedField.label}` : t.description,
           keywords: t.fields ? t.fields.map((f) => `${f.label} ${f.key}`).join(' ') : '',
-          onSelect: () => openTypeList(t, matchedField?.key)
+          onSelect: () => {
+            if (t.type === 'settings') {
+              setError(null)
+              setFilter('')
+              setLevel({ kind: 'settings' })
+            } else {
+              openTypeList(t, matchedField?.key)
+            }
+          }
         }
       }),
       {
@@ -687,19 +790,419 @@ export default function ConfigManager({ initialFilter, initialTarget, onExit }: 
     ],
     ['label', 'sublabel', 'keywords'],
     filter
+    )
+  }, [
+    level.kind,
+    filter,
+    openAppsScreen,
+    openSearchCommandsScreen,
+    openHiddenCommandsScreen,
+    openDefaultCommandScreen,
+    openDockSlotsScreen,
+    openCommandLayoutScreen
+  ])
+
+  const settingsRows = useMemo((): SettingRow[] => {
+    if (!settings) return []
+
+    return [
+      {
+        key: 'dockLayout',
+        label: 'Dock Layout',
+        sublabel: 'Arrangement of the floating dock on screen · ↵ to cycle',
+        badge: (settings.dockLayout ?? 'shelf').charAt(0).toUpperCase() + (settings.dockLayout ?? 'shelf').slice(1),
+        badgeType: 'value',
+        keywords: 'dock layout shelf horizontal circle arrangement mode appearance',
+        onSelect: () => {
+          const cur = settings.dockLayout ?? 'shelf'
+          const idx = DOCK_LAYOUTS.indexOf(cur)
+          const next = DOCK_LAYOUTS[(idx + 1) % DOCK_LAYOUTS.length]
+          updateSetting('dockLayout', next)
+        },
+        onCycleBackward: () => {
+          const cur = settings.dockLayout ?? 'shelf'
+          const idx = DOCK_LAYOUTS.indexOf(cur)
+          const next = DOCK_LAYOUTS[(idx - 1 + DOCK_LAYOUTS.length) % DOCK_LAYOUTS.length]
+          updateSetting('dockLayout', next)
+        }
+      },
+      {
+        key: 'dockGlowStyle',
+        label: 'Minimized Dock Glow Style',
+        sublabel: 'Animation effect for the collapsed pill bar · ↵ to cycle',
+        badge: (settings.dockGlowStyle ?? 'breathing').charAt(0).toUpperCase() + (settings.dockGlowStyle ?? 'breathing').slice(1),
+        badgeType: 'value',
+        keywords: 'glow style animation breathing steady stealth idle pill dock',
+        onSelect: () => {
+          const cur = settings.dockGlowStyle ?? 'breathing'
+          const idx = DOCK_GLOW_STYLES.indexOf(cur)
+          const next = DOCK_GLOW_STYLES[(idx + 1) % DOCK_GLOW_STYLES.length]
+          updateSetting('dockGlowStyle', next)
+        },
+        onCycleBackward: () => {
+          const cur = settings.dockGlowStyle ?? 'breathing'
+          const idx = DOCK_GLOW_STYLES.indexOf(cur)
+          const next = DOCK_GLOW_STYLES[(idx - 1 + DOCK_GLOW_STYLES.length) % DOCK_GLOW_STYLES.length]
+          updateSetting('dockGlowStyle', next)
+        }
+      },
+      {
+        key: 'dockGlowColor',
+        label: 'Dock Glow Color',
+        sublabel: 'Ambient neon glow color of the dock across all display modes · ↵ to cycle colors',
+        badge: settings.dockGlowColor ?? '#5aa0ff',
+        badgeType: 'color',
+        keywords: 'glow color accent pill tint dock light neon hex purple dark black',
+        onSelect: () => {
+          const cur = (settings.dockGlowColor ?? '#5aa0ff').toLowerCase()
+          const idx = GLOW_COLORS.findIndex((c) => c.hex.toLowerCase() === cur)
+          const next = GLOW_COLORS[(idx + 1) % GLOW_COLORS.length].hex
+          updateSetting('dockGlowColor', next)
+        },
+        onCycleBackward: () => {
+          const cur = (settings.dockGlowColor ?? '#5aa0ff').toLowerCase()
+          const idx = GLOW_COLORS.findIndex((c) => c.hex.toLowerCase() === cur)
+          const next = GLOW_COLORS[(idx - 1 + GLOW_COLORS.length) % GLOW_COLORS.length].hex
+          updateSetting('dockGlowColor', next)
+        }
+      },
+      {
+        key: 'dockSlots',
+        label: 'Dock Slots & Modules',
+        sublabel: 'Choose icons and customize their order on the shelf dock · ↵ to open',
+        badge: `${shelfIcons.length} active`,
+        badgeType: 'value',
+        keywords: 'dock slots modules shelf icons tray order reorder buttons',
+        onSelect: openDockSlotsScreen
+      },
+      {
+        key: 'defaultCommand',
+        label: 'Default Command',
+        sublabel: 'Command prioritized at the top of suggestions · ↵ to choose',
+        badge: settings.defaultCommand && settings.defaultCommand !== 'none' ? `/${settings.defaultCommand}` : 'None',
+        badgeType: 'value',
+        keywords: 'default command priority initial fallback suggestion',
+        onSelect: openDefaultCommandScreen
+      },
+      {
+        key: 'commandLayout',
+        label: 'Command Layout & Subfolders',
+        sublabel: 'Organize commands into categories and customize display order · ↵ to open',
+        badge: `${layout?.folders.length ?? 0} folders`,
+        badgeType: 'value',
+        keywords: 'command layout rearrange reorder folders subfolders categories move',
+        onSelect: openCommandLayoutScreen
+      },
+      {
+        key: 'historyEnabled',
+        label: 'Remember Command History',
+        sublabel: 'Save executed commands and offer them back on empty input · ↵ to toggle',
+        badge: settings.historyEnabled ? 'Enabled' : 'Disabled',
+        badgeType: settings.historyEnabled ? 'toggle-on' : 'toggle-off',
+        keywords: 'history remember enabled save commands log suggestions',
+        onSelect: () => updateSetting('historyEnabled', !settings.historyEnabled)
+      },
+      {
+        key: 'historyLimit',
+        label: 'History Limit',
+        sublabel: 'Maximum number of history commands to retain · ↵ to cycle',
+        badge: `${settings.historyLimit ?? 50} entries`,
+        badgeType: 'value',
+        keywords: 'history limit max entries count retained',
+        onSelect: () => {
+          const cur = settings.historyLimit ?? 50
+          const idx = HISTORY_LIMITS.indexOf(cur)
+          const next = HISTORY_LIMITS[(idx + 1) % HISTORY_LIMITS.length]
+          updateSetting('historyLimit', next)
+        },
+        onCycleBackward: () => {
+          const cur = settings.historyLimit ?? 50
+          const idx = HISTORY_LIMITS.indexOf(cur)
+          const next = HISTORY_LIMITS[(idx - 1 + HISTORY_LIMITS.length) % HISTORY_LIMITS.length]
+          updateSetting('historyLimit', next)
+        }
+      },
+      {
+        key: 'autoStart',
+        label: 'Auto-Start on Boot',
+        sublabel: 'Automatically launch SudoLaunch when Windows boots · ↵ to toggle',
+        badge: settings.autoStart ? 'Enabled' : 'Disabled',
+        badgeType: settings.autoStart ? 'toggle-on' : 'toggle-off',
+        keywords: 'autostart auto start boot login windows startup launch',
+        onSelect: () => updateSetting('autoStart', !settings.autoStart)
+      },
+      {
+        key: 'autoReturnHome',
+        label: 'Auto-Return Dock to Home',
+        sublabel: 'Float dock back to rest position above taskbar clock · ↵ to toggle',
+        badge: settings.autoReturnHome ? 'Enabled' : 'Disabled',
+        badgeType: settings.autoReturnHome ? 'toggle-on' : 'toggle-off',
+        keywords: 'auto return home dock float clock timer rest position',
+        onSelect: () => updateSetting('autoReturnHome', !settings.autoReturnHome)
+      },
+      {
+        key: 'dockHomePosition',
+        label: 'Dock Home Position',
+        sublabel: 'Resting screen anchor (Left, Middle, Right, Custom X,Y) · ↵ to cycle',
+        badge: settings.dockHomePosition
+          ? settings.dockHomePosition.charAt(0).toUpperCase() + settings.dockHomePosition.slice(1)
+          : 'Middle',
+        badgeType: 'value',
+        keywords: 'home position anchor dock left middle right custom coords coordinates',
+        onSelect: () => {
+          const cur = settings.dockHomePosition ?? 'middle'
+          const idx = DOCK_HOME_POSITIONS.indexOf(cur)
+          const next = DOCK_HOME_POSITIONS[(idx + 1) % DOCK_HOME_POSITIONS.length]
+          updateSetting('dockHomePosition', next)
+        },
+        onCycleBackward: () => {
+          const cur = settings.dockHomePosition ?? 'middle'
+          const idx = DOCK_HOME_POSITIONS.indexOf(cur)
+          const next = DOCK_HOME_POSITIONS[(idx - 1 + DOCK_HOME_POSITIONS.length) % DOCK_HOME_POSITIONS.length]
+          updateSetting('dockHomePosition', next)
+        }
+      },
+      {
+        key: 'autoReturnDelaySec',
+        label: 'Auto-Return Delay',
+        sublabel: 'Idle seconds before dock returns to home position · ↵ to cycle',
+        badge: `${settings.autoReturnDelaySec ?? 8}s`,
+        badgeType: 'value',
+        keywords: 'auto return delay seconds timer wait idle float',
+        onSelect: () => {
+          const cur = settings.autoReturnDelaySec ?? 8
+          const idx = RETURN_DELAYS.indexOf(cur)
+          const next = RETURN_DELAYS[(idx + 1) % RETURN_DELAYS.length]
+          updateSetting('autoReturnDelaySec', next)
+        },
+        onCycleBackward: () => {
+          const cur = settings.autoReturnDelaySec ?? 8
+          const idx = RETURN_DELAYS.indexOf(cur)
+          const next = RETURN_DELAYS[(idx - 1 + RETURN_DELAYS.length) % RETURN_DELAYS.length]
+          updateSetting('autoReturnDelaySec', next)
+        }
+      },
+      {
+        key: 'terminalWidth',
+        label: 'Terminal Window Width',
+        sublabel: 'Width of the slide-up quick terminal window in pixels · ↵ to cycle',
+        badge: `${settings.terminalWidth ?? 800}px`,
+        badgeType: 'value',
+        keywords: 'terminal width size window px cascadia dimension',
+        onSelect: () => {
+          const cur = settings.terminalWidth ?? 800
+          const idx = TERMINAL_WIDTHS.indexOf(cur)
+          const next = TERMINAL_WIDTHS[(idx + 1) % TERMINAL_WIDTHS.length]
+          updateSetting('terminalWidth', next)
+        },
+        onCycleBackward: () => {
+          const cur = settings.terminalWidth ?? 800
+          const idx = TERMINAL_WIDTHS.indexOf(cur)
+          const next = TERMINAL_WIDTHS[(idx - 1 + TERMINAL_WIDTHS.length) % TERMINAL_WIDTHS.length]
+          updateSetting('terminalWidth', next)
+        }
+      },
+      {
+        key: 'monitor',
+        label: 'Dock Monitor',
+        sublabel: 'Display monitor index to anchor the dock to · ↵ to cycle',
+        badge: `Monitor ${settings.monitor ?? 1}`,
+        badgeType: 'value',
+        keywords: 'monitor display screen display1 display2 multi-monitor',
+        onSelect: () => {
+          const cur = settings.monitor ?? 1
+          const idx = MONITORS.indexOf(cur)
+          const next = MONITORS[(idx + 1) % MONITORS.length]
+          updateSetting('monitor', next)
+        },
+        onCycleBackward: () => {
+          const cur = settings.monitor ?? 1
+          const idx = MONITORS.indexOf(cur)
+          const next = MONITORS[(idx - 1 + MONITORS.length) % MONITORS.length]
+          updateSetting('monitor', next)
+        }
+      },
+      {
+        key: 'hotkey',
+        label: 'Command Palette Hotkey',
+        sublabel: 'Global shortcut to summon launcher · ↵ to cycle presets',
+        badge: settings.hotkey || 'Alt+Space',
+        badgeType: 'value',
+        keywords: 'hotkey shortcut summon palette key alt space global',
+        onSelect: () => {
+          const cur = settings.hotkey || 'Alt+Space'
+          const idx = PALETTE_HOTKEYS.indexOf(cur)
+          const next = PALETTE_HOTKEYS[(idx + 1) % PALETTE_HOTKEYS.length]
+          updateSetting('hotkey', next)
+        },
+        onCycleBackward: () => {
+          const cur = settings.hotkey || 'Alt+Space'
+          const idx = PALETTE_HOTKEYS.indexOf(cur)
+          const next = PALETTE_HOTKEYS[(idx - 1 + PALETTE_HOTKEYS.length) % PALETTE_HOTKEYS.length]
+          updateSetting('hotkey', next)
+        }
+      },
+      {
+        key: 'terminalHotkey',
+        label: 'Terminal Hotkey',
+        sublabel: 'Global shortcut to toggle slide-up terminal · ↵ to cycle presets',
+        badge: settings.terminalHotkey || 'Alt+`',
+        badgeType: 'value',
+        keywords: 'terminal hotkey shortcut quick term tty',
+        onSelect: () => {
+          const cur = settings.terminalHotkey || 'Alt+`'
+          const idx = TERMINAL_HOTKEYS.indexOf(cur)
+          const next = TERMINAL_HOTKEYS[(idx + 1) % TERMINAL_HOTKEYS.length]
+          updateSetting('terminalHotkey', next)
+        },
+        onCycleBackward: () => {
+          const cur = settings.terminalHotkey || 'Alt+`'
+          const idx = TERMINAL_HOTKEYS.indexOf(cur)
+          const next = TERMINAL_HOTKEYS[(idx - 1 + TERMINAL_HOTKEYS.length) % TERMINAL_HOTKEYS.length]
+          updateSetting('terminalHotkey', next)
+        }
+      },
+      {
+        key: 'swapEnabled',
+        label: 'Input Sharing (/control)',
+        sublabel: 'Network mouse and keyboard sharing between PCs · ↵ to toggle',
+        badge: settings.swapEnabled ? 'Enabled' : 'Disabled',
+        badgeType: settings.swapEnabled ? 'toggle-on' : 'toggle-off',
+        keywords: 'swap control input sharing mouse keyboard network mtls',
+        onSelect: () => updateSetting('swapEnabled', !settings.swapEnabled)
+      },
+      {
+        key: 'swapToggleHotkey',
+        label: 'Input Sharing Hotkey',
+        sublabel: 'Hotkey to switch mouse/keyboard to another PC · ↵ to cycle',
+        badge: settings.swapToggleHotkey || 'ScrollLock',
+        badgeType: 'value',
+        keywords: 'swap toggle hotkey control switch machine scrolllock pause',
+        onSelect: () => {
+          const cur = settings.swapToggleHotkey || 'ScrollLock'
+          const idx = SWAP_HOTKEYS.indexOf(cur)
+          const next = SWAP_HOTKEYS[(idx + 1) % SWAP_HOTKEYS.length]
+          updateSetting('swapToggleHotkey', next)
+        },
+        onCycleBackward: () => {
+          const cur = settings.swapToggleHotkey || 'ScrollLock'
+          const idx = SWAP_HOTKEYS.indexOf(cur)
+          const next = SWAP_HOTKEYS[(idx - 1 + SWAP_HOTKEYS.length) % SWAP_HOTKEYS.length]
+          updateSetting('swapToggleHotkey', next)
+        }
+      },
+      {
+        key: 'peers',
+        label: 'Swap Peers',
+        sublabel: 'Computers configured for input sharing · ↵ to view',
+        badge: 'View Peers',
+        badgeType: 'value',
+        keywords: 'peers swap control machines computers remote network',
+        onSelect: () => {
+          const peersDef = CONFIG_TYPES.find((t) => t.type === 'peers')
+          if (peersDef) {
+            setLevel({ kind: 'list', typeDef: peersDef })
+            setFilter('')
+            setActiveIndex(0)
+          }
+        }
+      },
+      {
+        key: 'ctrlRightClickSummon',
+        label: 'Ctrl+Right Click Dock Summon',
+        sublabel: 'Summon dock icon instantly to cursor position on Ctrl+Right Click · ↵ to toggle',
+        badge: settings.ctrlRightClickSummon ? 'Enabled' : 'Disabled',
+        badgeType: settings.ctrlRightClickSummon ? 'toggle-on' : 'toggle-off',
+        keywords: 'ctrl right click summon teleport cursor mouse dock',
+        onSelect: () => updateSetting('ctrlRightClickSummon', !settings.ctrlRightClickSummon)
+      },
+      {
+        key: 'disableMouseInput',
+        label: 'Disable Mouse Input',
+        sublabel: 'Keyboard-only mode: ignore mouse hover & clicks in palette · ↵ to toggle',
+        badge: settings.disableMouseInput ? 'Enabled' : 'Disabled',
+        badgeType: settings.disableMouseInput ? 'toggle-on' : 'toggle-off',
+        keywords: 'disable mouse input keyboard only pure distraction free',
+        onSelect: () => updateSetting('disableMouseInput', !settings.disableMouseInput)
+      },
+      {
+        key: 'apps',
+        label: 'App Visibility',
+        sublabel: 'Choose which apps appear in the app launcher · ↵ to configure',
+        badge: 'Configure',
+        badgeType: 'value',
+        keywords: 'applications visibility launcher show hide filter apps',
+        onSelect: openAppsScreen
+      },
+      {
+        key: 'searchCommands',
+        label: 'Search Commands',
+        sublabel: 'Choose which commands the "search" command fans out to · ↵ to configure',
+        badge: 'Configure',
+        badgeType: 'value',
+        keywords: 'search fanout commands include exclude query',
+        onSelect: openSearchCommandsScreen
+      },
+      {
+        key: 'hiddenCommands',
+        label: 'Command Visibility',
+        sublabel: 'Choose which commands appear in the command palette UI · ↵ to configure',
+        badge: 'Configure',
+        badgeType: 'value',
+        keywords: 'hide show palette commands visibility toggle ui',
+        onSelect: openHiddenCommandsScreen
+      },
+      {
+        key: 'openConfigFolder',
+        label: 'Open Config Folder',
+        sublabel: 'Open %USERPROFILE%\\.sudolaunch in File Explorer · ↵ to open',
+        badge: 'Explore',
+        badgeType: 'value',
+        keywords: 'folder explorer directory path config json configuration files',
+        onSelect: () => window.api.openConfigFolder()
+      }
+    ]
+  }, [
+    settings,
+    shelfIcons,
+    layout,
+    updateSetting,
+    openDockSlotsScreen,
+    openDefaultCommandScreen,
+    openCommandLayoutScreen,
+    openAppsScreen,
+    openSearchCommandsScreen,
+    openHiddenCommandsScreen
+  ])
+
+  const filteredSettingsRows = useMemo(() => {
+    if (level.kind !== 'settings') return []
+    if (!filter.trim()) return settingsRows
+    return fuzzyFilter(settingsRows, ['label', 'sublabel', 'keywords', 'badge'], filter)
+  }, [level.kind, settingsRows, filter])
+
+  const filteredApps = useMemo(
+    () => (level.kind === 'apps' ? fuzzyFilter(apps, ['name', 'path'], filter) : apps),
+    [level.kind, apps, filter]
   )
 
-  const filteredApps =
-    level.kind === 'apps' ? fuzzyFilter(apps, ['name', 'path'], filter) : apps
+  const filteredSearchCommandDefs = useMemo(
+    () =>
+      level.kind === 'searchCommands'
+        ? fuzzyFilter(SEARCH_COMMAND_DEFS, ['name', 'description'], filter)
+        : SEARCH_COMMAND_DEFS,
+    [level.kind, filter]
+  )
 
-  const filteredSearchCommandDefs =
-    level.kind === 'searchCommands' ? fuzzyFilter(SEARCH_COMMAND_DEFS, ['name', 'description'], filter) : SEARCH_COMMAND_DEFS
+  const filteredHiddenCommandDefs = useMemo(
+    () => (level.kind === 'hiddenCommands' ? fuzzyFilter(COMMANDS, ['name', 'description'], filter) : COMMANDS),
+    [level.kind, filter]
+  )
 
-  const filteredHiddenCommandDefs =
-    level.kind === 'hiddenCommands' ? fuzzyFilter(COMMANDS, ['name', 'description'], filter) : COMMANDS
-
-  const filteredDefaultCommandDefs =
-    level.kind === 'defaultCommand' ? fuzzyFilter(COMMANDS, ['name', 'description'], filter) : COMMANDS
+  const filteredDefaultCommandDefs = useMemo(
+    () => (level.kind === 'defaultCommand' ? fuzzyFilter(COMMANDS, ['name', 'description'], filter) : COMMANDS),
+    [level.kind, filter]
+  )
 
   const dockModulesList = useMemo(() => {
     if (level.kind !== 'dockSlots') return []
@@ -773,7 +1276,29 @@ export default function ConfigManager({ initialFilter, initialTarget, onExit }: 
       backOneLevel()
       return
     }
-    if (level.kind === 'types') {
+    if (level.kind === 'settings') {
+      const lastIndex = filteredSettingsRows.length - 1
+      if (e.key === 'ArrowDown') {
+        e.preventDefault()
+        setActiveIndex((i) => Math.min(i + 1, Math.max(lastIndex, 0)))
+      } else if (e.key === 'ArrowUp') {
+        e.preventDefault()
+        setActiveIndex((i) => Math.max(i - 1, 0))
+      } else if (e.key === 'Enter' || e.key === ' ') {
+        e.preventDefault()
+        filteredSettingsRows[activeIndex]?.onSelect()
+      } else if (e.key === 'ArrowRight') {
+        e.preventDefault()
+        filteredSettingsRows[activeIndex]?.onSelect()
+      } else if (e.key === 'ArrowLeft') {
+        e.preventDefault()
+        if (filteredSettingsRows[activeIndex]?.onCycleBackward) {
+          filteredSettingsRows[activeIndex].onCycleBackward!()
+        } else {
+          filteredSettingsRows[activeIndex]?.onSelect()
+        }
+      }
+    } else if (level.kind === 'types') {
       if (e.key === 'ArrowDown') {
         e.preventDefault()
         setActiveIndex((i) => Math.min(i + 1, Math.max(typesRows.length - 1, 0)))
@@ -1012,29 +1537,31 @@ export default function ConfigManager({ initialFilter, initialTarget, onExit }: 
 
   const breadcrumb =
     '// ' +
-    (level.kind === 'apps'
-      ? APPS_ROW_LABEL
-      : level.kind === 'searchCommands'
-        ? SEARCH_COMMANDS_ROW_LABEL
-        : level.kind === 'hiddenCommands'
-          ? HIDDEN_COMMANDS_ROW_LABEL
-          : level.kind === 'defaultCommand'
-            ? DEFAULT_COMMAND_ROW_LABEL
-            : level.kind === 'dockSlots'
-              ? DOCK_SLOTS_ROW_LABEL
-              : level.kind === 'commandLayout'
-              ? COMMAND_LAYOUT_ROW_LABEL
-              : level.kind === 'folderEdit'
-                ? `Command Layout / ${layout?.folders.find((f) => f.id === level.folderId)?.name ?? 'Folder'}`
-                : level.kind === 'folderAddCommand'
-                  ? `Command Layout / ${layout?.folders.find((f) => f.id === level.folderId)?.name ?? 'Folder'} / Add Command`
-                  : level.kind === 'commandAssignFolder'
-                    ? `Command Layout / /${level.commandName} / Move to Folder`
-                    : level.kind === 'newFolder'
-                      ? 'Command Layout / Create Folder'
-                      : level.kind !== 'types'
-                        ? level.typeDef.label
-                        : '') +
+    (level.kind === 'settings'
+      ? 'Settings'
+      : level.kind === 'apps'
+        ? APPS_ROW_LABEL
+        : level.kind === 'searchCommands'
+          ? SEARCH_COMMANDS_ROW_LABEL
+          : level.kind === 'hiddenCommands'
+            ? HIDDEN_COMMANDS_ROW_LABEL
+            : level.kind === 'defaultCommand'
+              ? DEFAULT_COMMAND_ROW_LABEL
+              : level.kind === 'dockSlots'
+                ? DOCK_SLOTS_ROW_LABEL
+                : level.kind === 'commandLayout'
+                ? COMMAND_LAYOUT_ROW_LABEL
+                : level.kind === 'folderEdit'
+                  ? `Command Layout / ${layout?.folders.find((f) => f.id === level.folderId)?.name ?? 'Folder'}`
+                  : level.kind === 'folderAddCommand'
+                    ? `Command Layout / ${layout?.folders.find((f) => f.id === level.folderId)?.name ?? 'Folder'} / Add Command`
+                    : level.kind === 'commandAssignFolder'
+                      ? `Command Layout / /${level.commandName} / Move to Folder`
+                      : level.kind === 'newFolder'
+                        ? 'Command Layout / Create Folder'
+                        : level.kind !== 'types'
+                          ? level.typeDef.label
+                          : '') +
     (level.kind === 'form' ? (level.index === null ? ' / New' : ' / Edit') : '')
 
   return (
@@ -1058,15 +1585,19 @@ export default function ConfigManager({ initialFilter, initialTarget, onExit }: 
         className="palette-input"
         value={filter}
         placeholder={
-          level.kind === 'types'
-            ? '/settings — type to filter config...'
-            : level.kind === 'form'
-              ? breadcrumb
-              : `${breadcrumb} — type to filter...`
+          level.kind === 'settings'
+            ? filteredSettingsRows[activeIndex]
+              ? `↵ ${filteredSettingsRows[activeIndex].label}: ${filteredSettingsRows[activeIndex].sublabel}`
+              : '/settings — type to filter...'
+            : level.kind === 'types'
+              ? '/settings — type to filter config...'
+              : level.kind === 'form'
+                ? breadcrumb
+                : `${breadcrumb} — type to filter...`
         }
         onChange={(e) => {
           const val = e.target.value
-          if (level.kind === 'types') {
+          if (level.kind === 'settings' || level.kind === 'types') {
             if (val.startsWith('/settings ') || val.startsWith('/config ')) {
               const spaceIdx = val.indexOf(' ')
               setFilter(val.slice(spaceIdx + 1))
@@ -1109,6 +1640,45 @@ export default function ConfigManager({ initialFilter, initialTarget, onExit }: 
                 <span className="palette-item-label">{row.label}</span>
                 <span className="palette-item-sublabel">{row.sublabel}</span>
               </span>
+            </li>
+          ))}
+        </ul>
+      )}
+
+      {level.kind === 'settings' && (
+        <ul className={disableMouseInput ? 'palette-list ignore-mouse' : 'palette-list'}>
+          {filteredSettingsRows.length === 0 && <li className="palette-empty">No matching settings</li>}
+          {filteredSettingsRows.map((row, idx) => (
+            <li
+              key={row.key}
+              ref={idx === activeIndex ? activeItemRef : undefined}
+              className={idx === activeIndex ? 'palette-item active' : 'palette-item'}
+              onMouseEnter={() => setActiveIndex(idx)}
+              onClick={row.onSelect}
+            >
+              <span className="palette-item-text">
+                <span className="palette-item-label">{row.label}</span>
+                <span className="palette-item-sublabel">{row.sublabel}</span>
+              </span>
+              {row.badge && (
+                <span
+                  className={
+                    row.badgeType === 'toggle-on'
+                      ? 'config-toggle-badge config-toggle-on'
+                      : row.badgeType === 'toggle-off'
+                        ? 'config-toggle-badge config-toggle-off'
+                        : 'config-value-badge'
+                  }
+                >
+                  {row.badgeType === 'color' && (
+                    <span
+                      className="config-color-swatch"
+                      style={{ backgroundColor: row.badge, color: row.badge }}
+                    />
+                  )}
+                  {row.badge}
+                </span>
+              )}
             </li>
           ))}
         </ul>
@@ -1862,6 +2432,15 @@ export default function ConfigManager({ initialFilter, initialTarget, onExit }: 
               </button>
             )}
           </div>
+        </div>
+      )}
+
+      {level.kind === 'settings' && (
+        <div className="config-footer-hints">
+          <span><kbd>↵</kbd> Change / Toggle</span>
+          <span><kbd>←</kbd><kbd>→</kbd> Cycle</span>
+          <span><kbd>↑</kbd><kbd>↓</kbd> Navigate</span>
+          <span><kbd>Esc</kbd> Back / Close</span>
         </div>
       )}
     </div>

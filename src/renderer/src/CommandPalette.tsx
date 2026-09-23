@@ -23,10 +23,76 @@ interface ListItem {
   key: string
   label: string
   sublabel?: string
+  badge?: string
+  section?: string
+  sectionIcon?: string
   // Set when this item fills the input rather than running anything — lets Tab accept it
   // without also triggering Enter's "run" behavior for regular result items.
   completion?: string
   onSelect: (elevated?: boolean) => void
+}
+
+const COMMAND_ICONS: Record<string, string> = {
+  search: '🔍',
+  app: '🚀',
+  teams: '💬',
+  mail: '✉️',
+  fav: '⭐',
+  git: '🌿',
+  repo: '🔀',
+  http: '🌐',
+  json: '{}',
+  regex: '.*',
+  cron: '⏲️',
+  term: '>_',
+  custom: '⚡',
+  docker: '🐳',
+  env: '🌱',
+  diff: '⇄',
+  cert: '🔒',
+  curl: '📡',
+  dns: '🧭',
+  key: '⌨️',
+  calc: '🧮',
+  snippet: '📋',
+  case: 'Aa',
+  color: '🎨',
+  uuid: '🆔',
+  hash: '#️⃣',
+  pwd: '🔑',
+  tz: '🌍',
+  unit: '📏',
+  qr: '📱',
+  mime: '📄',
+  lookup: '🗂️',
+  lorem: '📝',
+  text: '¶',
+  url: '🔗',
+  emoji: '😀',
+  gif: '🎞️',
+  g: '🔎',
+  pt: '🧰',
+  focus: '🪟',
+  timer: '⏱️',
+  ip: '🖧',
+  port: '🔌',
+  chmod: '🛡️',
+  profile: '👤',
+  settings: '⚙️',
+  notifications: '🔔',
+  default: '📌',
+  history: '🕒',
+  view: '👁️',
+  show: '🔆',
+  hide: '🌙',
+  control: '🖱️',
+  release: '🔓',
+  restart: '🔄',
+  exit: '🚪'
+}
+
+function getIconForCommand(name: string): string {
+  return COMMAND_ICONS[name] ?? '⚡'
 }
 
 // Only these three commands get a shortcut, mapped to their Settings field — by design,
@@ -69,11 +135,35 @@ function parseInput(
     if (name === 'exit' || name === 'quit') {
       return { command: 'exit', query: '' }
     }
+    if (name === 'repo') {
+      return { command: 'repo', query: '' }
+    }
+    if (name === 'notifications' || name === 'notify') {
+      return { command: 'notifications', query: '' }
+    }
+    if (name === 'timer') {
+      return { command: 'timer', query: '' }
+    }
+    if (name === 'cert' || name === 'ssl') {
+      return { command: 'cert', query: '' }
+    }
+    if (name === 'dns' || name === 'dig') {
+      return { command: 'dns', query: '' }
+    }
+    if (name === 'key' || name === 'kbd') {
+      return { command: 'key', query: '' }
+    }
+    if (name === 'show') {
+      return { command: 'show', query: '' }
+    }
+    if (name === 'hide') {
+      return { command: 'hide', query: '' }
+    }
     if (customNames.has(name)) {
       return { command: 'custom', query: name }
     }
     const matchedCmd = COMMANDS.find((c) => c.name === name)?.name
-    const nonZeroArg = new Set<CommandName>(['calc', 'search', 'restart', 'default', 'view', 'term', 'control', 'release', 'exit', 'settings'])
+    const nonZeroArg = new Set<CommandName>(['calc', 'search', 'restart', 'default', 'view', 'term', 'control', 'release', 'exit', 'settings', 'show', 'hide'])
     if (matchedCmd && !nonZeroArg.has(matchedCmd)) {
       return { command: matchedCmd, query: '' }
     }
@@ -82,6 +172,14 @@ function parseInput(
   const name = raw.slice(1, spaceIdx)
   const rest = raw.slice(spaceIdx + 1)
   if (name === 'settings' || name === 'config') return { command: 'settings', query: rest }
+  if (name === 'repo') return { command: 'repo', query: rest }
+  if (name === 'notifications' || name === 'notify') return { command: 'notifications', query: rest }
+  if (name === 'timer') return { command: 'timer', query: rest }
+  if (name === 'cert' || name === 'ssl') return { command: 'cert', query: rest }
+  if (name === 'dns' || name === 'dig') return { command: 'dns', query: rest }
+  if (name === 'key' || name === 'kbd') return { command: 'key', query: rest }
+  if (name === 'show') return { command: 'show', query: rest }
+  if (name === 'hide') return { command: 'hide', query: rest }
   if (name === 'google') return { command: 'g', query: rest }
   if (name === 'powertoys') return { command: 'pt', query: rest }
   if (name === 'exit' || name === 'quit') return { command: 'exit', query: rest }
@@ -148,10 +246,46 @@ export default function CommandPalette(): JSX.Element {
     gradient: string
     flickerType: number | null
   } | null>(null)
+  // Dock home & idle tracking for circular orbit revolving
+  const [isDockAtHome, setIsDockAtHome] = useState(true)
+  const [isOrbitIdle, setIsOrbitIdle] = useState(false)
+  const orbitIdleTimeoutRef = useRef<NodeJS.Timeout | null>(null)
+
+  useEffect(() => {
+    window.api.setPaletteModule?.(settingsTarget !== null ? 'settings' : activeModuleView)
+  }, [activeModuleView, settingsTarget])
+
+  const markOrbitActivity = useCallback(() => {
+    setIsOrbitIdle(false)
+    if (orbitIdleTimeoutRef.current) {
+      clearTimeout(orbitIdleTimeoutRef.current)
+    }
+    orbitIdleTimeoutRef.current = setTimeout(() => {
+      setIsOrbitIdle(true)
+    }, 15000)
+  }, [])
+
+  useEffect(() => {
+    if (isDockAtHome && !shelfPaletteActive && !barActive) {
+      markOrbitActivity()
+    } else {
+      setIsOrbitIdle(false)
+      if (orbitIdleTimeoutRef.current) {
+        clearTimeout(orbitIdleTimeoutRef.current)
+        orbitIdleTimeoutRef.current = null
+      }
+    }
+    return () => {
+      if (orbitIdleTimeoutRef.current) {
+        clearTimeout(orbitIdleTimeoutRef.current)
+        orbitIdleTimeoutRef.current = null
+      }
+    }
+  }, [isDockAtHome, shelfPaletteActive, barActive, markOrbitActivity])
   // Where the icon sat inside the now-full-size window, so the palette can grow out of it
   // (see barWindow.ts's activateBar / revealPaletteWindow in main/index.ts). Shared with
   // NotificationPanel and Terminal — see useGrowAnimation.
-  const { growOrigin, growPhase, setGrowOrigin, setGrowPhase, growClassNames, growStyle, onGrowEnd } =
+  const { growPhase, setGrowOrigin, setGrowPhase, growClassNames, growStyle, onGrowEnd } =
     useGrowAnimation()
   // Softens page-to-page switches while the dock is already open (e.g. Git -> Focus) with
   // a quick fade-out/fade-in instead of the instant cut that used to make switching feel
@@ -159,7 +293,8 @@ export default function CommandPalette(): JSX.Element {
   // onPaletteShown below for how the two interact.
   const [pageFade, setPageFade] = useState<'out' | 'in' | null>(null)
   const inputRef = useRef<HTMLInputElement>(null)
-  const activeItemRef = useRef<HTMLLIElement>(null)
+  const activeItemRef = useRef<HTMLElement>(null)
+  const gridContainerRef = useRef<HTMLDivElement>(null)
   // The palette opens wherever the cursor already happens to be resting, which fires a
   // phantom mouseenter (and even the browser's native CSS :hover) on whatever list item
   // ends up underneath it — stealing activeIndex from keyboard navigation, and visually
@@ -239,6 +374,19 @@ export default function CommandPalette(): JSX.Element {
     (name: CommandName): string | undefined =>
       Object.entries(shortcuts).find(([, cmd]) => cmd === name)?.[0],
     [shortcuts]
+  )
+
+  const isKnownCommandName = useCallback(
+    (name: string): boolean => {
+      const lower = name.toLowerCase()
+      if (COMMANDS.some((c) => c.name.toLowerCase() === lower)) return true
+      if (['settings', 'config', 'g', 'google', 'powertoys', 'pt', 'exit', 'quit', 'notify', 'timer', 'ssl', 'dig', 'kbd'].includes(lower)) return true
+      if (Object.keys(shortcuts).some((k) => k.toLowerCase() === lower)) return true
+      if (customCommands.some((c) => c.command.toLowerCase() === lower)) return true
+      if (layout.folders.some((f) => f.name.toLowerCase() === lower || f.id.toLowerCase() === lower)) return true
+      return false
+    },
+    [shortcuts, customCommands, layout.folders]
   )
 
   const refreshHistory = useCallback(() => {
@@ -334,6 +482,10 @@ export default function CommandPalette(): JSX.Element {
     refreshLayout()
     refreshGit()
     window.api.getFocusTimerState?.().then(setFocusState)
+    window.api.getDockIsHome?.().then((isHome) => {
+      setIsDockAtHome(isHome)
+      if (isHome) markOrbitActivity()
+    })
     const unsubTick = window.api.onFocusTimerTick?.((state) => setFocusState(state))
     const unsubDone = window.api.onFocusTimerComplete?.(() => {
       window.api.getFocusTimerState?.().then(setFocusState)
@@ -476,6 +628,12 @@ export default function CommandPalette(): JSX.Element {
         setGrowPhase('collapsing')
       }),
       window.api.onDockSummoned?.((data) => {
+        setIsDockAtHome(false)
+        setIsOrbitIdle(false)
+        if (orbitIdleTimeoutRef.current) {
+          clearTimeout(orbitIdleTimeoutRef.current)
+          orbitIdleTimeoutRef.current = null
+        }
         if (data?.color) setSummonColor(data.color)
         if (data?.glow) setSummonGlow(data.glow)
         setSummonPulse(true)
@@ -508,7 +666,25 @@ export default function CommandPalette(): JSX.Element {
         setHotkeyError(`Couldn't register terminal hotkey "${hotkey}" — keeping the previous one.`)
         setTimeout(() => setHotkeyError(null), 5000)
       }),
-      window.api.onDockFade?.((dir) => setDockFading(dir === 'out')),
+      window.api.onDockFade?.((dir) => {
+        setDockFading(dir === 'out')
+        if (dir === 'in') {
+          setIsDockAtHome(true)
+          markOrbitActivity()
+        }
+      }),
+      window.api.onDockHomeState?.((isHome) => {
+        setIsDockAtHome(isHome)
+        if (isHome) {
+          markOrbitActivity()
+        } else {
+          setIsOrbitIdle(false)
+          if (orbitIdleTimeoutRef.current) {
+            clearTimeout(orbitIdleTimeoutRef.current)
+            orbitIdleTimeoutRef.current = null
+          }
+        }
+      }),
       window.api.onTermUnreadActivity?.((unread) => setTermUnread(unread)),
       window.api.onNotificationsUpdated?.((items) => {
         setNotifyCount(items.filter((n) => !n.read).length)
@@ -523,7 +699,7 @@ export default function CommandPalette(): JSX.Element {
       unsubTick?.()
       unsubDone?.()
     }
-  }, [refreshHistory, refreshSettings, refreshHotkeys, refreshCustomCommands, refreshGit, getDefaultValue])
+  }, [refreshHistory, refreshSettings, refreshHotkeys, refreshCustomCommands, refreshGit, getDefaultValue, markOrbitActivity])
 
   useEffect(() => {
     setActiveIndex(0)
@@ -573,7 +749,7 @@ export default function CommandPalette(): JSX.Element {
     }
     window.addEventListener('blur', handleBlur)
     return () => window.removeEventListener('blur', handleBlur)
-  }, [getDefaultValue])
+  }, [barActive, getDefaultValue])
 
   useEffect(() => {
     const handler = (e: KeyboardEvent): void => {
@@ -587,136 +763,13 @@ export default function CommandPalette(): JSX.Element {
         return
       }
       const defVal = getDefaultValue()
-      if (valueRef.current.startsWith('/custom ') && valueRef.current.length > '/custom '.length) {
-        setValue('/custom ')
-        return
-      }
-      if (valueRef.current.startsWith('/gif ') && valueRef.current.length > '/gif '.length) {
-        setValue('/gif ')
-        return
-      }
-      if (valueRef.current.startsWith('/g ') && valueRef.current.length > '/g '.length) {
-        setValue('/g ')
-        return
-      }
-      if (valueRef.current.startsWith('/google ') && valueRef.current.length > '/google '.length) {
-        setValue('/google ')
-        return
-      }
-      if (valueRef.current.startsWith('/lookup ') && valueRef.current.length > '/lookup '.length) {
-        setValue('/lookup ')
-        return
-      }
-      if (valueRef.current.startsWith('/tz ') && valueRef.current.length > '/tz '.length) {
-        setValue('/tz ')
-        return
-      }
-      if (valueRef.current.startsWith('/case ') && valueRef.current.length > '/case '.length) {
-        setValue('/case ')
-        return
-      }
-      if (valueRef.current.startsWith('/chmod ') && valueRef.current.length > '/chmod '.length) {
-        setValue('/chmod ')
-        return
-      }
-      if (valueRef.current.startsWith('/color ') && valueRef.current.length > '/color '.length) {
-        setValue('/color ')
-        return
-      }
-      if (valueRef.current.startsWith('/cron ') && valueRef.current.length > '/cron '.length) {
-        setValue('/cron ')
-        return
-      }
-      if (valueRef.current.startsWith('/emoji ') && valueRef.current.length > '/emoji '.length) {
-        setValue('/emoji ')
-        return
-      }
-      if (valueRef.current.startsWith('/git ') && valueRef.current.length > '/git '.length) {
-        setValue('/git ')
-        return
-      }
-      if (valueRef.current.startsWith('/hash ') && valueRef.current.length > '/hash '.length) {
-        setValue('/hash ')
-        return
-      }
-      if (valueRef.current.startsWith('/http ') && valueRef.current.length > '/http '.length) {
-        setValue('/http ')
-        return
-      }
-      if (valueRef.current.startsWith('/ip ') && valueRef.current.length > '/ip '.length) {
-        setValue('/ip ')
-        return
-      }
-      if (valueRef.current.startsWith('/json ') && valueRef.current.length > '/json '.length) {
-        setValue('/json ')
-        return
-      }
-      if (valueRef.current.startsWith('/lorem ') && valueRef.current.length > '/lorem '.length) {
-        setValue('/lorem ')
-        return
-      }
-      if (valueRef.current.startsWith('/mime ') && valueRef.current.length > '/mime '.length) {
-        setValue('/mime ')
-        return
-      }
-      if (valueRef.current.startsWith('/port ') && valueRef.current.length > '/port '.length) {
-        setValue('/port ')
-        return
-      }
-      if (valueRef.current.startsWith('/pt ') && valueRef.current.length > '/pt '.length) {
-        setValue('/pt ')
-        return
-      }
-      if (valueRef.current.startsWith('/powertoys ') && valueRef.current.length > '/powertoys '.length) {
-        setValue('/powertoys ')
-        return
-      }
-      if (valueRef.current.startsWith('/pwd ') && valueRef.current.length > '/pwd '.length) {
-        setValue('/pwd ')
-        return
-      }
-      if (valueRef.current.startsWith('/qr ') && valueRef.current.length > '/qr '.length) {
-        setValue('/qr ')
-        return
-      }
-      if (valueRef.current.startsWith('/regex ') && valueRef.current.length > '/regex '.length) {
-        setValue('/regex ')
-        return
-      }
-      if (valueRef.current.startsWith('/text ') && valueRef.current.length > '/text '.length) {
-        setValue('/text ')
-        return
-      }
-      if (valueRef.current.startsWith('/unit ') && valueRef.current.length > '/unit '.length) {
-        setValue('/unit ')
-        return
-      }
-      if (valueRef.current.startsWith('/url ') && valueRef.current.length > '/url '.length) {
-        setValue('/url ')
-        return
-      }
-      if (valueRef.current.startsWith('/uuid ') && valueRef.current.length > '/uuid '.length) {
-        setValue('/uuid ')
-        return
-      }
-      if (valueRef.current.startsWith('/control ') && valueRef.current.length > '/control '.length) {
-        setValue('/control ')
-        return
-      }
       if (valueRef.current.match(/^\/[^/\s]+\//)) {
         setValue('/')
         return
       }
-      if (valueRef.current.startsWith('/profile ') && valueRef.current.length > '/profile '.length) {
-        setValue('/profile ')
-        return
-      }
-      if (valueRef.current.startsWith('/settings ') && valueRef.current.length > '/settings '.length) {
-        setValue('/settings ')
-        return
-      }
-      if (valueRef.current.startsWith('/config ') && valueRef.current.length > '/config '.length) {
-        setValue('/config ')
+      const cmdWithArgsMatch = valueRef.current.match(/^(\/[a-zA-Z0-9_-]+\s+)\S/)
+      if (cmdWithArgsMatch) {
+        setValue(cmdWithArgsMatch[1])
         return
       }
       if (valueRef.current !== '' && valueRef.current !== defVal) {
@@ -733,7 +786,7 @@ export default function CommandPalette(): JSX.Element {
     }
     window.addEventListener('keydown', handler)
     return () => window.removeEventListener('keydown', handler)
-  }, [getDefaultValue])
+  }, [barActive, getDefaultValue])
 
   useEffect(() => {
     activeItemRef.current?.scrollIntoView({ block: 'nearest' })
@@ -863,6 +916,15 @@ export default function CommandPalette(): JSX.Element {
     return () => clearTimeout(timerId)
   }, [windowMode, dockLayout, shelfPaletteActive, summonPulse, dockFading, autoReturnDelaySec, shelfInteractionTick])
 
+  // Safety guard: if dockLayout is switched to 'shelf' or 'circle' while running in bar mode with barActive = true,
+  // immediately reset barActive and trigger deactivation so the palette window never gets stuck at 80px/150px height.
+  useEffect(() => {
+    if (windowMode === 'bar' && (dockLayout === 'shelf' || dockLayout === 'circle') && barActive) {
+      setBarActive(false)
+      window.api.barDeactivate?.()
+    }
+  }, [windowMode, dockLayout, barActive])
+
   function handleExecuteResult(error: string | null): void {
     if (error) {
       setCommandError(error)
@@ -877,238 +939,6 @@ export default function CommandPalette(): JSX.Element {
     }
   }
 
-  const getDefaultCommandItem = useCallback((): ListItem | null => {
-    if (!defaultCommand || defaultCommand === 'none') return null
-
-    const builtin = COMMANDS.find((c) => c.name === defaultCommand)
-    if (builtin && !hiddenCommands.has(builtin.name)) {
-      const shortcut = shortcutFor(builtin.name)
-      return {
-        key: `__default_${builtin.name}`,
-        label: `⭐ /${builtin.name}`,
-        sublabel: `Default command · ${shortcut ? `${builtin.description} · /${shortcut}` : builtin.description}`,
-        onSelect: (elevated = false) => {
-          if (builtin.name === 'term') {
-            window.api.executeCommand('term', { label: 'term', value: 'term' }, '', elevated).then(handleExecuteResult)
-          } else if (builtin.name === 'settings') {
-            setValue('/settings')
-            inputRef.current?.focus()
-          } else {
-            setValue(`/${builtin.name} `)
-            inputRef.current?.focus()
-          }
-        }
-      }
-    }
-
-    const custom = customCommands.find((c) => c.command === defaultCommand)
-    if (custom) {
-      const detail = custom.folder !== undefined ? `Browse ${custom.folder}` : (custom.action ?? '')
-      return {
-        key: `__default_custom_${custom.command}`,
-        label: `⭐ /${custom.command}`,
-        sublabel: `Default command · ${custom.label ? `${custom.label} — ${detail}` : detail}`,
-        onSelect: () => {
-          setValue(`/${custom.command} `)
-          inputRef.current?.focus()
-        }
-      }
-    }
-
-    return null
-  }, [defaultCommand, hiddenCommands, shortcutFor, customCommands, windowMode])
-
-  const formatCommandList = useCallback((): ListItem[] => {
-    // 1. Inside a subfolder:
-    if (activeFolder) {
-      const items: ListItem[] = [
-        {
-          key: '__back',
-          label: '← Back to all commands',
-          sublabel: 'Return to root commands',
-          onSelect: () => setValue('/')
-        }
-      ]
-      for (const cmdName of activeFolder.commands) {
-        if (hiddenCommands.has(cmdName as CommandName)) continue
-        if (folderSubQuery && !cmdName.toLowerCase().startsWith(folderSubQuery)) continue
-
-        const builtin = COMMANDS.find((c) => c.name === cmdName)
-        if (builtin) {
-          const shortcut = shortcutFor(builtin.name)
-          items.push({
-            key: builtin.name,
-            label: `/${builtin.name}`,
-            sublabel: shortcut ? `${builtin.description} · /${shortcut}` : builtin.description,
-            onSelect: () => setValue(`/${builtin.name} `)
-          })
-          continue
-        }
-
-        const custom = customCommands.find((c) => c.command === cmdName)
-        if (custom) {
-          const detail = custom.folder !== undefined ? `Browse ${custom.folder}` : (custom.action ?? '')
-          items.push({
-            key: `custom-${custom.command}`,
-            label: `/${custom.command}`,
-            sublabel: custom.label ? `${custom.label} — ${detail}` : detail,
-            onSelect: () => setValue(`/${custom.command} `)
-          })
-        }
-      }
-      return items
-    }
-
-    // 2. Root level with NO search filter typed (just "/" or empty if history disabled):
-    if (value === '/' || value === '') {
-      const items: ListItem[] = []
-      const seen = new Set<string>()
-
-      const defaultItem = getDefaultCommandItem()
-      if (defaultItem) {
-        items.push(defaultItem)
-        if (defaultCommand) seen.add(defaultCommand)
-      }
-
-      for (const item of layout.rootOrder) {
-        const folder = layout.folders.find((f) => f.id === item || f.name.toLowerCase() === item.toLowerCase())
-        if (folder) {
-          if (seen.has(folder.id)) continue
-          seen.add(folder.id)
-          const visibleCmds = folder.commands.filter((c) => !hiddenCommands.has(c as CommandName))
-          if (visibleCmds.length > 0) {
-            items.push({
-              key: folder.id,
-              label: `${folder.icon ?? '📁'} ${folder.name}/`,
-              sublabel: `${visibleCmds.length} commands${folder.description ? ' · ' + folder.description : ''} · ${visibleCmds.slice(0, 4).map((c) => '/' + c).join(', ')}${visibleCmds.length > 4 ? '...' : ''}`,
-              onSelect: () => setValue(`/${folder.name}/`)
-            })
-          }
-          continue
-        }
-
-        if (seen.has(item)) continue
-        seen.add(item)
-
-        const builtin = COMMANDS.find((c) => c.name === item)
-        if (builtin && !hiddenCommands.has(builtin.name)) {
-          const shortcut = shortcutFor(builtin.name)
-          items.push({
-            key: builtin.name,
-            label: `/${builtin.name}`,
-            sublabel: shortcut ? `${builtin.description} · /${shortcut}` : builtin.description,
-            onSelect: () => setValue(`/${builtin.name} `)
-          })
-          continue
-        }
-
-        const custom = customCommands.find((c) => c.command === item)
-        if (custom) {
-          const detail = custom.folder !== undefined ? `Browse ${custom.folder}` : (custom.action ?? '')
-          items.push({
-            key: `custom-${custom.command}`,
-            label: `/${custom.command}`,
-            sublabel: custom.label ? `${custom.label} — ${detail}` : detail,
-            onSelect: () => setValue(`/${custom.command} `)
-          })
-        }
-      }
-
-      // Any remaining built-in or custom commands not in rootOrder or any folder:
-      const assignedCommands = new Set<string>()
-      layout.folders.forEach((f) => f.commands.forEach((c) => assignedCommands.add(c)))
-
-      for (const builtin of COMMANDS) {
-        if (!seen.has(builtin.name) && !assignedCommands.has(builtin.name) && !hiddenCommands.has(builtin.name)) {
-          const shortcut = shortcutFor(builtin.name)
-          items.push({
-            key: builtin.name,
-            label: `/${builtin.name}`,
-            sublabel: shortcut ? `${builtin.description} · /${shortcut}` : builtin.description,
-            onSelect: () => setValue(`/${builtin.name} `)
-          })
-        }
-      }
-
-      for (const custom of customCommands) {
-        if (!seen.has(custom.command) && !assignedCommands.has(custom.command)) {
-          const detail = custom.folder !== undefined ? `Browse ${custom.folder}` : (custom.action ?? '')
-          items.push({
-            key: `custom-${custom.command}`,
-            label: `/${custom.command}`,
-            sublabel: custom.label ? `${custom.label} — ${detail}` : detail,
-            onSelect: () => setValue(`/${custom.command} `)
-          })
-        }
-      }
-
-      return items
-    }
-
-    // 3. User typed search filter e.g. "/g" or "/git" or "/calc":
-    const needle = value.slice(1).toLowerCase()
-    const items: ListItem[] = []
-
-    // Match folders
-    for (const folder of layout.folders) {
-      if (folder.name.toLowerCase().includes(needle)) {
-        const visibleCmds = folder.commands.filter((c) => !hiddenCommands.has(c as CommandName))
-        items.push({
-          key: folder.id,
-          label: `${folder.icon ?? '📁'} ${folder.name}/`,
-          sublabel: `Folder (${visibleCmds.length} commands) · Press Enter or Tab to browse`,
-          onSelect: () => setValue(`/${folder.name}/`)
-        })
-      }
-    }
-
-    // Match all visible commands across all folders and root
-    const visibleBuiltins = COMMANDS.filter((c) => !hiddenCommands.has(c.name))
-    const matchingBuiltins = visibleBuiltins.filter((b) => b.name.toLowerCase().startsWith(needle))
-    if (defaultCommand) {
-      matchingBuiltins.sort((a, b) => {
-        if (a.name === defaultCommand) return -1
-        if (b.name === defaultCommand) return 1
-        return 0
-      })
-    }
-    for (const builtin of matchingBuiltins) {
-      const parentFolder = layout.folders.find((f) => f.commands.includes(builtin.name))
-      const shortcut = shortcutFor(builtin.name)
-      const desc = shortcut ? `${builtin.description} · /${shortcut}` : builtin.description
-      const isDef = builtin.name === defaultCommand
-      items.push({
-        key: builtin.name,
-        label: isDef ? `⭐ /${builtin.name}` : `/${builtin.name}`,
-        sublabel: isDef ? `Default command · ${desc}` : parentFolder ? `${parentFolder.name} · ${desc}` : desc,
-        onSelect: () => setValue(`/${builtin.name} `)
-      })
-    }
-
-    const matchingCustom = customCommands.filter((c) => c.command.toLowerCase().startsWith(needle))
-    if (defaultCommand) {
-      matchingCustom.sort((a, b) => {
-        if (a.command === defaultCommand) return -1
-        if (b.command === defaultCommand) return 1
-        return 0
-      })
-    }
-    for (const custom of matchingCustom) {
-      const parentFolder = layout.folders.find((f) => f.commands.includes(custom.command))
-      const detail = custom.folder !== undefined ? `Browse ${custom.folder}` : (custom.action ?? '')
-      const desc = custom.label ? `${custom.label} — ${detail}` : detail
-      const isDef = custom.command === defaultCommand
-      items.push({
-        key: `custom-${custom.command}`,
-        label: isDef ? `⭐ /${custom.command}` : `/${custom.command}`,
-        sublabel: isDef ? `Default command · ${desc}` : parentFolder ? `${parentFolder.name} · ${desc}` : desc,
-        onSelect: () => setValue(`/${custom.command} `)
-      })
-    }
-
-    return items
-  }, [value, activeFolder, folderSubQuery, layout, hiddenCommands, defaultCommand, shortcutFor, customCommands, getDefaultCommandItem])
-
   const runCommand = useCallback((cmd: CommandName, item: SearchResultItem, elevated = false): void => {
     if (item.value && !item.value.startsWith('__')) {
       navigator.clipboard?.writeText(item.value).catch(() => {})
@@ -1120,19 +950,258 @@ export default function CommandPalette(): JSX.Element {
     window.api.executeCommand(h.command, { label: h.label, value: h.value }, h.query, elevated).then(handleExecuteResult)
   }, [])
 
+  const formatCommandList = useCallback((): ListItem[] => {
+    const selectBuiltin = (name: CommandName, elevated = false) => {
+      if (name === 'term') {
+        window.api.executeCommand('term', { label: 'term', value: 'term' }, '', elevated).then(handleExecuteResult)
+      } else if (name === 'repo') {
+        setActiveModuleView('git')
+      } else if (name === 'settings') {
+        setValue('/settings')
+        inputRef.current?.focus()
+      } else if (name === 'notifications') {
+        if (windowMode === 'bar') {
+          window.api.barDeactivate()
+        } else {
+          window.api.hidePalette()
+        }
+        window.api.notifyOpen?.() ?? window.api.notifyToggle()
+      } else if (name === 'timer') {
+        setActiveModuleView('focus')
+      } else if (name === 'show' || name === 'hide') {
+        runCommand(name, { label: name === 'show' ? 'Show command dock' : 'Hide command dock', value: name })
+      } else {
+        setValue(`/${name} `)
+        inputRef.current?.focus()
+      }
+    }
+
+    const buildCommandCard = (cmdName: string, sectionName: string, sectionIcon: string, isDef = false): ListItem | null => {
+      if (hiddenCommands.has(cmdName as CommandName)) return null
+      const builtin = COMMANDS.find((c) => c.name === cmdName)
+      if (builtin) {
+        const shortcut = shortcutFor(builtin.name)
+        return {
+          key: isDef ? `__default_${builtin.name}` : builtin.name,
+          label: `/${builtin.name}`,
+          sublabel: builtin.description,
+          badge: isDef ? (shortcut ? `★ · /${shortcut}` : '★ Default') : shortcut ? `/${shortcut}` : undefined,
+          section: sectionName,
+          sectionIcon,
+          onSelect: (elevated = false) => selectBuiltin(builtin.name, elevated)
+        }
+      }
+      const custom = customCommands.find((c) => c.command === cmdName)
+      if (custom) {
+        const detail = custom.folder !== undefined ? `Browse ${custom.folder}` : (custom.action ?? '')
+        return {
+          key: isDef ? `__default_custom_${custom.command}` : `custom-${custom.command}`,
+          label: `/${custom.command}`,
+          sublabel: custom.label ? `${custom.label} — ${detail}` : detail,
+          badge: isDef ? '★ Default' : 'Custom',
+          section: sectionName,
+          sectionIcon,
+          onSelect: () => {
+            setValue(`/${custom.command} `)
+            inputRef.current?.focus()
+          }
+        }
+      }
+      return null
+    }
+
+    // 1. Inside a subfolder (e.g. if user explicitly typed "/Developer/"):
+    if (activeFolder) {
+      const items: ListItem[] = [
+        {
+          key: '__back',
+          label: '← All Commands',
+          sublabel: 'Return to full categorized grid',
+          section: activeFolder.name,
+          sectionIcon: activeFolder.icon ?? '📁',
+          onSelect: () => setValue('/')
+        }
+      ]
+      for (const cmdName of activeFolder.commands) {
+        if (folderSubQuery && !cmdName.toLowerCase().includes(folderSubQuery)) continue
+        const card = buildCommandCard(cmdName, activeFolder.name, activeFolder.icon ?? '📁')
+        if (card) items.push(card)
+      }
+      return items
+    }
+
+    // 2. Root level with NO search filter typed (just "/" or empty):
+    // Expand all folders into categorized grid sections so every option is visible at once!
+    if (value === '/' || value === '') {
+      const items: ListItem[] = []
+      const seen = new Set<string>()
+
+      if (defaultCommand && defaultCommand !== 'none') {
+        const defaultItem = buildCommandCard(defaultCommand, 'Pinned & Quick Launch', '✨', true)
+        if (defaultItem) {
+          items.push(defaultItem)
+          seen.add(defaultCommand)
+        }
+      }
+
+      // Collect root-level non-folder commands first under "Quick Launch"
+      for (const item of layout.rootOrder) {
+        const isFolder = layout.folders.some((f) => f.id === item || f.name.toLowerCase() === item.toLowerCase())
+        if (isFolder || seen.has(item)) continue
+        const card = buildCommandCard(item, 'Pinned & Quick Launch', '✨')
+        if (card) {
+          seen.add(item)
+          items.push(card)
+        }
+      }
+
+      // Expand each folder in rootOrder into its own categorized section
+      for (const item of layout.rootOrder) {
+        const folder = layout.folders.find((f) => f.id === item || f.name.toLowerCase() === item.toLowerCase())
+        if (!folder || seen.has(folder.id)) continue
+        seen.add(folder.id)
+        for (const cmdName of folder.commands) {
+          if (seen.has(cmdName)) continue
+          const card = buildCommandCard(cmdName, folder.name, folder.icon ?? '📁')
+          if (card) {
+            seen.add(cmdName)
+            items.push(card)
+          }
+        }
+      }
+
+      // Any remaining folders not listed in rootOrder
+      for (const folder of layout.folders) {
+        if (seen.has(folder.id)) continue
+        seen.add(folder.id)
+        for (const cmdName of folder.commands) {
+          if (seen.has(cmdName)) continue
+          const card = buildCommandCard(cmdName, folder.name, folder.icon ?? '📁')
+          if (card) {
+            seen.add(cmdName)
+            items.push(card)
+          }
+        }
+      }
+
+      // Any remaining built-in or custom commands not in any folder:
+      for (const builtin of COMMANDS) {
+        if (!seen.has(builtin.name) && !hiddenCommands.has(builtin.name)) {
+          const card = buildCommandCard(builtin.name, 'Other Commands', '🧩')
+          if (card) {
+            seen.add(builtin.name)
+            items.push(card)
+          }
+        }
+      }
+
+      for (const custom of customCommands) {
+        if (!seen.has(custom.command)) {
+          const card = buildCommandCard(custom.command, 'Custom Commands', '⚡')
+          if (card) {
+            seen.add(custom.command)
+            items.push(card)
+          }
+        }
+      }
+
+      return items
+    }
+
+    // 3. User typed search filter e.g. "/g" or "/git" or "/calc":
+    const needle = value.slice(1).toLowerCase()
+    const items: ListItem[] = []
+    const seen = new Set<string>()
+
+    // Match all visible commands across all folders and root (startsWith prioritized first, then includes)
+    const visibleBuiltins = COMMANDS.filter((c) => !hiddenCommands.has(c.name))
+    const matchingBuiltins = visibleBuiltins.filter((b) => {
+      const parentFolder = layout.folders.find((f) => f.commands.includes(b.name))
+      return (
+        b.name.toLowerCase().includes(needle) ||
+        b.description.toLowerCase().includes(needle) ||
+        (parentFolder && parentFolder.name.toLowerCase().includes(needle))
+      )
+    })
+    matchingBuiltins.sort((a, b) => {
+      if (defaultCommand) {
+        if (a.name === defaultCommand) return -1
+        if (b.name === defaultCommand) return 1
+      }
+      const aStarts = a.name.toLowerCase().startsWith(needle)
+      const bStarts = b.name.toLowerCase().startsWith(needle)
+      if (aStarts && !bStarts) return -1
+      if (!aStarts && bStarts) return 1
+      return 0
+    })
+
+    for (const builtin of matchingBuiltins) {
+      if (seen.has(builtin.name)) continue
+      seen.add(builtin.name)
+      const parentFolder = layout.folders.find((f) => f.commands.includes(builtin.name))
+      const isDef = builtin.name === defaultCommand
+      const card = buildCommandCard(
+        builtin.name,
+        parentFolder ? parentFolder.name : 'Quick Launch',
+        parentFolder?.icon ?? '✨',
+        isDef
+      )
+      if (card) items.push(card)
+    }
+
+    const matchingCustom = customCommands.filter((c) => {
+      const parentFolder = layout.folders.find((f) => f.commands.includes(c.command))
+      return (
+        c.command.toLowerCase().includes(needle) ||
+        (c.label && c.label.toLowerCase().includes(needle)) ||
+        (parentFolder && parentFolder.name.toLowerCase().includes(needle))
+      )
+    })
+    matchingCustom.sort((a, b) => {
+      if (defaultCommand) {
+        if (a.command === defaultCommand) return -1
+        if (b.command === defaultCommand) return 1
+      }
+      const aStarts = a.command.toLowerCase().startsWith(needle)
+      const bStarts = b.command.toLowerCase().startsWith(needle)
+      if (aStarts && !bStarts) return -1
+      if (!aStarts && bStarts) return 1
+      return 0
+    })
+
+    for (const custom of matchingCustom) {
+      if (seen.has(custom.command)) continue
+      seen.add(custom.command)
+      const parentFolder = layout.folders.find((f) => f.commands.includes(custom.command))
+      const isDef = custom.command === defaultCommand
+      const card = buildCommandCard(
+        custom.command,
+        parentFolder ? parentFolder.name : 'Custom Commands',
+        parentFolder?.icon ?? '⚡',
+        isDef
+      )
+      if (card) items.push(card)
+    }
+
+    return items
+  }, [value, activeFolder, folderSubQuery, layout, hiddenCommands, defaultCommand, shortcutFor, customCommands, runCommand])
+
   const items: ListItem[] = useMemo(() => {
     if (value === '') {
-      const defaultItem = getDefaultCommandItem()
-      if (historyEnabled) {
-        const historyItems = history.map((h) => ({
+      const allCommandCards = formatCommandList()
+      if (historyEnabled && history.length > 0) {
+        const historyItems: ListItem[] = history.map((h) => ({
           key: `history-${h.timestamp}`,
           label: h.label,
-          sublabel: `/${h.command} ${h.query}`,
+          sublabel: `/${h.command}${h.query ? ' ' + h.query : ''}`,
+          badge: `/${h.command}`,
+          section: 'Recent History',
+          sectionIcon: '🕒',
           onSelect: (elevated = false) => runFromHistory(h, elevated)
         }))
-        return defaultItem ? [defaultItem, ...historyItems] : historyItems
+        return [...historyItems, ...allCommandCards]
       }
-      return formatCommandList()
+      return allCommandCards
     }
     if (showingCommandList) {
       return formatCommandList()
@@ -1141,10 +1210,16 @@ export default function CommandPalette(): JSX.Element {
       return []
     }
     if (command) {
+      const cmdDef = COMMANDS.find((c) => c.name === command)
+      const sectionLabel = cmdDef ? `/${cmdDef.name} — ${cmdDef.description}` : `/${command}`
+      const sectionIcon = getIconForCommand(command)
       return results.map((r) => ({
         key: `${r.value}|${r.label}`,
         label: r.label,
         sublabel: r.sublabel,
+        badge: r.completion ? 'Tab' : undefined,
+        section: sectionLabel,
+        sectionIcon,
         completion: r.completion,
         onSelect: (elevated = false) => {
           if (r.disabled) return
@@ -1183,11 +1258,20 @@ export default function CommandPalette(): JSX.Element {
             setSettingsTarget(target)
             return
           }
-          if (command === 'focus') {
+          if (command === 'timer') {
             setActiveModuleView('focus')
             return
           }
-          if (command === 'git') {
+          if (command === 'notifications') {
+            if (windowMode === 'bar') {
+              window.api.barDeactivate()
+            } else {
+              window.api.hidePalette()
+            }
+            window.api.notifyOpen?.() ?? window.api.notifyToggle()
+            return
+          }
+          if (command === 'repo') {
             setActiveModuleView('git')
             return
           }
@@ -1218,8 +1302,7 @@ export default function CommandPalette(): JSX.Element {
     results,
     query,
     runCommand,
-    windowMode,
-    getDefaultCommandItem
+    windowMode
   ])
 
   // Tab only ever does one of two things — fill in a result's completion, or drill into a
@@ -1228,10 +1311,39 @@ export default function CommandPalette(): JSX.Element {
   const activeItem = items[activeIndex]
   const isHistoryActive = activeItem?.key.startsWith('history-')
   const tabHintLabel =
-    activeItem?.completion !== undefined ? 'Complete' : showingCommandList && activeItem ? 'Select' : null
+    activeItem?.completion !== undefined
+      ? 'Complete'
+      : showingCommandList && activeItem
+        ? 'Select'
+        : value === '' && activeItem
+          ? activeItem.key.startsWith('history-') || activeItem.key.startsWith('__default_')
+            ? 'Edit'
+            : 'Select'
+          : null
 
   const placeholderText = useMemo(() => {
     if (value !== '') return 'Type / for commands, // to manage config...'
+
+    if (activeItem) {
+      if (activeItem.key.startsWith('__default_')) {
+        const cleanCmd = activeItem.label.replace(/^⭐\s*/, '')
+        return `↵ Run ${cleanCmd} · ${activeItem.sublabel ?? 'Default command'}`
+      }
+      if (activeItem.key.startsWith('history-')) {
+        const queryDisplay = activeItem.sublabel?.startsWith('/')
+          ? activeItem.sublabel
+          : `/${activeItem.sublabel || activeItem.label}`
+        return `↵ Run ${queryDisplay}`
+      }
+      if (activeItem.key.startsWith('folder') || activeItem.label.endsWith('/')) {
+        return `↵ Open ${activeItem.label} · Press Enter to browse folder`
+      }
+      if (activeItem.sublabel) {
+        return `↵ Run ${activeItem.label} · ${activeItem.sublabel}`
+      }
+      return `↵ ${activeItem.label}`
+    }
+
     if (defaultCommand && defaultCommand !== 'none') {
       const defBuiltin = COMMANDS.find((c) => c.name === defaultCommand)
       if (defBuiltin) {
@@ -1244,9 +1356,134 @@ export default function CommandPalette(): JSX.Element {
       return `Run /${defaultCommand}, or type / for commands...`
     }
     return 'Type to search, / for commands, // to manage config...'
-  }, [value, defaultCommand, customCommands])
+  }, [value, activeItem, defaultCommand, customCommands])
+
+  const activeActionHint = useMemo(() => {
+    if (value === '' || !activeItem) return null
+    if (activeItem.key.startsWith('folder') || activeItem.label.endsWith('/')) {
+      return `↵ Open ${activeItem.label}`
+    }
+    if (activeItem.completion) {
+      return `Tab ${activeItem.completion}`
+    }
+    if (activeItem.key.startsWith('__default_') || activeItem.label.startsWith('/')) {
+      return `↵ ${activeItem.label.replace(/^⭐\s*/, '')}`
+    }
+    if (command === 'custom' || command === 'term') {
+      return '↵ Run'
+    }
+    return `↵ ${activeItem.label}`
+  }, [value, activeItem, command])
+
+  const groupedSections = useMemo(() => {
+    const groups: Array<{
+      name: string
+      icon?: string
+      items: Array<{ item: ListItem; flatIndex: number }>
+    }> = []
+    items.forEach((item, flatIndex) => {
+      const secName = item.section || 'Options'
+      let group = groups.find((g) => g.name === secName)
+      if (!group) {
+        group = { name: secName, icon: item.sectionIcon, items: [] }
+        groups.push(group)
+      }
+      group.items.push({ item, flatIndex })
+    })
+    return groups
+  }, [items])
+
+  const navigateGridVertical = useCallback(
+    (dir: 1 | -1) => {
+      if (items.length === 0) return
+      const container = gridContainerRef.current
+      if (!container) {
+        setActiveIndex((i) => (i + dir + items.length) % items.length)
+        return
+      }
+      const cardEls = Array.from(container.querySelectorAll<HTMLElement>('[data-card-index]'))
+      const currentEl = cardEls.find((el) => Number(el.dataset.cardIndex) === activeIndex)
+      if (!currentEl) {
+        setActiveIndex((i) => (i + dir + items.length) % items.length)
+        return
+      }
+      const curRect = currentEl.getBoundingClientRect()
+      const curCenterX = curRect.left + curRect.width / 2
+      const curCenterY = curRect.top + curRect.height / 2
+
+      const candidates = cardEls
+        .map((el) => {
+          const r = el.getBoundingClientRect()
+          const cx = r.left + r.width / 2
+          const cy = r.top + r.height / 2
+          const dy = cy - curCenterY
+          return {
+            idx: Number(el.dataset.cardIndex),
+            cx,
+            cy,
+            dy,
+            dx: Math.abs(cx - curCenterX)
+          }
+        })
+        .filter((c) => (dir === 1 ? c.dy > 20 : c.dy < -20))
+
+      if (candidates.length === 0) {
+        // Wrap around to top/bottom row in the closest column
+        const allWithRect = cardEls.map((el) => {
+          const r = el.getBoundingClientRect()
+          return {
+            idx: Number(el.dataset.cardIndex),
+            cy: r.top + r.height / 2,
+            dx: Math.abs(r.left + r.width / 2 - curCenterX)
+          }
+        })
+        if (allWithRect.length === 0) return
+        const extremeY =
+          dir === 1
+            ? Math.min(...allWithRect.map((c) => c.cy))
+            : Math.max(...allWithRect.map((c) => c.cy))
+        const targetRow = allWithRect.filter((c) => Math.abs(c.cy - extremeY) < 28)
+        targetRow.sort((a, b) => a.dx - b.dx)
+        if (targetRow[0]) setActiveIndex(targetRow[0].idx)
+        return
+      }
+
+      const nearestRowY =
+        dir === 1
+          ? Math.min(...candidates.map((c) => c.cy))
+          : Math.max(...candidates.map((c) => c.cy))
+      const rowCandidates = candidates.filter((c) => Math.abs(c.cy - nearestRowY) < 28)
+      rowCandidates.sort((a, b) => a.dx - b.dx)
+      if (rowCandidates[0]) {
+        setActiveIndex(rowCandidates[0].idx)
+      }
+    },
+    [items.length, activeIndex]
+  )
 
   function handleKeyDown(e: React.KeyboardEvent): void {
+    if (
+      command === 'key' &&
+      !['Escape', 'Enter', 'ArrowDown', 'ArrowUp', 'ArrowLeft', 'ArrowRight', 'Tab'].includes(e.key)
+    ) {
+      if (!(e.key === 'Backspace' && value === '/key')) {
+        if (e.ctrlKey || e.altKey || e.metaKey || e.key.length > 1) {
+          const mods: string[] = []
+          if (e.ctrlKey) mods.push('Ctrl')
+          if (e.altKey) mods.push('Alt')
+          if (e.shiftKey) mods.push('Shift')
+          if (e.metaKey) mods.push('Super')
+          const keyName = ['Control', 'Alt', 'Shift', 'Meta'].includes(e.key) ? '' : e.key
+          const combo = [...mods, keyName].filter(Boolean).join('+')
+          if (combo) {
+            e.preventDefault()
+            setValue(`/key ${combo}`)
+            return
+          }
+        }
+      }
+    }
+
     if ((e.key === 'Delete' && e.shiftKey) || (e.key === 'Backspace' && e.altKey)) {
       const item = items[activeIndex]
       if (item && item.key.startsWith('history-')) {
@@ -1259,19 +1496,76 @@ export default function CommandPalette(): JSX.Element {
       }
     }
     if (e.key === 'Backspace') {
-      const match = value.match(/^\/([^/\s]+)\/$/)
-      if (match) {
-        e.preventDefault()
-        setValue('/')
-        return
+      const input = inputRef.current
+      const selStart = input?.selectionStart ?? value.length
+      const selEnd = input?.selectionEnd ?? value.length
+
+      // Only perform whole-word deletion if there is no text range selected
+      if (selStart === selEnd) {
+        const textBefore = value.slice(0, selStart)
+        const textAfter = value.slice(selStart)
+
+        // 1. Folder drilldown in command palette e.g. "/gif funny/" -> back to "/gif "
+        const folderDrillMatch = textBefore.match(/^(\/.+\s+)([^/\s]+)\/$/)
+        if (folderDrillMatch && (!textAfter || textAfter.length === 0)) {
+          e.preventDefault()
+          setValue(folderDrillMatch[1])
+          return
+        }
+        // Root folder e.g. "/tools/" -> back to "/"
+        const rootFolderMatch = textBefore.match(/^\/([^/\s]+)\/$/)
+        if (rootFolderMatch && (!textAfter || textAfter.length === 0)) {
+          e.preventDefault()
+          setValue('/')
+          return
+        }
+
+        // 2. Full command name matched (e.g. "/calc", "/calc ", "/tools/calc", "calc ", etc.)
+        const cmdMatch = textBefore.match(/^((?:\/)?(?:[^/\s]+\/)*)([^\s/]+)(\s?)$/)
+        if (cmdMatch) {
+          const prefix = cmdMatch[1] // e.g. "/" or "/tools/" or ""
+          const cmdName = cmdMatch[2]
+          const space = cmdMatch[3]
+
+          if (isKnownCommandName(cmdName)) {
+            e.preventDefault()
+            const nextAfter = textAfter.startsWith(' ') && space ? textAfter.slice(1) : textAfter
+            const newValue = prefix + nextAfter
+            setValue(newValue)
+            requestAnimationFrame(() => {
+              if (inputRef.current) {
+                inputRef.current.setSelectionRange(prefix.length, prefix.length)
+              }
+            })
+            return
+          }
+        }
       }
     }
     if (e.key === 'ArrowDown') {
       e.preventDefault()
-      setActiveIndex((i) => (items.length > 0 ? (i + 1) % items.length : 0))
+      setIgnoreMouse(true)
+      navigateGridVertical(1)
     } else if (e.key === 'ArrowUp') {
       e.preventDefault()
-      setActiveIndex((i) => (items.length > 0 ? (i - 1 + items.length) % items.length : 0))
+      setIgnoreMouse(true)
+      navigateGridVertical(-1)
+    } else if (e.key === 'ArrowRight') {
+      const input = inputRef.current
+      const atEnd = !input || (input.selectionStart === value.length && input.selectionEnd === value.length)
+      if (atEnd && items.length > 0) {
+        e.preventDefault()
+        setIgnoreMouse(true)
+        setActiveIndex((i) => (i + 1) % items.length)
+      }
+    } else if (e.key === 'ArrowLeft') {
+      const input = inputRef.current
+      const atEnd = !input || (input.selectionStart === value.length && input.selectionEnd === value.length)
+      if (atEnd && items.length > 0) {
+        e.preventDefault()
+        setIgnoreMouse(true)
+        setActiveIndex((i) => (i - 1 + items.length) % items.length)
+      }
     } else if (e.key === 'Enter') {
       e.preventDefault()
       const isElevated = e.ctrlKey || e.metaKey
@@ -1291,12 +1585,19 @@ export default function CommandPalette(): JSX.Element {
         item.onSelect(isElevated)
       } else if (command === 'settings') {
         setSettingsTarget('types')
-      } else if (command === 'focus') {
+      } else if (command === 'timer') {
         setActiveModuleView('focus')
-      } else if (command === 'git') {
+      } else if (command === 'repo') {
         setActiveModuleView('git')
       } else if (command === 'profile') {
         setActiveModuleView('profile')
+      } else if (command === 'notifications') {
+        if (windowMode === 'bar') {
+          window.api.barDeactivate()
+        } else {
+          window.api.hidePalette()
+        }
+        window.api.notifyOpen?.() ?? window.api.notifyToggle()
       }
     } else if (e.key === 'Tab') {
       const item = items[activeIndex]
@@ -1306,6 +1607,16 @@ export default function CommandPalette(): JSX.Element {
       } else if (showingCommandList && item) {
         e.preventDefault()
         item.onSelect()
+      } else if (value === '' && item) {
+        e.preventDefault()
+        if (item.key.startsWith('history-') && item.sublabel?.startsWith('/')) {
+          setValue(item.sublabel + ' ')
+        } else if (item.key.startsWith('__default_')) {
+          const cleanCmd = item.label.replace(/^⭐\s*\//, '').replace(/^\//, '')
+          setValue(`/${cleanCmd} `)
+        } else {
+          item.onSelect()
+        }
       }
     }
   }
@@ -1519,6 +1830,12 @@ export default function CommandPalette(): JSX.Element {
       }
 
       if (shelfCollapsed) {
+        const focusRemaining = focusState?.remainingSeconds ?? 0
+        const focusMinutes = Math.floor(focusRemaining / 60)
+        const focusSeconds = focusRemaining % 60
+        const formattedFocusClock = `${focusMinutes}:${focusSeconds.toString().padStart(2, '0')}`
+        const isTimerActive = Boolean(focusState && (focusState.running || focusState.paused))
+
         return (
           <div
             className={`dock-shelf-container ${summonPulse ? 'summon-pulse' : ''} ${dockFading ? 'dock-fading' : ''}`}
@@ -1530,26 +1847,39 @@ export default function CommandPalette(): JSX.Element {
               } as React.CSSProperties
             }
           >
-            <button
-              type="button"
-              className={`dock-shelf-glow-bar glow-${dockGlowStyle}`}
-              title="Click to expand · Double-click to search · Right-click for menu"
-              onClick={() => setShelfCollapsed(false)}
-              onDoubleClick={(e) => {
-                e.stopPropagation()
-                setShelfCollapsed(false)
-                if (windowMode === 'bar') {
-                  window.api.barActivate()
-                } else {
-                  window.api.hidePalette()
-                }
-              }}
-              onContextMenu={(e) => {
-                e.preventDefault()
-                e.stopPropagation()
-                window.api.showDockContextMenu?.()
-              }}
-            />
+            <div className="dock-shelf-collapsed-wrap">
+              {isTimerActive && (
+                <button
+                  type="button"
+                  className={`shelf-focus-countdown-clock is-collapsed-pill ${focusState?.paused ? 'is-paused' : ''}`}
+                  title={`Focus timer: ${formattedFocusClock} (${focusState?.paused ? 'Paused' : 'Running'}) — Click to expand`}
+                  onClick={() => setShelfCollapsed(false)}
+                >
+                  <span className="countdown-pulse-dot" />
+                  <span className="countdown-time-digits">{formattedFocusClock}</span>
+                </button>
+              )}
+              <button
+                type="button"
+                className={`dock-shelf-glow-bar glow-${dockGlowStyle}`}
+                title="Click to expand · Double-click to search · Right-click for menu"
+                onClick={() => setShelfCollapsed(false)}
+                onDoubleClick={(e) => {
+                  e.stopPropagation()
+                  setShelfCollapsed(false)
+                  if (windowMode === 'bar') {
+                    window.api.barActivate()
+                  } else {
+                    window.api.hidePalette()
+                  }
+                }}
+                onContextMenu={(e) => {
+                  e.preventDefault()
+                  e.stopPropagation()
+                  window.api.showDockContextMenu?.()
+                }}
+              />
+            </div>
           </div>
         )
       }
@@ -1559,6 +1889,7 @@ export default function CommandPalette(): JSX.Element {
           className={`dock-shelf-container ${summonPulse ? 'summon-pulse' : ''} ${dockFading ? 'dock-fading' : ''}`}
           style={
             {
+              ...(dockGlowColor ? { '--dock-glow-color': dockGlowColor } : {}),
               ...(summonColor ? { '--summon-color': summonColor } : {}),
               ...(summonGlow ? { '--summon-glow-color': summonGlow } : {})
             } as React.CSSProperties
@@ -1580,11 +1911,280 @@ export default function CommandPalette(): JSX.Element {
       )
     }
 
+    if (dockLayout === 'circle') {
+      const orbitModuleList: ShelfModuleId[] = [
+        'bar',
+        ...shelfIcons.filter((id) => id !== 'bar')
+      ]
+      const count = orbitModuleList.length
+      const orbitRadius = 48
+      const centerCoord = 75
+
+      const focusRemaining = focusState?.remainingSeconds ?? 0
+      const focusMinutes = Math.floor(focusRemaining / 60)
+      const focusSeconds = focusRemaining % 60
+      const formattedFocusClock = `${focusMinutes}:${focusSeconds.toString().padStart(2, '0')}`
+      const isTimerActive = Boolean(focusState && (focusState.running || focusState.paused))
+      const isOrbiting = isDockAtHome && isOrbitIdle && !shelfPaletteActive && !barActive
+
+      const renderOrbitSatellite = (moduleId: ShelfModuleId, idx: number): JSX.Element | null => {
+        const angle = -Math.PI / 2 + (idx * 2 * Math.PI) / count
+        const sx = Math.round(centerCoord + orbitRadius * Math.cos(angle))
+        const sy = Math.round(centerCoord + orbitRadius * Math.sin(angle))
+        const isBar = moduleId === 'bar'
+        const btnSize = isBar ? 36 : 32
+
+        let iconContent: JSX.Element
+        let title: string
+        let isModuleActive = false
+        let hasUnread = false
+        let badgeContent: React.ReactNode = null
+        let onClick: () => void
+
+        switch (moduleId) {
+          case 'bar':
+            title = paletteHotkey ? `Command Palette [/] (${paletteHotkey})` : 'Command Palette [/]'
+            isModuleActive = shelfPaletteActive && activeShelfModule === 'bar'
+            iconContent = <span style={{ fontSize: 16, fontWeight: 800, color: !isModuleActive ? (dockGlowColor || undefined) : undefined }}>/</span>
+            onClick = () => window.api.barActivate('bar')
+            break
+          case 'term':
+            title = 'PowerShell Terminal [>_]'
+            hasUnread = termUnread
+            if (termUnread) {
+              badgeContent = <span className="circle-orbit-badge" style={{ background: '#38bdf8' }}>•</span>
+            }
+            iconContent = <span style={{ fontSize: 12, fontWeight: 800, fontFamily: 'monospace' }}>&gt;_</span>
+            onClick = () => window.api.termToggle()
+            break
+          case 'notify':
+            title = notifyCount > 0 ? `Notification Center [🔔] (${notifyCount} unread)` : 'Notification Center [🔔]'
+            if (notifyCount > 0) {
+              badgeContent = (
+                <span className="circle-orbit-badge">
+                  {notifyCount > 9 ? '9+' : notifyCount}
+                </span>
+              )
+            }
+            iconContent = (
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" />
+                <path d="M13.73 21a2 2 0 0 1-3.46 0" />
+              </svg>
+            )
+            onClick = () => window.api.notifyToggle()
+            break
+          case 'git':
+            title = gitStatus?.isRepo && gitStatus.branch ? `Git [🔀] (${gitStatus.branch}${gitStatus.dirty ? ' *' : ''})` : 'Git Repository [🔀]'
+            isModuleActive = shelfPaletteActive && activeShelfModule === 'git'
+            if (gitStatus?.dirty) {
+              badgeContent = <span className="circle-orbit-badge" style={{ background: '#f59e0b' }}>•</span>
+            }
+            iconContent = (
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <line x1="6" y1="3" x2="6" y2="15" />
+                <circle cx="18" cy="6" r="3" />
+                <circle cx="6" cy="18" r="3" />
+                <path d="M18 9a9 9 0 0 1-9 9" />
+              </svg>
+            )
+            onClick = () => window.api.barActivate('git')
+            break
+          case 'focus': {
+            title = isTimerActive
+              ? `Focus Timer [⏱️] (${Math.floor((focusState?.remainingSeconds ?? 0) / 60)}m left)`
+              : 'Focus & Pomodoro Timer [⏱️]'
+            isModuleActive = shelfPaletteActive && activeShelfModule === 'focus'
+            if (focusState?.running) {
+              badgeContent = <span className="circle-orbit-badge" style={{ background: '#10b981' }}>⏱</span>
+            }
+            iconContent = (
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <circle cx="12" cy="14" r="8" />
+                <line x1="12" y1="2" x2="12" y2="6" />
+                <line x1="12" y1="14" x2="15" y2="11" />
+              </svg>
+            )
+            onClick = () => window.api.barActivate('focus')
+            break
+          }
+          case 'settings':
+            title = 'Settings [⚙️] (/config)'
+            isModuleActive = shelfPaletteActive && activeShelfModule === 'settings'
+            iconContent = (
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <circle cx="12" cy="12" r="3" />
+                <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z" />
+              </svg>
+            )
+            onClick = () => window.api.barActivate('settings')
+            break
+          case 'profile':
+            title = 'Profiles [👤] (/profile)'
+            isModuleActive = shelfPaletteActive && activeShelfModule === 'profile'
+            iconContent = (
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
+                <circle cx="12" cy="7" r="4" />
+              </svg>
+            )
+            onClick = () => window.api.barActivate('profile')
+            break
+          default:
+            return null
+        }
+
+        return (
+          <button
+            key={moduleId}
+            type="button"
+            className={`circle-orbit-satellite-btn ${isModuleActive ? 'is-active' : ''} ${hasUnread ? 'has-unread' : ''} ${summonPulse ? 'summon-pulse' : ''}`}
+            style={{
+              left: sx,
+              top: sy,
+              transform: 'translate(-50%, -50%)',
+              width: btnSize,
+              height: btnSize,
+              color: isBar && !isModuleActive ? '#38bdf8' : undefined
+            }}
+            title={title}
+            onClick={onClick}
+          >
+            <div className="circle-orbit-glyph-wrapper">
+              {iconContent}
+              {badgeContent}
+            </div>
+          </button>
+        )
+      }
+
+      return (
+        <div
+          className={`circle-orbit-container ${summonPulse ? 'summon-pulse' : ''} ${dockFading ? 'dock-fading' : ''}`}
+          style={
+            {
+              ...(dockGlowColor ? { '--dock-glow-color': dockGlowColor } : {}),
+              ...(summonColor ? { '--summon-color': summonColor } : {}),
+              ...(summonGlow ? { '--summon-glow-color': summonGlow } : {})
+            } as React.CSSProperties
+          }
+          onContextMenu={(e) => {
+            e.preventDefault()
+            window.api.showDockContextMenu?.()
+          }}
+        >
+          {/* Subtle Glowing Orbit Guide Track */}
+          <div
+            style={{
+              position: 'absolute',
+              inset: 27,
+              borderRadius: '50%',
+              border: '1.5px dashed var(--dock-glow-color, rgba(56, 189, 248, 0.45))',
+              pointerEvents: 'none',
+              animation: 'orbit-track-pulse 4s ease-in-out infinite'
+            }}
+          />
+
+          {/* Faint Inner Gravitational Track Ring */}
+          <div
+            style={{
+              position: 'absolute',
+              inset: 51,
+              borderRadius: '50%',
+              border: '1px dotted var(--dock-glow-color, rgba(56, 189, 248, 0.22))',
+              pointerEvents: 'none'
+            }}
+          />
+
+          {/* SVG Radial Radar Spokes */}
+          <svg
+            style={{
+              position: 'absolute',
+              inset: 0,
+              width: 150,
+              height: 150,
+              pointerEvents: 'none'
+            }}
+          >
+            {orbitModuleList.map((_, idx) => {
+              const angle = -Math.PI / 2 + (idx * 2 * Math.PI) / count
+              return (
+                <line
+                  key={idx}
+                  x1={centerCoord}
+                  y1={centerCoord}
+                  x2={Math.round(centerCoord + orbitRadius * Math.cos(angle))}
+                  y2={Math.round(centerCoord + orbitRadius * Math.sin(angle))}
+                  stroke="var(--dock-glow-color, rgba(56, 189, 248, 0.22))"
+                  strokeWidth="1"
+                  strokeDasharray="2 3"
+                />
+              )
+            })}
+          </svg>
+
+          {/* Center Element: Active Focus Timer Countdown OR Mouse Anchor Beacon */}
+          {isTimerActive ? (
+            <button
+              type="button"
+              className={`circle-orbit-center-timer ${focusState?.paused ? 'is-paused' : ''}`}
+              title={focusState?.paused ? 'Paused — click to resume timer' : 'Timer running — click to pause'}
+              onClick={(e) => {
+                e.stopPropagation()
+                window.api.pauseFocusTimer?.().then(setFocusState)
+              }}
+              onMouseDown={(e) => e.stopPropagation()}
+            >
+              <div className="center-timer-icon">
+                {focusState?.paused ? (
+                  <span style={{ fontSize: '8px', color: '#f59e0b', lineHeight: 1, marginLeft: '1px' }}>▶</span>
+                ) : (
+                  <span className="center-timer-dot" />
+                )}
+              </div>
+              <span className="center-timer-digits">{formattedFocusClock}</span>
+            </button>
+          ) : (
+            <div
+              style={{
+                position: 'absolute',
+                left: '50%',
+                top: '50%',
+                width: 12,
+                height: 12,
+                borderRadius: '50%',
+                background: dockGlowColor || '#38bdf8',
+                boxShadow: dockGlowColor
+                  ? `0 0 7px ${dockGlowColor}, 0 0 15px ${dockGlowColor}`
+                  : '0 0 7px #38bdf8, 0 0 15px rgba(56, 189, 248, 0.55)',
+                pointerEvents: 'none',
+                zIndex: 15,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                transform: 'translate(-50%, -50%)',
+                animation: 'orbit-center-beacon 3s ease-in-out infinite'
+              }}
+              title="Mouse Cursor anchor (Ctrl+Right Click location)"
+            >
+              <div style={{ width: 4, height: 4, borderRadius: '50%', background: '#ffffff' }} />
+            </div>
+          )}
+
+          {/* Revolving Wheel Container holding all Satellites */}
+          <div className={`circle-orbit-wheel ${isOrbiting ? 'is-revolving' : ''}`}>
+            {orbitModuleList.map((id, idx) => renderOrbitSatellite(id, idx))}
+          </div>
+        </div>
+      )
+    }
+
     return (
       <div
         className={`palette palette-bar-icon ${summonPulse ? 'summon-pulse' : ''} ${dockFading ? 'dock-fading' : ''} ${shimmerInfo ? `icon-shimmer shimmer-${shimmerInfo.corner}${shimmerInfo.flickerType ? ` has-flicker-${shimmerInfo.flickerType}` : ''}` : ''}`}
         style={
           {
+            ...(dockGlowColor ? { '--dock-glow-color': dockGlowColor } : {}),
             ...(shimmerInfo
               ? {
                   '--shimmer-color': shimmerInfo.color,
@@ -1705,7 +2305,7 @@ export default function CommandPalette(): JSX.Element {
 
   return (
     <div
-      className={paletteClassName}
+      className={`${paletteClassName} palette-launchpad`}
       style={growStyle}
       onAnimationEnd={onGrowEnd}
       onMouseDown={(e) => {
@@ -1719,23 +2319,44 @@ export default function CommandPalette(): JSX.Element {
         }
       }}
     >
-      <input
-        ref={inputRef}
-        className="palette-input"
-        value={value}
-        placeholder={placeholderText}
-        autoFocus={windowMode === 'popup'}
-        onChange={(e) => setValue(e.target.value)}
-        onKeyDown={handleKeyDown}
-      />
-      {hotkeyError && <div className="palette-banner">{hotkeyError}</div>}
-      {commandError && <div className="palette-banner">{commandError}</div>}
+      <div className="launchpad-search-pill">
+        <span className="launchpad-search-glyph">{value.startsWith('/') ? '⌘' : '⌕'}</span>
+        <input
+          ref={inputRef}
+          className="palette-input launchpad-input"
+          value={value}
+          placeholder={placeholderText}
+          autoFocus={windowMode === 'popup'}
+          onChange={(e) => setValue(e.target.value)}
+          onKeyDown={handleKeyDown}
+        />
+        {value !== '' && (
+          <button
+            type="button"
+            className="launchpad-clear-btn"
+            title="Clear filter (Esc)"
+            onClick={() => {
+              setValue(getDefaultValue())
+              inputRef.current?.focus()
+            }}
+          >
+            ×
+          </button>
+        )}
+        {activeActionHint && <span className="palette-input-action-badge">{activeActionHint}</span>}
+      </div>
+      {hotkeyError && <div className="palette-banner launchpad-banner">{hotkeyError}</div>}
+      {commandError && <div className="palette-banner launchpad-banner">{commandError}</div>}
       {command === 'calc' && (
-        <div className="calc-result">{calcResult ?? (query ? 'Invalid expression' : 'Enter an expression')}</div>
+        <div className="launchpad-calc-card">
+          <div className="launchpad-calc-label">Calculator Result (Press Enter to Copy)</div>
+          <div className="calc-result">{calcResult ?? (query ? 'Invalid expression' : 'Enter a math expression...')}</div>
+        </div>
       )}
       {command !== 'calc' && (
-        <ul
-          className={ignoreMouse || disableMouseInput ? 'palette-list ignore-mouse' : 'palette-list'}
+        <div
+          ref={gridContainerRef}
+          className={ignoreMouse || disableMouseInput ? 'launchpad-grid-scroll ignore-mouse' : 'launchpad-grid-scroll'}
           onMouseMove={(e) => {
             if (disableMouseInput) return
             const last = lastMousePosRef.current
@@ -1746,27 +2367,50 @@ export default function CommandPalette(): JSX.Element {
           }}
         >
           {items.length === 0 && (
-            <li className="palette-empty">
-              {isSearching && !showingCommandList ? 'Searching…' : 'No results'}
-            </li>
+            <div className="launchpad-empty-card">
+              {isSearching && !showingCommandList ? 'Searching…' : 'No matching options found'}
+            </div>
           )}
-          {items.map((item, idx) => (
-            <li
-              key={item.key}
-              ref={idx === activeIndex ? activeItemRef : undefined}
-              className={idx === activeIndex ? 'palette-item active' : 'palette-item'}
-              onMouseEnter={() => {
-                if (!ignoreMouse) setActiveIndex(idx)
-              }}
-              onClick={(e) => item.onSelect(e.ctrlKey || e.metaKey)}
-            >
-              <span className="palette-item-label">{item.label}</span>
-              {item.sublabel && <span className="palette-item-sublabel">{item.sublabel}</span>}
-            </li>
+          {groupedSections.map((group) => (
+            <section key={group.name} className="launchpad-section">
+              <div className="launchpad-section-header">
+                {group.icon && <span className="launchpad-section-icon">{group.icon}</span>}
+                <span className="launchpad-section-title">{group.name}</span>
+                <span className="launchpad-section-count">{group.items.length}</span>
+              </div>
+              <div className="launchpad-cards-grid">
+                {group.items.map(({ item, flatIndex }) => {
+                  const isActive = flatIndex === activeIndex
+                  return (
+                    <div
+                      key={item.key}
+                      data-card-index={flatIndex}
+                      ref={isActive ? (activeItemRef as React.RefObject<HTMLDivElement>) : undefined}
+                      className={isActive ? 'launchpad-card active' : 'launchpad-card'}
+                      onMouseEnter={() => {
+                        if (!ignoreMouse) setActiveIndex(flatIndex)
+                      }}
+                      onClick={(e) => item.onSelect(e.ctrlKey || e.metaKey)}
+                    >
+                      <div className="launchpad-card-top">
+                        <div className="launchpad-card-title-wrap">
+                          <span className="launchpad-card-label">{item.label}</span>
+                          {item.badge && <span className="launchpad-card-badge">{item.badge}</span>}
+                        </div>
+                      </div>
+                      {item.sublabel && <div className="launchpad-card-sublabel">{item.sublabel}</div>}
+                    </div>
+                  )
+                })}
+              </div>
+            </section>
           ))}
-        </ul>
+        </div>
       )}
-      <div className="palette-footer">
+      <div className="launchpad-footer-pill">
+        <span className="palette-footer-hint">
+          <kbd className="palette-kbd">↑↓←→</kbd> Navigate
+        </span>
         <span className="palette-footer-hint">
           <kbd className="palette-kbd">↵</kbd>{' '}
           {command === 'calc'
@@ -1790,7 +2434,7 @@ export default function CommandPalette(): JSX.Element {
         </span>
         {value === '' && (
           <span className="palette-footer-hint">
-            <kbd className="palette-kbd">/</kbd> Commands
+            <kbd className="palette-kbd">/</kbd> All Commands
           </span>
         )}
         {isHistoryActive && (

@@ -30,38 +30,58 @@ function clampToWorkArea(bounds: Rectangle): Rectangle {
 
 function idleBounds(): Rectangle {
   const settings = readSettings()
+  const { workArea } = getDockDisplay(settings.monitor)
   if (settings.dockLayout === 'shelf') {
-    const { workArea } = getDockDisplay(settings.monitor)
     const slotCount = settings.shelfIcons?.length ?? 7
-    return DockGeometry.calculateShelfBarBounds(workArea, slotCount)
+    return DockGeometry.calculateShelfBarBounds(
+      workArea,
+      slotCount,
+      settings.dockHomePosition,
+      settings.dockHomeCustomCoordinates
+    )
+  }
+  if (settings.dockLayout === 'circle') {
+    return DockGeometry.calculateCircleOrbitBounds(
+      workArea,
+      settings.dockHomePosition,
+      settings.dockHomeCustomCoordinates
+    )
   }
   if (!settings.barPosition) return defaultIdleBounds()
   return clampToWorkArea({ x: settings.barPosition.x, y: settings.barPosition.y, ...DockGeometry.ICON_SIZE })
 }
 
+export function resetBarToIdle(): void {
+  if (barCollapseTimeout) {
+    clearTimeout(barCollapseTimeout)
+    barCollapseTimeout = null
+  }
+  if (barActivateTimeout) {
+    clearTimeout(barActivateTimeout)
+    barActivateTimeout = null
+  }
+  const wasActive = barActive
+  barActive = false
+  if (!barWindow || barWindow.isDestroyed()) return
+  const bounds = idleBounds()
+  barWindow.setBounds(bounds)
+  dockManager.repositionAttached(bounds)
+  if (wasActive) {
+    barWindow.webContents.send('bar-collapsed')
+  }
+}
+
 export function repositionBarForShelfIcons(): void {
   if (!barWindow || barWindow.isDestroyed()) return
   const settings = readSettings()
-  if (settings.dockLayout === 'shelf') {
-    const current = barWindow.getBounds()
-    const { workArea } = dockManager.getIsSummonedAway()
-      ? screen.getDisplayNearestPoint({ x: current.x, y: current.y })
-      : getDockDisplay(settings.monitor)
-    const slotCount = settings.shelfIcons?.length ?? 7
-    const newWidth = DockGeometry.calculateShelfBarWidth(slotCount)
-    const newBounds = {
-      x: Math.round(workArea.x + (workArea.width - newWidth) / 2),
-      y:
-        workArea.y +
-        workArea.height -
-        DockGeometry.SHELF_BOTTOM_MARGIN -
-        DockGeometry.SHELF_PILL_HEIGHT -
-        DockGeometry.SHELF_HEADROOM,
-      width: newWidth,
-      height: DockGeometry.SHELF_WINDOW_HEIGHT
+  if (settings.dockLayout === 'shelf' || settings.dockLayout === 'circle') {
+    if (barActive) {
+      resetBarToIdle()
+      return
     }
-    barWindow.setBounds(DockGeometry.clampRect(newBounds, workArea))
-    dockManager.repositionAttached(barWindow.getBounds())
+    const bounds = idleBounds()
+    barWindow.setBounds(bounds)
+    dockManager.repositionAttached(bounds)
   }
 }
 
@@ -78,6 +98,15 @@ function barIconAnchor(): Rectangle {
     }
     const { workArea } = getDockDisplay(settings.monitor)
     return DockGeometry.calculateShelfIconBounds(workArea, 'bar', settings.shelfIcons)
+  }
+  if (settings.dockLayout === 'circle') {
+    if (liveBar) return liveBar
+    const { workArea } = getDockDisplay(settings.monitor)
+    return DockGeometry.calculateCircleOrbitBounds(
+      workArea,
+      settings.dockHomePosition,
+      settings.dockHomeCustomCoordinates
+    )
   }
   if (liveBar) {
     return liveBar
@@ -136,9 +165,7 @@ export function createBarWindow(icon: NativeImage): BrowserWindow {
       barActive = false
     },
     reset: () => {
-      if (barWindow && !barActive) {
-        barWindow.setBounds(idleBounds())
-      }
+      resetBarToIdle()
     }
   })
 
@@ -158,10 +185,6 @@ export function isBarWindow(win: BrowserWindow | null): boolean {
   return !!win && win === barWindow
 }
 
-export function isBarVisible(): boolean {
-  return !!barWindow && barWindow.isVisible()
-}
-
 // Drops a message into the bar window's webContents if mounted. Used to drive the
 // activate/deactivate lifecycle without having to export the BrowserWindow reference
 // itself.
@@ -177,13 +200,15 @@ export function sendToBar(channel: string, ...args: unknown[]): void {
 // (and collapse) right alongside it.
 export function setBarVisible(visible: boolean): void {
   if (!barWindow) return
-  if (visible && !barWindow.isVisible()) {
+  if (visible) {
     barActive = false
     barWindow.setBounds(idleBounds())
-    barWindow.showInactive()
+    if (!barWindow.isVisible()) {
+      barWindow.showInactive()
+    }
     dockManager.showAll()
     dockManager.repositionAttached(barWindow.getBounds())
-  } else if (!visible && barWindow.isVisible()) {
+  } else {
     dockManager.hideAll()
   }
 }
@@ -251,7 +276,7 @@ export function toggleBarActivation(): boolean {
   if (!barWindow || !barWindow.isVisible()) return false
   if (moveModeActive) return true
   const settings = readSettings()
-  if (settings.dockLayout === 'shelf') {
+  if (settings.dockLayout === 'shelf' || settings.dockLayout === 'circle') {
     return false
   }
   if (barActive) {
@@ -306,7 +331,7 @@ export function resetBarPosition(): void {
 export function registerBarIpc(): void {
   ipcMain.on('bar-activate', (_event, mode?: string) => {
     const settings = readSettings()
-    if (settings.dockLayout === 'shelf') {
+    if (settings.dockLayout === 'shelf' || settings.dockLayout === 'circle') {
       dockManager.toggleShelfPalette(mode)
       return
     }
@@ -318,10 +343,6 @@ export function registerBarIpc(): void {
     }
   })
   ipcMain.on('bar-deactivate', () => {
-    const settings = readSettings()
-    if (settings.dockLayout === 'shelf') {
-      return
-    }
     deactivateBar()
   })
   ipcMain.on('move-mode-toggle', () => toggleMoveMode())

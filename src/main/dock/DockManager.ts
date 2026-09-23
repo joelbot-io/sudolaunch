@@ -99,10 +99,6 @@ export class DockManager {
     })
   }
 
-  registerNotification(win: BrowserWindow, callbacks: NotificationDockCallbacks): void {
-    this.registerNotify(win, callbacks)
-  }
-
   registerNotify(win: BrowserWindow, callbacks: NotificationDockCallbacks): void {
     this.notifyWindow = win
     this.notifyCallbacks = callbacks
@@ -169,6 +165,7 @@ export class DockManager {
   returnHome(): void {
     this.cancelAutoReturn()
     this.isSummonedAway = false
+    this.broadcast('dock-home-state', true)
     if (!this.barWindow) return
 
     const settings = readSettings()
@@ -179,7 +176,9 @@ export class DockManager {
       'bar',
       settings.dockLayout ?? 'shelf',
       slotCount,
-      settings.shelfIcons
+      settings.shelfIcons,
+      settings.dockHomePosition ?? 'middle',
+      settings.dockHomeCustomCoordinates
     )
 
     // Fade windows out before teleporting, then fade back in.
@@ -214,14 +213,6 @@ export class DockManager {
     return this.barWindow
   }
 
-  getTerminalWindow(): BrowserWindow | null {
-    return this.terminalWindow
-  }
-
-  getNotificationWindow(): BrowserWindow | null {
-    return this.notifyWindow
-  }
-
   getLastBarBounds(): Rectangle | null {
     return this.lastBarBounds
   }
@@ -245,6 +236,9 @@ export class DockManager {
    */
   summonTo(cursorX: number, cursorY: number): void {
     if (!this.barWindow) return
+
+    this.isSummonedAway = true
+    this.broadcast('dock-home-state', false)
 
     // Cancel any in-flight expand/collapse transitions on the bar
     this.barCallbacks?.cancelAnimations()
@@ -290,7 +284,43 @@ export class DockManager {
       return
     }
 
-    // Circle orbit for circle/horizontal layouts
+    if (settings.dockLayout === 'circle') {
+      const size = DockGeometry.CIRCLE_ORBIT_SIZE
+      const targetRect = DockGeometry.clampRect(
+        {
+          x: Math.round(cursorX - size.width / 2),
+          y: Math.round(cursorY - size.height / 2),
+          width: size.width,
+          height: size.height
+        },
+        workArea
+      )
+
+      this.lastBarBounds = targetRect
+      this.barWindow.setBounds(targetRect)
+      this.terminalCallbacks?.reposition(targetRect)
+      this.notifyCallbacks?.reposition(targetRect)
+      if (!this.barWindow.isVisible()) {
+        this.barWindow.showInactive()
+      }
+
+      // In circle mode, satellite windows stay hidden (satellites are in the unified orbit wheel)
+      this.terminalCallbacks?.hide()
+      this.notifyCallbacks?.hide()
+
+      this.barWindow.webContents.send('dock-summoned', {
+        x: targetRect.x,
+        y: targetRect.y,
+        circle: true,
+        color: theme.color,
+        glow: theme.glow
+      })
+
+      this.scheduleAutoReturn()
+      return
+    }
+
+    // Horizontal dock layout
     const orbit = DockGeometry.calculateCircleOrbit(cursorX, cursorY, workArea)
 
     this.lastBarBounds = orbit.bar
@@ -332,12 +362,16 @@ export class DockManager {
   }
 
   /**
-   * Switches the dock layout between 'circle' (radial orbit) and 'horizontal' (linear dock).
+   * Switches the dock layout between 'shelf', 'circle' (radial orbit), and 'horizontal' (linear dock).
    */
-  setLayout(layout: 'circle' | 'horizontal'): void {
-    const settings = readSettings()
-    writeSettings({ ...settings, dockLayout: layout })
+  setLayout(layout: 'circle' | 'horizontal' | 'shelf', persist = true): void {
+    if (persist) {
+      const settings = readSettings()
+      writeSettings({ ...settings, dockLayout: layout })
+    }
+    this.barCallbacks?.cancelAnimations()
     this.resetPositions()
+    this.broadcast('dock-layout-changed', layout)
   }
 
   /**
@@ -351,6 +385,9 @@ export class DockManager {
       termPosition: null,
       termWindowPosition: null
     })
+
+    this.isSummonedAway = false
+    this.broadcast('dock-home-state', true)
 
     this.barCallbacks?.reset()
     this.terminalCallbacks?.reset()

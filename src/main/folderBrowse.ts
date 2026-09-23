@@ -1,7 +1,6 @@
-import { spawn } from 'child_process'
 import Fuse from 'fuse.js'
 import { readdirSync, statSync } from 'fs'
-import { dirname, extname, join, resolve, sep, basename } from 'path'
+import { extname, join, resolve, sep, basename } from 'path'
 import { CONFIG_DIR } from './config'
 import { runInTerminal, openTerminal } from './terminalWindow'
 import { runElevated } from './elevation'
@@ -45,14 +44,6 @@ function resolveWithin(base: string, relPath: string): string | null {
 // far as outside ~/.sudolaunch, where this rejects it.
 export function resolveFolderRoot(folder: string): string | null {
   return resolveWithin(resolve(CONFIG_DIR), folder)
-}
-
-// Wraps a path in literal quotes for use with spawn's windowsVerbatimArguments — Windows
-// filenames can never contain `"`, so this is always safe and, unlike Node's default
-// argv quoting (which only quotes args containing whitespace), it also neutralizes
-// cmd.exe metacharacters (&, |, ^, %, (, )) in paths that have no spaces at all.
-function quoteArg(path: string): string {
-  return `"${path}"`
 }
 
 export function browseFolder(root: string, query: string, extensions: string[]): SearchResultItem[] {

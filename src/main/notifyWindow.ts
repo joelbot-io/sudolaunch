@@ -18,12 +18,14 @@ let lastBarBounds: Rectangle | null = null
 
 function getLiveBarBounds(bar?: Rectangle | null): Rectangle | null {
   if (bar) return bar
-  if (lastBarBounds) return lastBarBounds
   const barWin = dockManager.getBarWindow()
   if (barWin && !barWin.isDestroyed() && barWin.isVisible()) {
     return barWin.getBounds()
   }
-  return dockManager.getLastBarBounds()
+  const last = dockManager.getLastBarBounds()
+  if (last) return last
+  if (lastBarBounds) return lastBarBounds
+  return null
 }
 
 function idleBounds(bar?: Rectangle | null): Rectangle {
@@ -36,17 +38,47 @@ function idleBounds(bar?: Rectangle | null): Rectangle {
       })
     : getDockDisplay(settings.monitor)
 
+  if (settings.dockLayout === 'circle') {
+    const dock =
+      activeBar ??
+      DockGeometry.calculateCircleOrbitBounds(
+        display.workArea,
+        settings.dockHomePosition,
+        settings.dockHomeCustomCoordinates
+      )
+    return DockGeometry.calculateCircleSatelliteBounds(
+      dock,
+      'notify',
+      settings.shelfIcons,
+      settings.dockHomePosition,
+      settings.dockHomeCustomCoordinates
+    )
+  }
+
   if (settings.dockLayout === 'shelf') {
     const slotCount = settings.shelfIcons?.length ?? 7
-    const shelfBar = activeBar ?? DockGeometry.calculateShelfBarBounds(display.workArea, slotCount)
-    return DockGeometry.calculateShelfIconBounds(shelfBar, 'notify', settings.shelfIcons)
+    const shelfBar =
+      activeBar ??
+      DockGeometry.calculateShelfBarBounds(
+        display.workArea,
+        slotCount,
+        settings.dockHomePosition,
+        settings.dockHomeCustomCoordinates
+      )
+    return DockGeometry.calculateShelfIconBounds(
+      shelfBar,
+      'notify',
+      settings.shelfIcons,
+      settings.dockHomePosition,
+      settings.dockHomeCustomCoordinates
+    )
   }
 
   if (activeBar) {
     return DockGeometry.calculateAttachedBounds(
       activeBar,
       'notify',
-      settings.dockLayout ?? 'shelf',
+      settings.dockLayout ?? 'horizontal',
       display.workArea
     )
   }
@@ -54,14 +86,30 @@ function idleBounds(bar?: Rectangle | null): Rectangle {
   return DockGeometry.calculateDefaultIdleBounds(
     display.workArea,
     'notify',
-    settings.dockLayout ?? 'shelf'
+    settings.dockLayout ?? 'horizontal',
+    settings.dockHomePosition,
+    settings.dockHomeCustomCoordinates
   )
 }
 
 function expandedBounds(bar?: Rectangle | null): Rectangle {
-  const icon = idleBounds(bar)
-  const { workArea } = screen.getDisplayNearestPoint({ x: icon.x, y: icon.y })
-  return DockGeometry.calculateExpandedBounds(icon, DockGeometry.NOTIFICATION_PANEL_SIZE, workArea)
+  const settings = readSettings()
+  const activeBar = getLiveBarBounds(bar)
+  const display = activeBar
+    ? screen.getDisplayNearestPoint({
+        x: activeBar.x + activeBar.width / 2,
+        y: activeBar.y + activeBar.height / 2
+      })
+    : getDockDisplay(settings.monitor)
+
+  return DockGeometry.calculateNotificationPanelBounds(
+    display.workArea,
+    activeBar,
+    settings.dockLayout ?? 'shelf',
+    settings.shelfIcons,
+    settings.dockHomePosition,
+    settings.dockHomeCustomCoordinates
+  )
 }
 
 function loadRenderer(win: BrowserWindow): void {
@@ -97,7 +145,7 @@ export function createNotificationWindow(icon: NativeImage): BrowserWindow {
     notifyWindow = null
   })
 
-  dockManager.registerNotification(notifyWindow, {
+  dockManager.registerNotify(notifyWindow, {
     reposition: repositionNotification,
     show: showNotificationWindow,
     hide: hideNotificationWindow,
@@ -117,6 +165,7 @@ let notifyReadyResolver: (() => void) | null = null
 
 export function registerNotificationIpc(): void {
   ipcMain.on('notify-toggle', () => toggleNotificationWindow())
+  ipcMain.on('notify-open', () => openNotificationWindow())
   ipcMain.on('notify-ready', () => {
     if (notifyReadyResolver) {
       notifyReadyResolver()
@@ -138,7 +187,7 @@ export function repositionNotification(barBounds?: Rectangle): void {
 export function showNotificationWindow(): void {
   if (!notifyWindow) return
   const settings = readSettings()
-  if (settings.dockLayout === 'shelf') {
+  if (settings.dockLayout === 'shelf' || settings.dockLayout === 'circle') {
     notifyExpanded = false
     notifyWindow.webContents.send('notify-expanded', false)
     notifyWindow.hide()
@@ -148,10 +197,6 @@ export function showNotificationWindow(): void {
   notifyWindow.setBounds(idleBounds(lastBarBounds))
   notifyWindow.webContents.send('notify-expanded', false)
   notifyWindow.showInactive()
-}
-
-export function notifyNotificationDockSummoned(pos: { x: number; y: number }): void {
-  notifyWindow?.webContents.send('dock-summoned', pos)
 }
 
 export function hideNotificationWindow(): void {
@@ -185,7 +230,7 @@ export function toggleNotificationWindow(): void {
     const icon = idleBounds(lastBarBounds)
     const panel = expandedBounds(lastBarBounds)
 
-    if (settings.dockLayout === 'shelf') {
+    if (settings.dockLayout === 'shelf' || settings.dockLayout === 'circle') {
       // Same opacity + always-mapped handshake as the shelf palette window (see
       // revealPaletteWindow in main/index.ts): calling show() here directly used to
       // reveal whatever the renderer last painted (its collapsed/closed state) for a
@@ -249,7 +294,7 @@ export function toggleNotificationWindow(): void {
     notifyCollapseTimeout = setTimeout(() => {
       notifyCollapseTimeout = null
       if (!notifyWindow) return
-      if (settings.dockLayout === 'shelf') {
+      if (settings.dockLayout === 'shelf' || settings.dockLayout === 'circle') {
         notifyWindow.setOpacity(0)
         notifyWindow.setIgnoreMouseEvents(true, { forward: true })
       } else {
@@ -259,3 +304,13 @@ export function toggleNotificationWindow(): void {
     }, 160)
   }
 }
+
+export function openNotificationWindow(): void {
+  if (!notifyWindow) return
+  if (!notifyExpanded) {
+    toggleNotificationWindow()
+  } else {
+    notifyWindow.focus()
+  }
+}
+

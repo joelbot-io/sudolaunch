@@ -1,9 +1,7 @@
-import { spawn } from 'child_process'
 import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from 'fs'
 import { join } from 'path'
 import { watch as chokidarWatch } from 'chokidar'
 import { CONFIG_DIR } from './config'
-import { getAppIconPath } from './icon'
 import { addNotification } from './notifications'
 import { runInTerminal, openTerminal } from './terminalWindow'
 import { runElevated } from './elevation'
@@ -128,41 +126,6 @@ function notify(cmd: CustomCommand, success: boolean, detail?: string, commandIn
     commandName: cmd.command,
     commandInput,
     showNativeToast: true
-  })
-}
-
-export function runAndNotify(cmd: CustomCommand, action: string): void {
-  const child = spawn('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', action], {
-    windowsHide: true
-  })
-  let stdout = ''
-  let stderr = ''
-
-  child.stdout?.setEncoding('utf-8')
-  child.stderr?.setEncoding('utf-8')
-
-  child.stdout?.on('data', (data: string) => {
-    stdout += data
-  })
-  child.stderr?.on('data', (data: string) => {
-    stderr += data
-  })
-
-  child.on('error', (err) => notify(cmd, false, err.message, action))
-  child.on('exit', (code) => {
-    const success = code === 0
-    const out = stdout.trim()
-    const err = stderr.trim()
-    let detail: string
-    if (success) {
-      detail = out || 'Completed successfully'
-    } else {
-      detail = err || out || `Exited with code ${code}`
-    }
-    if (detail.length > 500) {
-      detail = detail.slice(0, 497) + '...'
-    }
-    notify(cmd, success, detail, action)
   })
 }
 

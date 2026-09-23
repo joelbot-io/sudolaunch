@@ -35,6 +35,7 @@ declare global {
       notifyPaletteReady?: () => void
       notifyReady?: () => void
       barActivate: (mode?: string) => void
+      setPaletteModule?: (mode?: string | null) => void
       barDeactivate: () => void
       moveModeToggle: () => void
       onMoveModeChanged: (callback: (active: boolean) => void) => () => void
@@ -51,6 +52,8 @@ declare global {
         callback: (pos: { x: number; y: number; color?: string; glow?: string }) => void
       ) => () => void
       onDockFade: (callback: (direction: 'in' | 'out') => void) => () => void
+      onDockHomeState: (callback: (isHome: boolean) => void) => () => void
+      getDockIsHome: () => Promise<boolean>
       onConfigChanged: (callback: () => void) => () => void
       onHotkeyError: (callback: (hotkey: string) => void) => () => void
       onTerminalHotkeyError: (callback: (hotkey: string) => void) => () => void
@@ -77,6 +80,7 @@ declare global {
       onTermRespawned: (callback: () => void) => () => void
       onTermUnreadActivity: (callback: (hasUnread: boolean) => void) => () => void
       notifyToggle: () => void
+      notifyOpen?: () => void
       getNotifications: () => Promise<SudoNotification[]>
       clearNotifications: () => Promise<void>
       dismissNotification: (id: string) => Promise<void>

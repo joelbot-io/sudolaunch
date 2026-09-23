@@ -109,12 +109,12 @@ export interface Settings {
   // Auto-return dock to home position (above clock in bottom-right)
   autoReturnHome?: boolean
   autoReturnDelaySec?: number
+  // Home position anchor for resting dock: 'left', 'middle', 'right', or 'custom'
+  dockHomePosition?: 'left' | 'middle' | 'right' | 'custom'
+  // Custom screen percentage coordinates when dockHomePosition is 'custom'
+  dockHomeCustomCoordinates?: { x: number; y: number }
   // Configurable modules displayed on the shelf dock (e.g. 'term', 'bar', 'notify', 'settings', 'focus', 'git', 'profile')
   shelfIcons?: ShelfModuleId[]
-  theme?: string
-  paletteHotkey?: string
-  termHotkey?: string
-  appFolder?: string
   activeProfile?: string
   gitRepoPath?: string
   recentGitRepos?: string[]
@@ -158,8 +158,8 @@ export type ShelfModuleId =
 
 export const DEFAULT_SHELF_ICONS: ShelfModuleId[] = [
   'term',
-  'bar',
   'notify',
+  'bar',
   'focus',
   'git'
 ]
@@ -268,6 +268,18 @@ export type CommandName =
   | 'exit'
   | 'settings'
   | 'profile'
+  | 'repo'
+  | 'notifications'
+  | 'timer'
+  | 'docker'
+  | 'env'
+  | 'diff'
+  | 'cert'
+  | 'curl'
+  | 'dns'
+  | 'key'
+  | 'show'
+  | 'hide'
 
 export interface CommandDef {
   name: CommandName
@@ -286,7 +298,7 @@ export const COMMANDS: CommandDef[] = [
   { name: 'emoji', description: 'Search and copy Unicode emojis by name, keyword, or shortcode' },
   { name: 'exit', description: 'Exit and close the application (alias: /quit)' },
   { name: 'fav', description: 'Open a saved link in the browser' },
-  { name: 'focus', description: 'Bring an open window to the front' },
+  { name: 'focus', description: 'Switch to an open desktop window by title' },
   { name: 'g', description: 'Open a Google search in your browser (alias: /google)' },
   { name: 'gif', description: 'Copy a GIF from your GIF folder to the clipboard' },
   { name: 'git', description: 'Search common Git recipes, recovery shortcuts, and commands' },
@@ -299,6 +311,7 @@ export const COMMANDS: CommandDef[] = [
   { name: 'lorem', description: 'Generate placeholder text, mock dummy data, emails, and names' },
   { name: 'mail', description: 'Compose an email to a contact' },
   { name: 'mime', description: 'Search MIME content types and file extensions (e.g. .json, image/webp)' },
+  { name: 'notifications', description: 'Open notification center and execution history alerts (alias: /notify)' },
   { name: 'port', description: 'Inspect listening TCP ports and kill blocking processes' },
   { name: 'profile', description: 'Manage, backup, restore, validate, or reset the user profile and config' },
   { name: 'pt', description: 'Launch Microsoft PowerToys utilities and tools (alias: /powertoys)' },
@@ -306,6 +319,7 @@ export const COMMANDS: CommandDef[] = [
   { name: 'qr', description: 'Generate QR codes from URLs or text with clipboard copy' },
   { name: 'regex', description: 'Library of standard regex patterns and live regex tester' },
   { name: 'release', description: 'Release keyboard and mouse input sharing from /control' },
+  { name: 'repo', description: 'Open active Git repository status, branch switcher, and recent repos' },
   { name: 'restart', description: 'Relaunch the application' },
   { name: 'search', description: 'Search across other commands at once' },
   { name: 'settings', description: 'Open settings and configuration manager' },
@@ -313,24 +327,35 @@ export const COMMANDS: CommandDef[] = [
   { name: 'teams', description: 'Open a Teams chat with a contact' },
   { name: 'term', description: 'Open or run a command in the persistent terminal' },
   { name: 'text', description: 'Analyze text statistics, sort, deduplicate, and join lines' },
+  { name: 'timer', description: 'Open Pomodoro and countdown focus timer panel' },
   { name: 'tz', description: 'Convert timestamps and timezones to local time' },
   { name: 'unit', description: 'Convert data units, bandwidth, physical units, and number bases' },
   { name: 'url', description: 'Parse URL components, extract query parameters, and build cURL snippets' },
   { name: 'uuid', description: 'Generate UUIDs/GUIDs in multiple formats and inspect IDs' },
   { name: 'view', description: 'Toggle the command bar or change its position' },
-  { name: 'control', description: 'Toggle active keyboard and mouse input sharing with another computer (/control #)' }
+  { name: 'control', description: 'Toggle active keyboard and mouse input sharing with another computer (/control #)' },
+  { name: 'cert', description: 'Inspect SSL/TLS certificates, expiry dates, SANs, and cipher suites (alias: /ssl)' },
+  { name: 'curl', description: 'Convert cURL commands to code (fetch, Python, Go) or probe HTTP endpoints' },
+  { name: 'diff', description: 'Compare text and JSON snippets, clipboard vs input, and inspect changes' },
+  { name: 'dns', description: 'Lookup DNS records (A, AAAA, MX, TXT, CNAME, NS) and propagation (alias: /dig)' },
+  { name: 'docker', description: 'Manage Docker containers, inspect status/ports, logs, and prune images' },
+  { name: 'env', description: 'Search environment variables, inspect PATH directories, and parse .env files' },
+  { name: 'key', description: 'Inspect keyboard events, key codes, Windows VK codes, and accelerators (alias: /kbd)' },
+  { name: 'show', description: 'Show the persistent command dock on screen' },
+  { name: 'hide', description: 'Hide the persistent command dock from the screen' }
 ]
 
 // Commands that participate in the "search" command's fan-out — everything except
 // "calc" (not search-shaped) and "search" itself. Used both to build the SEARCHABLE
 // dispatch table in commands/search.ts and to drive the "Search Commands" toggle
 // screen in ConfigManager.tsx.
-export const SEARCHABLE_COMMAND_NAMES: Exclude<CommandName, 'calc' | 'search' | 'view' | 'term' | 'restart' | 'default' | 'settings' | 'control' | 'release' | 'exit' | 'profile' | 'history'>[] = [
+export const SEARCHABLE_COMMAND_NAMES: Exclude<CommandName, 'calc' | 'search' | 'view' | 'term' | 'restart' | 'default' | 'settings' | 'control' | 'release' | 'exit' | 'profile' | 'history' | 'show' | 'hide'>[] = [
   'app',
   'case',
   'chmod',
   'color',
   'cron',
+  'curl',
   'custom',
   'emoji',
   'fav',
@@ -357,7 +382,10 @@ export const SEARCHABLE_COMMAND_NAMES: Exclude<CommandName, 'calc' | 'search' | 
   'tz',
   'unit',
   'url',
-  'uuid'
+  'uuid',
+  'diff',
+  'env',
+  'key'
 ]
 
 export interface CommandFolder {
@@ -394,8 +422,8 @@ export const DEFAULT_COMMAND_LAYOUT: CommandLayout = {
       id: 'folder:dev',
       name: 'Developer',
       icon: '⚡',
-      description: 'Git, HTTP, JSON, RegEx, cron, and terminal',
-      commands: ['git', 'http', 'json', 'regex', 'cron', 'term', 'custom']
+      description: 'Git, HTTP, JSON, RegEx, cron, Docker, DNS, and terminal',
+      commands: ['git', 'repo', 'http', 'json', 'regex', 'cron', 'term', 'custom', 'docker', 'env', 'diff', 'cert', 'curl', 'dns', 'key']
     },
     {
       id: 'folder:utils',
@@ -423,6 +451,7 @@ export const DEFAULT_COMMAND_LAYOUT: CommandLayout = {
         'g',
         'pt',
         'focus',
+        'timer',
         'ip',
         'port',
         'chmod'
@@ -433,7 +462,7 @@ export const DEFAULT_COMMAND_LAYOUT: CommandLayout = {
       name: 'System',
       icon: '⚙️',
       description: 'Profile, settings, control, history, and system controls',
-      commands: ['profile', 'settings', 'default', 'history', 'view', 'control', 'release', 'restart', 'exit']
+      commands: ['profile', 'settings', 'notifications', 'default', 'history', 'view', 'show', 'hide', 'control', 'release', 'restart', 'exit']
     }
   ]
 }
@@ -529,8 +558,8 @@ export const CONFIG_TYPES: ConfigTypeDef[] = [
   },
   {
     type: 'teamLinks',
-    label: 'Teams links',
-    description: 'Deep links to actual Teams teams/channels, shown alongside contacts in /teams',
+    label: 'Edit Teams Links',
+    description: 'Manually add or edit deep links to actual Teams teams/channels, shown alongside contacts in /teams',
     titleField: 'name',
     subtitleField: 'description',
     fields: [
@@ -582,11 +611,12 @@ export const CONFIG_TYPES: ConfigTypeDef[] = [
       { key: 'swapToggleHotkey', label: 'Swap Toggle Hotkey (ScrollLock / Pause / Control+Alt+S)', type: 'text' },
       { key: 'ctrlRightClickSummon', label: 'Summon dock on Ctrl+Right Click', type: 'boolean' },
       { key: 'autoReturnHome', label: 'Auto-return dock to home position (above clock)', type: 'boolean' },
+      { key: 'dockHomePosition', label: 'Dock home position anchor (left, middle, right, custom)', type: 'text' },
       { key: 'autoReturnDelaySec', label: 'Auto-return delay in seconds', type: 'number' },
       { key: 'terminalWidth', label: 'Terminal window width (px, default 800)', type: 'number' },
       { key: 'monitor', label: 'Dock monitor (1-based, default 1)', type: 'number' },
-      { key: 'dockGlowColor', label: 'Minimized dock glow color (e.g. #5aa0ff, cyan, purple)', type: 'text' },
-      { key: 'dockGlowStyle', label: 'Minimized dock glow style (breathing, steady, stealth)', type: 'text' }
+      { key: 'dockGlowColor', label: 'Dock glow color (e.g. #5aa0ff, cyan, dark purple, black)', type: 'text' },
+      { key: 'dockGlowStyle', label: 'Dock glow style (breathing, steady, stealth)', type: 'text' }
     ]
   }
 ]

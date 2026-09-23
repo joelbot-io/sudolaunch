@@ -9,7 +9,9 @@ import { DEFAULT_SHELF_ICONS, type GrowOrigin, type ShelfModuleId } from '../../
 export class DockGeometry {
   static readonly ICON_SIZE = { width: 50, height: 50 } as const
   static readonly BUTTON_SIZE = { width: 40, height: 40 } as const
-  static readonly BAR_ACTIVE_SIZE = { width: 640, height: 420 } as const
+  static readonly BAR_ACTIVE_SIZE = { width: 1480, height: 920 } as const
+  static readonly MODULE_PANEL_SIZE = { width: 640, height: 480 } as const
+  static readonly FOCUS_PANEL_SIZE = { width: 640, height: 380 } as const
   static readonly TERMINAL_PANEL_SIZE = { width: 800, height: 360 } as const
   static readonly NOTIFICATION_PANEL_SIZE = { width: 560, height: 400 } as const
 
@@ -30,6 +32,8 @@ export class DockGeometry {
   /** Full OS window height = headroom + pill + bottom margin */
   static readonly SHELF_WINDOW_HEIGHT =
     DockGeometry.SHELF_HEADROOM + DockGeometry.SHELF_PILL_HEIGHT + DockGeometry.SHELF_BOTTOM_MARGIN
+  /** Dimensions of the unified Circular Orbit dock window (150x150 square) */
+  static readonly CIRCLE_ORBIT_SIZE = { width: 150, height: 150 } as const
 
   /**
    * Clamps a rectangle completely inside the given display work area so no edge clips off-screen.
@@ -109,23 +113,11 @@ export class DockGeometry {
     dockLayout: 'circle' | 'horizontal' | 'shelf',
     workArea: Rectangle
   ): Rectangle {
-    if (dockLayout === 'shelf') {
-      return this.calculateShelfIconBounds(bar, target)
-    }
-
-    // 1. Circle / radial orbit layout
     if (dockLayout === 'circle') {
-      const offsetX = target === 'terminal' ? -30 : 30
-      const offsetY = 56
-      return this.clampRect(
-        {
-          x: bar.x + offsetX,
-          y: bar.y + offsetY,
-          width: this.ICON_SIZE.width,
-          height: this.ICON_SIZE.height
-        },
-        workArea
-      )
+      return this.calculateCircleSatelliteBounds(bar, target)
+    }
+    if (dockLayout === 'shelf') {
+      return this.calculateShelfSatelliteBounds(workArea)
     }
 
     // 2. Horizontal or Edge-Aware Vertical Layout
@@ -168,41 +160,45 @@ export class DockGeometry {
   /**
    * Computes the default home position for the dock.
    * - 'shelf': bottom-center pill tray, the new default
-   * - 'circle': bottom-right radial orbit, just above the Windows clock
-   * - 'horizontal': bottom-right linear row, just above the Windows clock
+   * - 'circle': circular radial orbit hovering at the home anchor
+   * - 'horizontal': linear row at the home anchor
    */
   static calculateHomeBounds(
     workArea: Rectangle,
     target: 'bar' | 'terminal' | 'notify',
     dockLayout: 'circle' | 'horizontal' | 'shelf' = 'shelf',
     slotCount: number = DEFAULT_SHELF_ICONS.length,
-    shelfIcons?: ShelfModuleId[]
+    shelfIcons?: ShelfModuleId[],
+    homePosition: 'left' | 'middle' | 'right' | 'custom' = 'middle',
+    customCoords?: { x: number; y: number }
   ): Rectangle {
     // --- Shelf layout ---
     if (dockLayout === 'shelf') {
-      if (target === 'bar') return this.calculateShelfBarBounds(workArea, slotCount)
-      return this.calculateShelfIconBounds(workArea, target, shelfIcons)
+      if (target === 'bar') return this.calculateShelfBarBounds(workArea, slotCount, homePosition, customCoords)
+      return this.calculateShelfIconBounds(workArea, target, shelfIcons, homePosition, customCoords)
     }
 
+    // --- Circle Orbit layout ---
     if (dockLayout === 'circle') {
-      const cx = workArea.x + workArea.width - this.SCROLLBAR_MARGIN - 55
-      const cy = workArea.y + workArea.height - this.IDLE_BOTTOM_MARGIN - 46
-
-      const bar: Rectangle = {
-        x: cx - 25,
-        y: cy - 60,
-        width: this.ICON_SIZE.width,
-        height: this.ICON_SIZE.height
+      if (target === 'bar') {
+        return this.calculateCircleOrbitBounds(workArea, homePosition, customCoords)
       }
-
-      if (target === 'bar') return bar
-      return this.calculateAttachedBounds(bar, target, 'circle', workArea)
+      return this.calculateShelfSatelliteBounds(workArea, slotCount)
     }
 
-    // Horizontal dock layout above the clock
+    // Horizontal dock layout
     const totalWidth = this.ICON_SIZE.width * 3 + this.GAP * 2
-    const leftX = workArea.x + workArea.width - this.SCROLLBAR_MARGIN - totalWidth
-    const topY = workArea.y + workArea.height - this.IDLE_BOTTOM_MARGIN - this.ICON_SIZE.height
+    let leftX = workArea.x + workArea.width - this.SCROLLBAR_MARGIN - totalWidth
+    let topY = workArea.y + workArea.height - this.IDLE_BOTTOM_MARGIN - this.ICON_SIZE.height
+
+    if (homePosition === 'left') {
+      leftX = workArea.x + this.SCROLLBAR_MARGIN
+    } else if (homePosition === 'middle') {
+      leftX = Math.round(workArea.x + (workArea.width - totalWidth) / 2)
+    } else if (homePosition === 'custom' && customCoords) {
+      leftX = Math.round(workArea.x + (workArea.width * customCoords.x) / 100 - totalWidth / 2)
+      topY = Math.round(workArea.y + (workArea.height * customCoords.y) / 100 - this.ICON_SIZE.height / 2)
+    }
 
     if (target === 'terminal') {
       return { x: leftX, y: topY, width: this.ICON_SIZE.width, height: this.ICON_SIZE.height }
@@ -224,12 +220,24 @@ export class DockGeometry {
 
   /**
    * Calculates the shelf BrowserWindow bounds: a transparent window
-   * horizontally centered just above the Windows taskbar on the primary display.
+   * positioned at the home anchor (left, middle, right, or custom coordinates) just above the Windows taskbar.
    * The bottom 48px is the visible pill; the top 32px is transparent headroom for slide-up animations.
    */
-  static calculateShelfBarBounds(workArea: Rectangle, slotCount: number = DEFAULT_SHELF_ICONS.length): Rectangle {
+  static calculateShelfBarBounds(
+    workArea: Rectangle,
+    slotCount: number = DEFAULT_SHELF_ICONS.length,
+    homePosition: 'left' | 'middle' | 'right' | 'custom' = 'middle',
+    customCoords?: { x: number; y: number }
+  ): Rectangle {
     const width = this.calculateShelfBarWidth(slotCount)
-    const x = Math.round(workArea.x + (workArea.width - width) / 2)
+    let x = Math.round(workArea.x + (workArea.width - width) / 2)
+    if (homePosition === 'left') {
+      x = workArea.x + this.SHELF_BOTTOM_MARGIN
+    } else if (homePosition === 'right') {
+      x = workArea.x + workArea.width - width - this.SHELF_BOTTOM_MARGIN
+    } else if (homePosition === 'custom' && customCoords) {
+      x = Math.round(workArea.x + (workArea.width * customCoords.x) / 100 - width / 2)
+    }
     const y =
       workArea.y +
       workArea.height -
@@ -240,18 +248,47 @@ export class DockGeometry {
   }
 
   /**
-   * Calculates bounds for the standalone / shelf command palette window (640×420).
+   * Calculates bounds for the unified Circular Orbit dock window (150x150).
+   * Positioned at the chosen home anchor (left, middle, right, or custom percentage coordinates).
+   */
+  static calculateCircleOrbitBounds(
+    workArea: Rectangle,
+    homePosition: 'left' | 'middle' | 'right' | 'custom' = 'middle',
+    customCoords?: { x: number; y: number }
+  ): Rectangle {
+    const size = this.CIRCLE_ORBIT_SIZE
+    let x = Math.round(workArea.x + (workArea.width - size.width) / 2)
+    let y = workArea.y + workArea.height - this.SHELF_BOTTOM_MARGIN - size.height
+
+    if (homePosition === 'left') {
+      x = workArea.x + this.SHELF_BOTTOM_MARGIN
+    } else if (homePosition === 'right') {
+      x = workArea.x + workArea.width - size.width - this.SHELF_BOTTOM_MARGIN
+    } else if (homePosition === 'custom' && customCoords) {
+      x = Math.round(workArea.x + (workArea.width * customCoords.x) / 100 - size.width / 2)
+      y = Math.round(workArea.y + (workArea.height * customCoords.y) / 100 - size.height / 2)
+    }
+
+    return this.clampRect({ x, y, width: size.width, height: size.height }, workArea)
+  }
+
+  /**
+   * Calculates bounds for the standalone / shelf command palette window.
    * Positioned relative to the shelf dock: centered horizontally over the dock,
    * opening upwards above the dock (or downwards if the dock is in the top half of the screen).
    */
   static calculateShelfPaletteBounds(
     workArea: Rectangle,
     shelfBar?: Rectangle | null,
-    slotCount: number = DEFAULT_SHELF_ICONS.length
+    slotCount: number = DEFAULT_SHELF_ICONS.length,
+    moduleHeight?: number,
+    moduleWidth?: number
   ): Rectangle {
     const shelf = shelfBar ?? this.calculateShelfBarBounds(workArea, slotCount)
-    const width = this.BAR_ACTIVE_SIZE.width
-    const height = this.BAR_ACTIVE_SIZE.height
+    const maxWidth = Math.max(480, workArea.width - 32)
+    const maxHeight = Math.max(360, workArea.height - 80)
+    const width = Math.min(moduleWidth ?? this.BAR_ACTIVE_SIZE.width, maxWidth)
+    const height = Math.min(moduleHeight ?? this.BAR_ACTIVE_SIZE.height, maxHeight)
 
     const shelfCenterX = shelf.x + shelf.width / 2
     const targetX = Math.round(shelfCenterX - width / 2)
@@ -295,7 +332,9 @@ export class DockGeometry {
   static calculateShelfIconBounds(
     shelfOrWorkArea: Rectangle,
     target: ShelfModuleId | 'terminal',
-    shelfIcons?: ShelfModuleId[]
+    shelfIcons?: ShelfModuleId[],
+    homePosition: 'left' | 'middle' | 'right' | 'custom' = 'middle',
+    customCoords?: { x: number; y: number }
   ): Rectangle {
     const icons: ShelfModuleId[] =
       shelfIcons && shelfIcons.length > 0
@@ -307,7 +346,7 @@ export class DockGeometry {
       shelfOrWorkArea.height === this.SHELF_WINDOW_HEIGHT && shelfOrWorkArea.width >= 160
     const shelf = isAlreadyShelf
       ? shelfOrWorkArea
-      : this.calculateShelfBarBounds(shelfOrWorkArea, count)
+      : this.calculateShelfBarBounds(shelfOrWorkArea, count, homePosition, customCoords)
 
     const y = shelf.y + this.SHELF_HEADROOM + 4
     const index = icons.indexOf(normalizedTarget)
@@ -322,14 +361,113 @@ export class DockGeometry {
   }
 
   /**
+   * Computes the bounding box of an individual satellite icon rendered inside the 150×150 Circular Orbit dock window.
+   */
+  static calculateCircleSatelliteBounds(
+    circleDockOrWorkArea: Rectangle,
+    target: ShelfModuleId | 'terminal' | 'notify',
+    shelfIcons?: ShelfModuleId[],
+    homePosition: 'left' | 'middle' | 'right' | 'custom' = 'middle',
+    customCoords?: { x: number; y: number }
+  ): Rectangle {
+    const isAlreadyCircle =
+      circleDockOrWorkArea.width === this.CIRCLE_ORBIT_SIZE.width &&
+      circleDockOrWorkArea.height === this.CIRCLE_ORBIT_SIZE.height
+    const dock = isAlreadyCircle
+      ? circleDockOrWorkArea
+      : this.calculateCircleOrbitBounds(circleDockOrWorkArea, homePosition, customCoords)
+
+    const icons: ShelfModuleId[] =
+      shelfIcons && shelfIcons.length > 0
+        ? shelfIcons
+        : ['term', 'bar', 'notify', 'settings', 'focus', 'git', 'profile']
+    const normalizedTarget: ShelfModuleId = target === 'terminal' ? 'term' : target
+
+    const orbitModuleList: ShelfModuleId[] = [
+      'bar',
+      ...icons.filter((id) => id !== 'bar')
+    ]
+    const count = orbitModuleList.length
+    const orbitRadius = 48
+    const centerCoord = 75
+
+    const idx = orbitModuleList.indexOf(normalizedTarget)
+    const angle = idx !== -1 ? -Math.PI / 2 + (idx * 2 * Math.PI) / count : -Math.PI / 2
+    const sx = Math.round(centerCoord + orbitRadius * Math.cos(angle))
+    const sy = Math.round(centerCoord + orbitRadius * Math.sin(angle))
+    const size = normalizedTarget === 'bar' ? 36 : 32
+
+    return {
+      x: dock.x + sx - Math.round(size / 2),
+      y: dock.y + sy - Math.round(size / 2),
+      width: size,
+      height: size
+    }
+  }
+
+  /**
+   * Calculates bounds for the Notification Center panel (560×400) relative to the dock's current position.
+   * Works consistently across 'shelf', 'circle', and 'horizontal' dock layouts:
+   * - In shelf mode: centers horizontally over the notification bell icon and opens above/below.
+   * - In circle mode: centers horizontally over the circular orbit dock / satellite and opens above/below.
+   * - In horizontal mode: centers over the notification button and opens above/below.
+   */
+  static calculateNotificationPanelBounds(
+    workArea: Rectangle,
+    dockBounds?: Rectangle | null,
+    dockLayout: 'circle' | 'horizontal' | 'shelf' = 'shelf',
+    shelfIcons?: ShelfModuleId[],
+    homePosition: 'left' | 'middle' | 'right' | 'custom' = 'middle',
+    customCoords?: { x: number; y: number }
+  ): Rectangle {
+    const width = this.NOTIFICATION_PANEL_SIZE.width
+    const height = this.NOTIFICATION_PANEL_SIZE.height
+
+    let anchor: Rectangle
+    let dockTop: number
+    let dockBottom: number
+
+    if (dockLayout === 'circle') {
+      const dock = dockBounds ?? this.calculateCircleOrbitBounds(workArea, homePosition, customCoords)
+      anchor = this.calculateCircleSatelliteBounds(dock, 'notify', shelfIcons, homePosition, customCoords)
+      dockTop = dock.y
+      dockBottom = dock.y + dock.height
+    } else if (dockLayout === 'shelf') {
+      const slotCount = shelfIcons?.length ?? DEFAULT_SHELF_ICONS.length
+      const dock = dockBounds ?? this.calculateShelfBarBounds(workArea, slotCount, homePosition, customCoords)
+      anchor = this.calculateShelfIconBounds(dock, 'notify', shelfIcons, homePosition, customCoords)
+      dockTop = dock.y + this.SHELF_HEADROOM
+      dockBottom = dockTop + this.SHELF_PILL_HEIGHT
+    } else {
+      // Horizontal layout
+      const dock = dockBounds ?? this.calculateHomeBounds(workArea, 'bar', 'horizontal', undefined, undefined, homePosition, customCoords)
+      anchor = this.calculateAttachedBounds(dock, 'notify', 'horizontal', workArea)
+      dockTop = dock.y
+      dockBottom = dock.y + dock.height
+    }
+
+    const anchorCenterX = anchor.x + anchor.width / 2
+    const targetX = Math.round(anchorCenterX - width / 2)
+    const screenCenterY = workArea.y + workArea.height / 2
+    const targetY =
+      dockTop >= screenCenterY
+        ? dockTop - this.GAP - height
+        : dockBottom + this.GAP
+
+    return this.clampRect({ x: targetX, y: targetY, width, height }, workArea)
+  }
+
+  /**
    * Computes the default idle screen bounds for any dock icon when resting at home position.
    */
   static calculateDefaultIdleBounds(
     workArea: Rectangle,
     target: 'bar' | 'terminal' | 'notify',
-    dockLayout: 'circle' | 'horizontal' | 'shelf' = 'shelf'
+    dockLayout: 'circle' | 'horizontal' | 'shelf' = 'shelf',
+    homePosition: 'left' | 'middle' | 'right' | 'custom' = 'middle',
+    customCoords?: { x: number; y: number }
   ): Rectangle {
-    return this.calculateHomeBounds(workArea, target, dockLayout)
+    return this.calculateHomeBounds(workArea, target, dockLayout, undefined, undefined, homePosition, customCoords)
   }
 
   /**
@@ -341,8 +479,11 @@ export class DockGeometry {
     workArea: Rectangle,
     userPosition?: { x: number; y: number } | null
   ): Rectangle {
+    const width = Math.min(panelSize.width, Math.max(480, workArea.width - 32))
+    const height = Math.min(panelSize.height, Math.max(360, workArea.height - 80))
+
     if (userPosition) {
-      return this.clampRect({ x: userPosition.x, y: userPosition.y, ...panelSize }, workArea)
+      return this.clampRect({ x: userPosition.x, y: userPosition.y, width, height }, workArea)
     }
 
     const screenCenterY = workArea.y + workArea.height / 2
@@ -350,17 +491,17 @@ export class DockGeometry {
     const iconCenterY = icon.y + icon.height / 2
 
     // Center horizontally over the icon
-    const targetX = Math.round(iconCenterX - panelSize.width / 2)
+    const targetX = Math.round(iconCenterX - width / 2)
 
     // Vertical popout:
     // If in the bottom half of the screen, open upwards above the dock.
     // If in the top half of the screen, open downwards below the dock.
     const targetY =
       iconCenterY >= screenCenterY
-        ? icon.y - this.GAP - panelSize.height
+        ? icon.y - this.GAP - height
         : icon.y + icon.height + this.GAP
 
-    return this.clampRect({ x: targetX, y: targetY, width: panelSize.width, height: panelSize.height }, workArea)
+    return this.clampRect({ x: targetX, y: targetY, width, height }, workArea)
   }
 
   /**

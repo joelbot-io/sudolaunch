@@ -1,7 +1,7 @@
 import { Notification, shell, app } from 'electron'
 import { execFile } from 'child_process'
 import { existsSync, mkdirSync, readdirSync, readFileSync, statSync, cpSync, rmSync, writeFileSync } from 'fs'
-import { join, basename, resolve } from 'path'
+import { join, resolve } from 'path'
 import Fuse from 'fuse.js'
 import type { SearchResultItem, ProfileItem, BackupArchiveItem } from '../../shared/types'
 import { addNotification } from '../notifications'
@@ -317,7 +317,7 @@ function handleCleanHistory(): void {
       if (JWT_REGEX.test(entry.query.trim())) return false
       return true
     })
-    .slice(-50)
+    .slice(0, 50)
 
   const removed = initialCount - cleaned.length
   writeHistory(cleaned)
