@@ -278,6 +278,7 @@ export type CommandName =
   | 'curl'
   | 'dns'
   | 'key'
+  | 'expmod'
   | 'show'
   | 'hide'
 
@@ -340,6 +341,7 @@ export const COMMANDS: CommandDef[] = [
   { name: 'dns', description: 'Lookup DNS records (A, AAAA, MX, TXT, CNAME, NS) and propagation (alias: /dig)' },
   { name: 'docker', description: 'Manage Docker containers, inspect status/ports, logs, and prune images' },
   { name: 'env', description: 'Search environment variables, inspect PATH directories, and parse .env files' },
+  { name: 'expmod', description: 'Explore PowerShell & Python modules, cmdlets, functions, and help' },
   { name: 'key', description: 'Inspect keyboard events, key codes, Windows VK codes, and accelerators (alias: /kbd)' },
   { name: 'show', description: 'Show the persistent command dock on screen' },
   { name: 'hide', description: 'Hide the persistent command dock from the screen' }
@@ -385,6 +387,7 @@ export const SEARCHABLE_COMMAND_NAMES: Exclude<CommandName, 'calc' | 'search' | 
   'uuid',
   'diff',
   'env',
+  'expmod',
   'key'
 ]
 
@@ -423,7 +426,7 @@ export const DEFAULT_COMMAND_LAYOUT: CommandLayout = {
       name: 'Developer',
       icon: '⚡',
       description: 'Git, HTTP, JSON, RegEx, cron, Docker, DNS, and terminal',
-      commands: ['git', 'repo', 'http', 'json', 'regex', 'cron', 'term', 'custom', 'docker', 'env', 'diff', 'cert', 'curl', 'dns', 'key']
+      commands: ['git', 'repo', 'expmod', 'http', 'json', 'regex', 'cron', 'term', 'custom', 'docker', 'env', 'diff', 'cert', 'curl', 'dns', 'key']
     },
     {
       id: 'folder:utils',

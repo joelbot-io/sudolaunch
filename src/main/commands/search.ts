@@ -39,6 +39,7 @@ import * as url from './url'
 import * as diff from './diff'
 import * as env from './env'
 import * as key from './key'
+import * as expmod from './expmod'
 
 interface Searchable {
   name: CommandName
@@ -83,6 +84,7 @@ const SEARCHABLE: Searchable[] = [
   { name: 'uuid', search: uuid.search, execute: uuid.execute },
   { name: 'diff', search: diff.search, execute: diff.execute },
   { name: 'env', search: env.search, execute: env.execute },
+  { name: 'expmod', search: expmod.searchSync, execute: expmod.execute },
   { name: 'key', search: key.search, execute: key.execute }
 ]
 
@@ -150,7 +152,8 @@ export function search(query: string): SearchResultItem[] {
       results.push({
         label: item.label,
         sublabel: item.sublabel ? `${item.sublabel} · /${c.name}` : `/${c.name}`,
-        value: `${c.name}::${item.value}`
+        value: `${c.name}::${item.value}`,
+        completion: item.completion
       })
     }
   }

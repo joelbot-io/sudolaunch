@@ -48,6 +48,7 @@ const COMMAND_ICONS: Record<string, string> = {
   custom: '⚡',
   docker: '🐳',
   env: '🌱',
+  expmod: '📦',
   diff: '⇄',
   cert: '🔒',
   curl: '📡',
@@ -765,6 +766,26 @@ export default function CommandPalette(): JSX.Element {
       const defVal = getDefaultValue()
       if (valueRef.current.match(/^\/[^/\s]+\//)) {
         setValue('/')
+        return
+      }
+      const expmodCmdMatch = valueRef.current.match(/^(\/expmod\s+(?:ps|py):[^\s/]+)\/\S+/i)
+      if (expmodCmdMatch) {
+        setValue(`${expmodCmdMatch[1]} `)
+        return
+      }
+      const expmodModFilterMatch = valueRef.current.match(/^(\/expmod\s+(?:ps|py):\S+\s+)\S/i)
+      if (expmodModFilterMatch) {
+        setValue(expmodModFilterMatch[1])
+        return
+      }
+      const expmodModMatch = valueRef.current.match(/^\/expmod\s+(ps|py):\S+\s*$/i)
+      if (expmodModMatch) {
+        setValue(`/expmod ${expmodModMatch[1].toLowerCase()} `)
+        return
+      }
+      const expmodEcoFilterMatch = valueRef.current.match(/^(\/expmod\s+(?:ps|py)\s+)\S/i)
+      if (expmodEcoFilterMatch) {
+        setValue(expmodEcoFilterMatch[1])
         return
       }
       const cmdWithArgsMatch = valueRef.current.match(/^(\/[a-zA-Z0-9_-]+\s+)\S/)

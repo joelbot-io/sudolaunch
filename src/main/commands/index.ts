@@ -54,6 +54,7 @@ import * as cert from './cert'
 import * as curl from './curl'
 import * as dns from './dns'
 import * as key from './key'
+import * as expmod from './expmod'
 import * as show from './show'
 import * as hide from './hide'
 
@@ -111,6 +112,7 @@ const searchers: Record<Exclude<CommandName, 'calc'>, (query: string) => SearchR
   curl: curl.search,
   dns: dns.search,
   key: key.search,
+  expmod: expmod.search,
   show: show.search,
   hide: hide.search
 }
@@ -170,6 +172,7 @@ const executors: Record<CommandName, (item: SearchResultItem, query: string, ele
   curl: curl.execute,
   dns: dns.execute,
   key: key.execute,
+  expmod: expmod.execute,
   show: show.execute,
   hide: hide.execute
 }
