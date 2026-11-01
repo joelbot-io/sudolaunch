@@ -40,6 +40,8 @@ import * as diff from './diff'
 import * as env from './env'
 import * as key from './key'
 import * as expmod from './expmod'
+import * as ssh from './ssh'
+import * as clip from './clip'
 
 interface Searchable {
   name: CommandName
@@ -85,6 +87,8 @@ const SEARCHABLE: Searchable[] = [
   { name: 'diff', search: diff.search, execute: diff.execute },
   { name: 'env', search: env.search, execute: env.execute },
   { name: 'expmod', search: expmod.searchSync, execute: expmod.execute },
+  { name: 'ssh', search: ssh.search, execute: ssh.execute },
+  { name: 'clip', search: clip.search, execute: clip.execute },
   { name: 'key', search: key.search, execute: key.execute }
 ]
 
@@ -153,7 +157,8 @@ export function search(query: string): SearchResultItem[] {
         label: item.label,
         sublabel: item.sublabel ? `${item.sublabel} · /${c.name}` : `/${c.name}`,
         value: `${c.name}::${item.value}`,
-        completion: item.completion
+        completion: item.completion,
+        executeOnEnter: item.executeOnEnter
       })
     }
   }

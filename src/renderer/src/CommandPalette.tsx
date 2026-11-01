@@ -49,6 +49,12 @@ const COMMAND_ICONS: Record<string, string> = {
   docker: '🐳',
   env: '🌱',
   expmod: '📦',
+  ssh: '🖥️',
+  proc: '⚙️',
+  svc: '🛠️',
+  wsl: '🐧',
+  pkg: '📦',
+  clip: '📎',
   diff: '⇄',
   cert: '🔒',
   curl: '📡',
@@ -154,6 +160,12 @@ function parseInput(
     if (name === 'key' || name === 'kbd') {
       return { command: 'key', query: '' }
     }
+    if (name === 'proc' || name === 'ps') {
+      return { command: 'proc', query: '' }
+    }
+    if (name === 'pkg' || name === 'winget') {
+      return { command: 'pkg', query: '' }
+    }
     if (name === 'show') {
       return { command: 'show', query: '' }
     }
@@ -179,6 +191,8 @@ function parseInput(
   if (name === 'cert' || name === 'ssl') return { command: 'cert', query: rest }
   if (name === 'dns' || name === 'dig') return { command: 'dns', query: rest }
   if (name === 'key' || name === 'kbd') return { command: 'key', query: rest }
+  if (name === 'proc' || name === 'ps') return { command: 'proc', query: rest }
+  if (name === 'pkg' || name === 'winget') return { command: 'pkg', query: rest }
   if (name === 'show') return { command: 'show', query: rest }
   if (name === 'hide') return { command: 'hide', query: rest }
   if (name === 'google') return { command: 'g', query: rest }
@@ -1244,7 +1258,7 @@ export default function CommandPalette(): JSX.Element {
         completion: r.completion,
         onSelect: (elevated = false) => {
           if (r.disabled) return
-          if (r.completion !== undefined) {
+          if (r.completion !== undefined && !r.executeOnEnter) {
             setValue(r.completion)
             inputRef.current?.focus()
             return
@@ -1305,6 +1319,10 @@ export default function CommandPalette(): JSX.Element {
             // open — reusing that existing peers CRUD UI rather than building a second
             // one, the same way "settings" results above redirect into settingsTarget.
             setSettingsTarget('peers')
+            return
+          }
+          if (command === 'ssh' && r.value === '__manageSshHosts') {
+            setSettingsTarget('sshHosts')
             return
           }
           runCommand(command, r, elevated)

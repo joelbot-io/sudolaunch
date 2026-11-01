@@ -786,6 +786,7 @@ async function discoverPsModules(): Promise<PsModuleInfo[]> {
     try {
       const exe = await getPsExe()
       const script = `
+        [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
         $ErrorActionPreference = 'SilentlyContinue'
         Get-Module -ListAvailable |
           Group-Object Name |

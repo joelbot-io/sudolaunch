@@ -12,7 +12,8 @@ import type {
   Settings,
   ConfigType,
   ConfigEntry,
-  SwapPeer
+  SwapPeer,
+  SshHost
 } from '../shared/types'
 
 export const CONFIG_DIR = join(app.getPath('home'), '.sudolaunch')
@@ -25,6 +26,7 @@ const PATHS = {
   links: join(CONFIG_DIR, 'links.json'),
   teamLinks: join(CONFIG_DIR, 'teamLinks.json'),
   peers: join(CONFIG_DIR, 'peers.json'),
+  sshHosts: join(CONFIG_DIR, 'ssh.json'),
   history: join(CONFIG_DIR, 'history.json'),
   settings: join(CONFIG_DIR, 'settings.json')
 }
@@ -90,6 +92,7 @@ export function ensureConfigDir(): void {
   seedFile(PATHS.links, [] as Link[])
   seedFile(PATHS.teamLinks, [] as TeamLink[])
   seedFile(PATHS.peers, SEED_PEERS)
+  seedFile(PATHS.sshHosts, [] as SshHost[])
   seedFile(PATHS.history, [] as HistoryEntry[])
   seedFile(PATHS.settings, DEFAULT_SETTINGS)
 }
@@ -121,6 +124,10 @@ export function readTeamLinks(): TeamLink[] {
 
 export function readPeers(): SwapPeer[] {
   return readJson<SwapPeer[]>(PATHS.peers, [])
+}
+
+export function readSshHosts(): SshHost[] {
+  return readJson<SshHost[]>(PATHS.sshHosts, [])
 }
 
 export function readSettings(): Settings {
@@ -167,6 +174,10 @@ export function writePeers(peers: SwapPeer[]): void {
   writeFileSync(PATHS.peers, JSON.stringify(peers, null, 2), 'utf-8')
 }
 
+export function writeSshHosts(sshHosts: SshHost[]): void {
+  writeFileSync(PATHS.sshHosts, JSON.stringify(sshHosts, null, 2), 'utf-8')
+}
+
 export function writeSettings(settings: Settings): void {
   writeFileSync(PATHS.settings, JSON.stringify(settings, null, 2), 'utf-8')
 }
@@ -186,6 +197,8 @@ export function getConfigEntries(type: ConfigType): ConfigEntry[] {
       return readTeamLinks() as unknown as ConfigEntry[]
     case 'peers':
       return readPeers() as unknown as ConfigEntry[]
+    case 'sshHosts':
+      return readSshHosts() as unknown as ConfigEntry[]
     case 'settings':
       return [readSettings() as unknown as ConfigEntry]
   }
@@ -203,6 +216,8 @@ function writeConfigList(type: Exclude<ConfigType, 'settings'>, list: ConfigEntr
       return writeTeamLinks(list as unknown as TeamLink[])
     case 'peers':
       return writePeers(list as unknown as SwapPeer[])
+    case 'sshHosts':
+      return writeSshHosts(list as unknown as SshHost[])
   }
 }
 
@@ -241,7 +256,7 @@ function watchFiles(paths: string[], onChange: (path: string) => void): void {
 }
 
 export function watchConfig(onChange: () => void): void {
-  watchFiles([PATHS.contacts, PATHS.snippets, PATHS.links, PATHS.teamLinks, PATHS.peers], () => onChange())
+  watchFiles([PATHS.contacts, PATHS.snippets, PATHS.links, PATHS.teamLinks, PATHS.peers, PATHS.sshHosts], () => onChange())
 }
 
 export function watchSettings(onChange: (settings: Settings) => void): void {

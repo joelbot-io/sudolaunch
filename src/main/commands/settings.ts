@@ -56,6 +56,12 @@ const SETTINGS_ACTIONS: SettingsAction[] = [
     keywords: ['teams', 'teams links', 'channels', 'deep links', 'chat', 'groups', 'microsoft teams', 'edit', 'manual']
   },
   {
+    label: 'SSH Hosts',
+    sublabel: 'Saved SSH connections for /ssh (alongside ~/.ssh/config)',
+    value: '__sshHosts',
+    keywords: ['ssh', 'ssh hosts', 'servers', 'remote', 'terminal', 'keys', 'bastion', 'tunnel']
+  },
+  {
     label: 'Swap Peers',
     sublabel: 'Computers configured for input sharing via /control',
     value: '__peers',

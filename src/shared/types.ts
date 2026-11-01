@@ -35,6 +35,18 @@ export interface SwapPeer {
   // "This machine's fingerprint"), the same way you'd copy an SSH host key. Connections
   // to/from a peer with no fingerprint configured, or one that doesn't match, are refused.
   expectedFingerprint?: string
+  // end SwapPeer
+}
+
+export interface SshHost {
+  name: string
+  host: string
+  user?: string
+  port?: number
+  identityFile?: string
+  extraArgs?: string
+  description?: string
+  extra?: string
 }
 
 export interface HistoryEntry {
@@ -279,6 +291,12 @@ export type CommandName =
   | 'dns'
   | 'key'
   | 'expmod'
+  | 'ssh'
+  | 'proc'
+  | 'svc'
+  | 'wsl'
+  | 'pkg'
+  | 'clip'
   | 'show'
   | 'hide'
 
@@ -342,6 +360,12 @@ export const COMMANDS: CommandDef[] = [
   { name: 'docker', description: 'Manage Docker containers, inspect status/ports, logs, and prune images' },
   { name: 'env', description: 'Search environment variables, inspect PATH directories, and parse .env files' },
   { name: 'expmod', description: 'Explore PowerShell & Python modules, cmdlets, functions, and help' },
+  { name: 'ssh', description: 'Connect to SSH hosts from ~/.ssh/config or saved connections' },
+  { name: 'proc', description: 'Inspect running processes by RAM/CPU and kill hung tasks (alias: /ps, Ctrl+Enter elevated)' },
+  { name: 'svc', description: 'Browse, start, stop, and restart Windows Services' },
+  { name: 'wsl', description: 'Launch WSL Linux distributions in terminal or File Explorer' },
+  { name: 'pkg', description: 'Inspect developer runtimes (Node, Python, Git) and manage WinGet packages (alias: /winget)' },
+  { name: 'clip', description: 'Browse recent clipboard history, format JSON, or transform copied text' },
   { name: 'key', description: 'Inspect keyboard events, key codes, Windows VK codes, and accelerators (alias: /kbd)' },
   { name: 'show', description: 'Show the persistent command dock on screen' },
   { name: 'hide', description: 'Hide the persistent command dock from the screen' }
@@ -388,6 +412,8 @@ export const SEARCHABLE_COMMAND_NAMES: Exclude<CommandName, 'calc' | 'search' | 
   'diff',
   'env',
   'expmod',
+  'ssh',
+  'clip',
   'key'
 ]
 
@@ -426,7 +452,7 @@ export const DEFAULT_COMMAND_LAYOUT: CommandLayout = {
       name: 'Developer',
       icon: '⚡',
       description: 'Git, HTTP, JSON, RegEx, cron, Docker, DNS, and terminal',
-      commands: ['git', 'repo', 'expmod', 'http', 'json', 'regex', 'cron', 'term', 'custom', 'docker', 'env', 'diff', 'cert', 'curl', 'dns', 'key']
+      commands: ['git', 'repo', 'ssh', 'wsl', 'pkg', 'expmod', 'proc', 'svc', 'http', 'json', 'regex', 'cron', 'term', 'custom', 'docker', 'env', 'diff', 'cert', 'curl', 'dns', 'key']
     },
     {
       id: 'folder:utils',
@@ -435,6 +461,7 @@ export const DEFAULT_COMMAND_LAYOUT: CommandLayout = {
       description: 'Calculators, text, encoding, units, and generators',
       commands: [
         'calc',
+        'clip',
         'snippet',
         'case',
         'color',
@@ -481,6 +508,7 @@ export interface SearchResultItem {
   // When set, selecting this item fills the palette input with this text instead of
   // executing anything — used by the "custom" command's parameter tab-complete.
   completion?: string
+  executeOnEnter?: boolean
 }
 
 export interface CustomCommandParam {
@@ -502,7 +530,7 @@ export interface CustomCommand {
   showTerminal?: boolean
 }
 
-export type ConfigType = 'contacts' | 'snippets' | 'links' | 'teamLinks' | 'settings' | 'peers'
+export type ConfigType = 'contacts' | 'snippets' | 'links' | 'teamLinks' | 'settings' | 'peers' | 'sshHosts'
 
 export type ConfigEntry = Record<string, string | number | boolean | string[]>
 
@@ -587,6 +615,22 @@ export const CONFIG_TYPES: ConfigTypeDef[] = [
         label: 'Expected Fingerprint (from the other machine’s Settings)',
         type: 'text'
       }
+    ]
+  },
+  {
+    type: 'sshHosts',
+    label: 'SSH Hosts',
+    description: 'Saved SSH connections for /ssh (alongside ~/.ssh/config)',
+    titleField: 'name',
+    subtitleField: 'host',
+    fields: [
+      { key: 'name', label: 'Name / Alias', type: 'text' },
+      { key: 'host', label: 'Hostname / IP Address', type: 'text' },
+      { key: 'user', label: 'Username (optional)', type: 'text' },
+      { key: 'port', label: 'Port (optional, default 22)', type: 'number' },
+      { key: 'identityFile', label: 'Identity Key File (optional, e.g. ~/.ssh/id_ed25519)', type: 'text' },
+      { key: 'extraArgs', label: 'Extra SSH Flags (optional, e.g. -L 8080:localhost:80)', type: 'text' },
+      { key: 'description', label: 'Description / Notes', type: 'text' }
     ]
   },
   {

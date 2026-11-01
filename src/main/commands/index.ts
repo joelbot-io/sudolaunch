@@ -55,6 +55,12 @@ import * as curl from './curl'
 import * as dns from './dns'
 import * as key from './key'
 import * as expmod from './expmod'
+import * as ssh from './ssh'
+import * as proc from './proc'
+import * as svc from './svc'
+import * as wsl from './wsl'
+import * as pkg from './pkg'
+import * as clip from './clip'
 import * as show from './show'
 import * as hide from './hide'
 
@@ -113,6 +119,12 @@ const searchers: Record<Exclude<CommandName, 'calc'>, (query: string) => SearchR
   dns: dns.search,
   key: key.search,
   expmod: expmod.search,
+  ssh: ssh.search,
+  proc: proc.search,
+  svc: svc.search,
+  wsl: wsl.search,
+  pkg: pkg.search,
+  clip: clip.search,
   show: show.search,
   hide: hide.search
 }
@@ -173,6 +185,12 @@ const executors: Record<CommandName, (item: SearchResultItem, query: string, ele
   dns: dns.execute,
   key: key.execute,
   expmod: expmod.execute,
+  ssh: ssh.execute,
+  proc: proc.execute,
+  svc: svc.execute,
+  wsl: wsl.execute,
+  pkg: pkg.execute,
+  clip: clip.execute,
   show: show.execute,
   hide: hide.execute
 }
