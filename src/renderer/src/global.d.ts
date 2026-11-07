@@ -15,7 +15,34 @@ import type {
   GitRepoStatus,
   KnownRepoItem,
   ProfileItem,
-  BackupArchiveItem
+  BackupArchiveItem,
+  WingetPackageItem,
+  WingetPinItem,
+  WingetSearchResult,
+  WingetPinOptions,
+  WingetActionParams,
+  WingetBatchActionParams,
+  WingetOperationState,
+  WingetPackageDetails,
+  WingetSnapshotItem,
+  EcosystemUpdateItem,
+  DevRuntimeStatus,
+  PathEntryHealth,
+  SystemServiceItem,
+  SystemStartupAppItem,
+  SystemPortItem,
+  SystemProcessItem,
+  CleanupTargetItem,
+  WindowsUpdateStatus,
+  SystemEnvVarItem,
+  SystemScheduledTaskItem,
+  SystemHostEntryItem,
+  SystemNetworkAdapterItem,
+  SystemStorageAndPowerOverview,
+  SystemSecurityPosture,
+  SystemEventLogItem,
+  ShortcutOverlayItem,
+  ShortcutsOverlayData
 } from '../../shared/types'
 
 declare global {
@@ -114,6 +141,176 @@ declare global {
       deleteProfile: (id: string) => Promise<ProfileItem[]>
       listBackupArchives: () => Promise<BackupArchiveItem[]>
       restoreSpecificBackup: (filename: string) => Promise<void>
+
+      // WinGet / System Management APIs
+      getWingetUpdates?: (force?: boolean) => Promise<WingetPackageItem[]>
+      getWingetInstalled?: (force?: boolean) => Promise<WingetPackageItem[]>
+      getWingetPins?: (force?: boolean) => Promise<WingetPinItem[]>
+      searchWingetCatalog?: (query: string) => Promise<WingetSearchResult[]>
+      getWingetPackageDetails?: (id: string) => Promise<WingetPackageDetails | null>
+      addWingetPin?: (
+        options: WingetPinOptions
+      ) => Promise<{ success: boolean; message: string; pins: WingetPinItem[] }>
+      removeWingetPin?: (
+        id: string,
+        elevated?: boolean
+      ) => Promise<{ success: boolean; message: string; pins: WingetPinItem[] }>
+      resetWingetPins?: (
+        elevated?: boolean
+      ) => Promise<{ success: boolean; message: string; pins: WingetPinItem[] }>
+      runWingetAction?: (
+        params: WingetActionParams
+      ) => Promise<{ started: boolean; mode: 'in-panel' | 'elevated' | 'terminal'; message?: string }>
+      runWingetBatchAction?: (
+        params: WingetBatchActionParams
+      ) => Promise<{ started: boolean; message?: string }>
+      cancelWingetOperation?: () => Promise<boolean>
+      getWingetOperationState?: () => Promise<WingetOperationState | null>
+      listWingetSnapshots?: () => Promise<WingetSnapshotItem[]>
+      createWingetSnapshot?: (
+        label?: string
+      ) => Promise<{ success: boolean; message: string; snapshots: WingetSnapshotItem[] }>
+      restoreWingetSnapshot?: (
+        filename: string,
+        mode: 'pins-only' | 'full-import'
+      ) => Promise<{ success: boolean; message: string }>
+      deleteWingetSnapshot?: (filename: string) => Promise<WingetSnapshotItem[]>
+      openWingetSnapshotsFolder?: () => Promise<void>
+      getEcosystemUpdates?: (force?: boolean) => Promise<EcosystemUpdateItem[]>
+      runEcosystemUpdate?: (params: {
+        manager: 'npm' | 'pip' | 'psmodule' | 'wsl'
+        id?: string
+        all?: boolean
+        inTerminal?: boolean
+      }) => Promise<{ success: boolean; message: string }>
+      getDevRuntimesStatus?: (force?: boolean) => Promise<DevRuntimeStatus[]>
+      getPathHealth?: () => Promise<PathEntryHealth[]>
+      getSystemServices?: (force?: boolean) => Promise<SystemServiceItem[]>
+      togglePinSystemService?: (name: string) => Promise<SystemServiceItem[]>
+      runSystemServiceAction?: (params: {
+        name: string
+        action: 'start' | 'stop' | 'restart' | 'auto' | 'manual' | 'disabled'
+        elevated?: boolean
+      }) => Promise<{ success: boolean; message: string; services: SystemServiceItem[] }>
+      getSystemStartupApps?: () => Promise<SystemStartupAppItem[]>
+      getSystemPorts?: () => Promise<SystemPortItem[]>
+      getSystemProcesses?: () => Promise<SystemProcessItem[]>
+      killSystemProcess?: (
+        pid: number,
+        elevated?: boolean
+      ) => Promise<{ success: boolean; message: string }>
+      getCleanupTargets?: () => Promise<CleanupTargetItem[]>
+      cleanSystemTargets?: (
+        ids: string[]
+      ) => Promise<{ success: boolean; message: string; targets: CleanupTargetItem[] }>
+      getWindowsUpdateStatus?: (options?: {
+        force?: boolean
+        scanPending?: boolean
+        online?: boolean
+      }) => Promise<WindowsUpdateStatus>
+      runWindowsUpdateAction?: (
+        action:
+          | 'open-settings'
+          | 'open-history'
+          | 'trigger-scan'
+          | 'schedule-reboot-60s'
+          | 'cancel-reboot'
+      ) => Promise<{ success: boolean; message: string }>
+      getSystemEnvVars?: () => Promise<SystemEnvVarItem[]>
+      setSystemEnvVar?: (params: {
+        name: string
+        value: string
+        scope: 'User' | 'Machine'
+        elevated?: boolean
+      }) => Promise<{ success: boolean; message: string; items: SystemEnvVarItem[] }>
+      deleteSystemEnvVar?: (params: {
+        name: string
+        scope: 'User' | 'Machine'
+        elevated?: boolean
+      }) => Promise<{ success: boolean; message: string; items: SystemEnvVarItem[] }>
+      getSystemScheduledTasks?: (force?: boolean) => Promise<SystemScheduledTaskItem[]>
+      runSystemScheduledTaskAction?: (params: {
+        taskPath: string
+        taskName: string
+        action: 'run' | 'enable' | 'disable'
+        elevated?: boolean
+      }) => Promise<{ success: boolean; message: string; tasks: SystemScheduledTaskItem[] }>
+      getSystemHostsEntries?: () => Promise<SystemHostEntryItem[]>
+      saveSystemHostEntry?: (params: {
+        action: 'toggle' | 'add' | 'delete'
+        lineIndex?: number
+        ip?: string
+        hostname?: string
+        comment?: string
+      }) => Promise<{ success: boolean; message: string; entries: SystemHostEntryItem[] }>
+      getSystemNetworkAdapters?: () => Promise<SystemNetworkAdapterItem[]>
+      runSystemNetworkAction?: (params: {
+        action:
+          | 'flush-dns'
+          | 'reset-winsock'
+          | 'set-dns'
+          | 'allow-port-firewall'
+          | 'open-hosts-folder'
+        adapterName?: string
+        dnsPreset?: 'cloudflare' | 'google' | 'quad9' | 'dhcp'
+        port?: number
+      }) => Promise<{ success: boolean; message: string }>
+      getSystemStorageAndPower?: () => Promise<SystemStorageAndPowerOverview>
+      runSystemPowerOrRepairAction?: (params: {
+        action:
+          | 'set-power-plan'
+          | 'wsl-shutdown'
+          | 'sfc-scannow'
+          | 'dism-check'
+          | 'dism-restore'
+          | 'dism-cleanup'
+          | 'wsreset'
+          | 'battery-report'
+        planGuid?: string
+      }) => Promise<{ success: boolean; message: string }>
+      getSystemSecurityPosture?: (force?: boolean) => Promise<SystemSecurityPosture>
+      runSystemSecurityAction?: (params: {
+        action:
+          | 'update-signatures'
+          | 'quick-scan'
+          | 'open-defender'
+          | 'add-exclusion-path'
+          | 'remove-exclusion-path'
+        targetPath?: string
+      }) => Promise<{ success: boolean; message: string; posture?: SystemSecurityPosture }>
+      getSystemEventLogs?: () => Promise<SystemEventLogItem[]>
+      openExternalUrl?: (url: string) => Promise<void>
+      revealPathInExplorer?: (targetPath: string) => Promise<void>
+      onWingetOperationProgress?: (
+        callback: (state: WingetOperationState | null) => void
+      ) => () => void
+      onWingetUpdatesCount?: (callback: (count: number) => void) => () => void
+      shortcutsToggle?: (initialTab?: string) => void
+      shortcutsOpen?: (initialTab?: string) => void
+      shortcutsReady?: () => void
+      getShortcutsOverlayData?: () => Promise<ShortcutsOverlayData>
+      executeShortcutItem?: (
+        item: ShortcutOverlayItem,
+        elevated?: boolean
+      ) => Promise<{ ok: boolean; message: string }>
+      toggleShortcutFavorite?: (id: string) => Promise<ShortcutsOverlayData>
+      saveShortcutItem?: (item: ShortcutOverlayItem) => Promise<ShortcutsOverlayData>
+      deleteShortcutItem?: (id: string) => Promise<ShortcutsOverlayData>
+      addShortcutCustomTab?: (label: string, icon?: string) => Promise<ShortcutsOverlayData>
+      deleteShortcutCustomTab?: (tabId: string) => Promise<ShortcutsOverlayData>
+      restoreDefaultShortcuts?: () => Promise<ShortcutsOverlayData>
+      runDockerShortcutContainerAction?: (
+        containerNameOrId: string,
+        action: 'start' | 'stop' | 'restart' | 'shell' | 'logs'
+      ) => Promise<{ ok: boolean; message: string; data: ShortcutsOverlayData }>
+      setShortcutsStayOpen?: (stayOpen: boolean) => Promise<ShortcutsOverlayData>
+      setShortcutsGrayscale?: (grayscale: boolean) => Promise<ShortcutsOverlayData>
+      resizeShortcutsWindow?: (width: number, height: number) => Promise<ShortcutsOverlayData>
+      onShortcutsExpanded?: (callback: (expanded: boolean) => void) => () => void
+      onShortcutsGrowOrigin?: (callback: (origin: GrowOrigin) => void) => () => void
+      onShortcutsCollapsing?: (callback: (origin: GrowOrigin) => void) => () => void
+      onShortcutsSelectTab?: (callback: (tabId: string) => void) => () => void
+      onShortcutsActive?: (callback: (active: boolean) => void) => () => void
     }
   }
 }

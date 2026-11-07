@@ -1,5 +1,11 @@
 import { useState, useMemo, useEffect, useCallback, useRef } from 'react'
-import type { FocusTimerState, GitRepoStatus, KnownRepoItem, ProfileItem, BackupArchiveItem } from '../../shared/types'
+import type {
+  FocusTimerState,
+  GitRepoStatus,
+  KnownRepoItem,
+  ProfileItem,
+  BackupArchiveItem
+} from '../../shared/types'
 
 const FOCUS_PRESETS = [5, 10, 15, 30, 45, 60] as const
 
@@ -1203,3 +1209,5 @@ export function ProfilePanel({ onOpenSettings, onClose, onBackToPalette }: Profi
     </div>
   )
 }
+
+export { SystemManagementPanel, type WingetSubTab } from "./SystemManagementPanel"

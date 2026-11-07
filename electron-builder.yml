@@ -3,11 +3,13 @@ productName: SudoLaunch
 directories:
   output: dist
   buildResources: build
-compression: maximum
+compression: normal
+npmRebuild: false
 files:
   - out/**/*
 asarUnpack:
   - node_modules/node-window-manager/**
+  - node_modules/extract-file-icon/**
   - node_modules/electron-clipboard-ex/**
   - node_modules/node-pty/**
 extraResources:

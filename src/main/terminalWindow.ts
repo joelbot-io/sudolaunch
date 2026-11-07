@@ -158,10 +158,12 @@ export function createTerminalWindow(icon: NativeImage): BrowserWindow {
   termWindow.setAlwaysOnTop(true, 'screen-saver')
   loadRenderer(termWindow)
   termWindow.on('moved', () => {
-    if (termExpanded && termWindow) {
+    if (termExpanded && termWindow && !termCollapseTimeout && !termExpandTimeout) {
       const { x, y } = termWindow.getBounds()
       const settings = readSettings()
-      writeSettings({ ...settings, termWindowPosition: { x, y } })
+      if (settings.termWindowPosition?.x !== x || settings.termWindowPosition?.y !== y) {
+        writeSettings({ ...settings, termWindowPosition: { x, y } })
+      }
     }
   })
   termWindow.on('closed', () => {
@@ -220,6 +222,13 @@ export function repositionTerminal(barBounds?: Rectangle): void {
 
 export function showTerminalWindow(): void {
   if (!termWindow) return
+  if (termExpanded) {
+    termWindow.setBounds(expandedBounds(lastBarBounds))
+    if (!termWindow.isVisible()) {
+      termWindow.showInactive()
+    }
+    return
+  }
   const settings = readSettings()
   if (settings.dockLayout === 'shelf' || settings.dockLayout === 'circle') {
     termExpanded = false
@@ -237,6 +246,7 @@ export function hideTerminalWindow(): void {
   if (!termWindow) return
   if (termExpanded) {
     termExpanded = false
+    dockManager.notifyPanelCollapsed()
     termWindow.webContents.send('term-expanded', false)
   }
   termWindow.hide()

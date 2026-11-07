@@ -186,6 +186,13 @@ export function repositionNotification(barBounds?: Rectangle): void {
 
 export function showNotificationWindow(): void {
   if (!notifyWindow) return
+  if (notifyExpanded) {
+    notifyWindow.setBounds(expandedBounds(lastBarBounds))
+    if (!notifyWindow.isVisible()) {
+      notifyWindow.showInactive()
+    }
+    return
+  }
   const settings = readSettings()
   if (settings.dockLayout === 'shelf' || settings.dockLayout === 'circle') {
     notifyExpanded = false

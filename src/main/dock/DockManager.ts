@@ -18,6 +18,13 @@ export interface NotificationDockCallbacks {
   reset: () => void
 }
 
+export interface ShortcutsDockCallbacks {
+  reposition: (barBounds?: Rectangle) => void
+  show: () => void
+  hide: () => void
+  reset: () => void
+}
+
 export interface BarDockCallbacks {
   cancelAnimations: () => void
   reset: () => void
@@ -56,10 +63,12 @@ export class DockManager {
   private barWindow: BrowserWindow | null = null
   private terminalWindow: BrowserWindow | null = null
   private notifyWindow: BrowserWindow | null = null
+  private shortcutsWindow: BrowserWindow | null = null
 
   private barCallbacks: BarDockCallbacks | null = null
   private terminalCallbacks: TerminalDockCallbacks | null = null
   private notifyCallbacks: NotificationDockCallbacks | null = null
+  private shortcutsCallbacks: ShortcutsDockCallbacks | null = null
 
   private lastBarBounds: Rectangle | null = null
   private autoReturnTimer: NodeJS.Timeout | null = null
@@ -105,6 +114,15 @@ export class DockManager {
     win.on('closed', () => {
       this.notifyWindow = null
       this.notifyCallbacks = null
+    })
+  }
+
+  registerShortcuts(win: BrowserWindow, callbacks: ShortcutsDockCallbacks): void {
+    this.shortcutsWindow = win
+    this.shortcutsCallbacks = callbacks
+    win.on('closed', () => {
+      this.shortcutsWindow = null
+      this.shortcutsCallbacks = null
     })
   }
 
@@ -227,6 +245,7 @@ export class DockManager {
     if (barBounds) this.lastBarBounds = barBounds
     this.terminalCallbacks?.reposition(this.lastBarBounds ?? undefined)
     this.notifyCallbacks?.reposition(this.lastBarBounds ?? undefined)
+    this.shortcutsCallbacks?.reposition(this.lastBarBounds ?? undefined)
   }
 
   /**
@@ -383,7 +402,8 @@ export class DockManager {
       ...settings,
       barPosition: null,
       termPosition: null,
-      termWindowPosition: null
+      termWindowPosition: null,
+      shortcutsWindowPosition: null
     })
 
     this.isSummonedAway = false
@@ -392,10 +412,11 @@ export class DockManager {
     this.barCallbacks?.reset()
     this.terminalCallbacks?.reset()
     this.notifyCallbacks?.reset()
+    this.shortcutsCallbacks?.reset()
   }
 
   /**
-   * Synchronously shows all 3 dock windows in inactive mode (does not steal OS focus).
+   * Synchronously shows all dock windows in inactive mode (does not steal OS focus).
    */
   showAll(): void {
     if (this.barWindow && !this.barWindow.isVisible()) {
@@ -403,10 +424,11 @@ export class DockManager {
     }
     this.terminalCallbacks?.show()
     this.notifyCallbacks?.show()
+    this.shortcutsCallbacks?.show()
   }
 
   /**
-   * Synchronously hides all 3 dock windows.
+   * Synchronously hides all dock windows.
    */
   hideAll(): void {
     if (this.barWindow && this.barWindow.isVisible()) {
@@ -414,6 +436,7 @@ export class DockManager {
     }
     this.terminalCallbacks?.hide()
     this.notifyCallbacks?.hide()
+    this.shortcutsCallbacks?.hide()
   }
 
   sendToBar(channel: string, ...args: unknown[]): void {
@@ -431,6 +454,9 @@ export class DockManager {
     }
     if (this.notifyWindow && !this.notifyWindow.isDestroyed()) {
       this.notifyWindow.webContents.send(channel, ...args)
+    }
+    if (this.shortcutsWindow && !this.shortcutsWindow.isDestroyed()) {
+      this.shortcutsWindow.webContents.send(channel, ...args)
     }
   }
 }

@@ -23,7 +23,7 @@ let cachedProcs: { timestamp: number; list: ProcessInfo[] } | null = null
 let inflightProcs: Promise<ProcessInfo[]> | null = null
 
 async function getProcesses(force = false): Promise<ProcessInfo[]> {
-  if (!force && cachedProcs && Date.now() - cachedProcs.timestamp < 2500) {
+  if (!force && cachedProcs && Date.now() - cachedProcs.timestamp < 5000) {
     return cachedProcs.list
   }
   if (inflightProcs) return inflightProcs

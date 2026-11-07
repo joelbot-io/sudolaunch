@@ -50,8 +50,7 @@ function isMinimized(bounds: { x: number; y: number }): boolean {
   return bounds.x <= -30000 || bounds.y <= -30000
 }
 
-function monitorLabel(win: Window): string {
-  const monitors = windowManager.getMonitors()
+function monitorLabel(win: Window, monitors: ReturnType<typeof windowManager.getMonitors>): string {
   // getMonitor() falls back to an EmptyMonitor (no id at all) when the window doesn't
   // resolve to a real display — the package doesn't export Monitor for an instanceof
   // check, so narrow on the property that distinguishes them.
@@ -67,8 +66,17 @@ interface Candidate {
   sublabel: string
 }
 
+const FOCUS_CACHE_TTL_MS = 3000
+let cachedCandidates: Candidate[] | null = null
+let cachedCandidatesAt = 0
+
 function listCandidates(): Candidate[] {
+  const now = Date.now()
+  if (cachedCandidates && now - cachedCandidatesAt < FOCUS_CACHE_TTL_MS) {
+    return cachedCandidates
+  }
   const excludeId = ownWindowId()
+  const monitors = windowManager.getMonitors()
   const out: Candidate[] = []
   for (const win of windowManager.getWindows()) {
     if (win.id === excludeId) continue
@@ -86,12 +94,15 @@ function listCandidates(): Candidate[] {
     }
     let sublabel: string
     try {
-      sublabel = minimized ? `${monitorLabel(win)} · minimized` : monitorLabel(win)
+      const mLabel = monitorLabel(win, monitors)
+      sublabel = minimized ? `${mLabel} · minimized` : mLabel
     } catch {
       sublabel = minimized ? 'minimized' : ''
     }
     out.push({ id: win.id, label: title, sublabel })
   }
+  cachedCandidates = out
+  cachedCandidatesAt = now
   return out
 }
 
@@ -104,6 +115,7 @@ export function search(query: string): SearchResultItem[] {
 }
 
 export async function execute(item: SearchResultItem): Promise<void> {
+  cachedCandidates = null
   const id = Number(item.value)
   const win = windowManager.getWindows().find((w) => w.id === id)
   if (!win) {

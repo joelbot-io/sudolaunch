@@ -20,7 +20,7 @@ let cachedServices: { timestamp: number; list: ServiceInfo[] } | null = null
 let inflightServices: Promise<ServiceInfo[]> | null = null
 
 async function getServices(force = false): Promise<ServiceInfo[]> {
-  if (!force && cachedServices && Date.now() - cachedServices.timestamp < 3500) {
+  if (!force && cachedServices && Date.now() - cachedServices.timestamp < 7000) {
     return cachedServices.list
   }
   if (inflightServices) return inflightServices

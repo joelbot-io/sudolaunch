@@ -21,6 +21,10 @@ interface ResolvedSshHost {
   useConfigAlias?: boolean
 }
 
+const SSH_CONFIG_CACHE_TTL_MS = 10000
+let cachedSshConfigHosts: ResolvedSshHost[] | null = null
+let cachedSshConfigAt = 0
+
 function expandHome(p: string): string {
   if (p.startsWith('~/') || p.startsWith('~\\')) {
     return join(homedir(), p.slice(2))
@@ -130,9 +134,14 @@ function parseSshConfigFile(filePath: string, visited = new Set<string>()): Reso
 function getAllSshHosts(): ResolvedSshHost[] {
   const byName = new Map<string, ResolvedSshHost>()
 
-  // 1. Read ~/.ssh/config first
-  const sshConfigPath = join(homedir(), '.ssh', 'config')
-  for (const h of parseSshConfigFile(sshConfigPath)) {
+  // 1. Read ~/.ssh/config first (cached briefly to avoid per-keystroke disk I/O)
+  const now = Date.now()
+  if (!cachedSshConfigHosts || now - cachedSshConfigAt >= SSH_CONFIG_CACHE_TTL_MS) {
+    const sshConfigPath = join(homedir(), '.ssh', 'config')
+    cachedSshConfigHosts = parseSshConfigFile(sshConfigPath)
+    cachedSshConfigAt = now
+  }
+  for (const h of cachedSshConfigHosts) {
     byName.set(h.name.toLowerCase(), h)
   }
 
@@ -411,7 +420,7 @@ export function search(query: string): SearchResultItem[] {
   if (items.length === 0) {
     return [
       {
-        label: ` Connect to "${raw}" via SSH`,
+        label: `🖥️ Connect to "${raw}" via SSH`,
         sublabel: `Run "ssh ${raw}" in SudoLaunch Terminal · ↵ Connect`,
         value: `__term::ssh ${raw}`
       },
@@ -472,4 +481,3 @@ export async function execute(item: SearchResultItem, _query?: string, elevated?
 
   clipboard.writeText(item.value)
 }
-

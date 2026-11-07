@@ -7,6 +7,7 @@ const prebuildDir = path.join(rootDir, 'resources', 'native-prebuilds', 'win32-x
 
 const ptyTarget = path.join(rootDir, 'node_modules', 'node-pty', 'build', 'Release')
 const wmTarget = path.join(rootDir, 'node_modules', 'node-window-manager', 'build', 'Release')
+const iconTarget = path.join(rootDir, 'node_modules', 'extract-file-icon', 'build', 'Release')
 
 let restored = false
 
@@ -15,6 +16,7 @@ if (process.platform === 'win32' && fs.existsSync(prebuildDir)) {
   try {
     const ptySource = path.join(prebuildDir, 'node-pty')
     const wmSource = path.join(prebuildDir, 'node-window-manager')
+    const iconSource = path.join(prebuildDir, 'extract-file-icon')
 
     if (fs.existsSync(ptySource)) {
       fs.mkdirSync(ptyTarget, { recursive: true })
@@ -30,7 +32,18 @@ if (process.platform === 'win32' && fs.existsSync(prebuildDir)) {
       }
     }
 
-    if (fs.existsSync(path.join(ptyTarget, 'pty.node')) && fs.existsSync(path.join(wmTarget, 'addon.node'))) {
+    if (fs.existsSync(iconSource)) {
+      fs.mkdirSync(iconTarget, { recursive: true })
+      for (const file of fs.readdirSync(iconSource)) {
+        fs.copyFileSync(path.join(iconSource, file), path.join(iconTarget, file))
+      }
+    }
+
+    if (
+      fs.existsSync(path.join(ptyTarget, 'pty.node')) &&
+      fs.existsSync(path.join(wmTarget, 'addon.node')) &&
+      fs.existsSync(path.join(iconTarget, 'addon.node'))
+    ) {
       console.log(' [v] Successfully restored prebuilt native binaries for Windows x64.')
       restored = true
     }
@@ -43,9 +56,12 @@ if (process.platform === 'win32' && fs.existsSync(prebuildDir)) {
 if (!restored) {
   console.log(' [+] Rebuilding native modules for Electron...')
   try {
-    execSync('npx electron-rebuild -f -o node-window-manager,electron-clipboard-ex,node-pty', {
+    const env = { ...process.env }
+    delete env.NoDefaultCurrentDirectoryInExePath
+    execSync('npx electron-rebuild -f -o node-window-manager,extract-file-icon,electron-clipboard-ex,node-pty', {
       stdio: 'inherit',
-      cwd: rootDir
+      cwd: rootDir,
+      env
     })
   } catch (err) {
     console.error(' [X] electron-rebuild failed:', err.message)

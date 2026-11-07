@@ -1,4 +1,5 @@
-import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from 'fs'
+import { app } from 'electron'
+import { copyFileSync, existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from 'fs'
 import { join } from 'path'
 import { watch as chokidarWatch } from 'chokidar'
 import { CONFIG_DIR } from './config'
@@ -8,6 +9,12 @@ import { runElevated } from './elevation'
 import type { CustomCommand, CustomCommandParam } from '../shared/types'
 
 export const COMMANDS_DIR = join(CONFIG_DIR, 'commands')
+
+let cachedCustomCommands: CustomCommand[] | null = null
+
+export function invalidateCustomCommandsCache(): void {
+  cachedCustomCommands = null
+}
 
 const EXAMPLE_COMMAND = {
   Command: '/example',
@@ -22,12 +29,26 @@ const EXAMPLE_COMMAND = {
 const EXAMPLE_FOLDER_COMMAND = {
   Command: '/maint',
   Label: 'Maintenance',
-  Folder: 'maintenance'
+  Folder: 'maintenance',
+  ShowTerminal: true
 }
 
 const EXAMPLE_MAINTENANCE_SCRIPT = `# Example maintenance task - update PowerShell modules used by other custom commands.
 Get-Module -ListAvailable | ForEach-Object { Update-Module -Name $_.Name -Force -ErrorAction SilentlyContinue }
 `
+
+function resolveBundledResource(filename: string): string | null {
+  const candidates = [
+    join(process.resourcesPath, filename),
+    join(process.resourcesPath, 'resources', filename),
+    join(app ? app.getAppPath() : process.cwd(), 'resources', filename),
+    join(process.cwd(), 'resources', filename)
+  ]
+  for (const p of candidates) {
+    if (p && existsSync(p)) return p
+  }
+  return null
+}
 
 export function ensureCommandsDir(): void {
   if (!existsSync(COMMANDS_DIR)) {
@@ -39,6 +60,17 @@ export function ensureCommandsDir(): void {
   if (!existsSync(maintenanceDir)) {
     mkdirSync(maintenanceDir, { recursive: true })
     writeFileSync(join(maintenanceDir, 'example-update-modules.ps1'), EXAMPLE_MAINTENANCE_SCRIPT, 'utf-8')
+  }
+  const syncTeamsTarget = join(maintenanceDir, 'Sync-TeamsList.ps1')
+  if (!existsSync(syncTeamsTarget)) {
+    const bundledSyncTeams = resolveBundledResource('Sync-TeamsList.ps1')
+    if (bundledSyncTeams) {
+      try {
+        copyFileSync(bundledSyncTeams, syncTeamsTarget)
+      } catch {
+        // ignore
+      }
+    }
   }
 }
 
@@ -72,6 +104,7 @@ function findJsonFiles(dir: string): string[] {
 }
 
 export function loadCustomCommands(): CustomCommand[] {
+  if (cachedCustomCommands) return cachedCustomCommands
   const files = findJsonFiles(COMMANDS_DIR)
   const out: CustomCommand[] = []
   for (const fullPath of files) {
@@ -90,30 +123,37 @@ export function loadCustomCommands(): CustomCommand[] {
         continue
       }
       const showTerminal = Boolean(raw.ShowTerminal ?? raw.showTerminal ?? raw.OpenTerminal ?? raw.openTerminal)
+      const excludeFromSearch = Boolean(raw.ExcludeFromSearch ?? raw.excludeFromSearch)
       out.push({
         command,
         action: hasAction ? raw.Action : undefined,
         folder: hasFolder ? raw.Folder : undefined,
         label: typeof raw.Label === 'string' ? raw.Label : undefined,
         parameters: normalizeParams(raw.Parameters),
-        showTerminal
+        showTerminal,
+        excludeFromSearch
       })
     } catch (err) {
       console.warn(`Failed to parse custom command file ${fullPath}:`, err)
     }
   }
+  cachedCustomCommands = out
   return out
 }
 
 export function watchCustomCommands(onChange: () => void): void {
+  const handleChange = (): void => {
+    cachedCustomCommands = null
+    onChange()
+  }
   chokidarWatch(COMMANDS_DIR, {
     persistent: false,
     ignoreInitial: true,
     awaitWriteFinish: { stabilityThreshold: 150, pollInterval: 50 }
   })
-    .on('add', onChange)
-    .on('change', onChange)
-    .on('unlink', onChange)
+    .on('add', handleChange)
+    .on('change', handleChange)
+    .on('unlink', handleChange)
 }
 
 function notify(cmd: CustomCommand, success: boolean, detail?: string, commandInput?: string): void {

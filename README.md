@@ -6,6 +6,8 @@ A global-hotkey command palette, persistent command bar, and drop-down terminal 
 
 - [Commands](#commands)
 - [Execution Modes & Elevation (`Ctrl+Enter`)](#execution-modes--elevation-ctrlenter)
+- [System Management Control Center (`/system` & `🧰` Dock Module)](#system-management-control-center-system--dock-module)
+- [Customizable Shortcuts Overlay (`/shortcuts` & `⌨️` Dock Module)](#customizable-shortcuts-overlay-shortcuts--dock-module)
 - [Modular Dock, Layouts & Notifications](#modular-dock-layouts--notifications)
 - [Focus & Pomodoro Timer Popout](#focus--pomodoro-timer-popout)
 - [Command Layout & Subfolders](#command-layout--subfolders)
@@ -31,12 +33,29 @@ A global-hotkey command palette, persistent command bar, and drop-down terminal 
 |---|---|
 | `/search <query>` | Universal multi-source search across contacts, snippets, apps, windows, custom commands, and GIFs (excludes internal Teams links) |
 | `/app <query>` | Fuzzy-search Start Menu shortcuts and installed applications, launch (cached in-memory with a 10-minute TTL for fast typing) |
+| `/system [tab]` | Open the `1040×720` System Management Control Center — 6-category workstation suite covering WinGet & Windows Update, Dev Runtimes, PATH Doctor & Persistent Env Vars, Services & Scheduled Tasks, Ports, Hosts & DNS, Disk, SMART & Power/Repair, and Defender, BitLocker & Event Logs (alias: `/sys`) |
+| `/shortcuts [tab]` | Open the `740×460` floating Customizable Shortcuts Overlay — tabbed keyboard shortcut deck for Favorites, PowerToys, Docker, Windows, Dev & Git, and Custom tabs with click-to-execute keystroke simulation and actions (aliases: `/sc`, `/hotkeys`) |
+| `/pkg [query]` | Inspect developer runtimes (Node, Python, Git, Go, Rust, .NET, Docker) and run quick WinGet package actions (alias: `/winget`) |
+| `/svc [query]` | Browse, filter (`running`/`stopped`), start, stop, and restart Windows Services with automatic UAC elevation |
+| `/proc [query]` | Inspect running processes by RAM/CPU and terminate hung tasks (alias: `/ps`, `Ctrl+Enter` elevated) |
+| `/wsl [distro]` | Launch WSL Linux distributions in SudoLaunch Terminal or open their root filesystem in File Explorer |
+| `/ssh [host]` | Connect to SSH hosts from `~/.ssh/config` or saved connections in `sshHosts.json` |
+| `/docker [query]` | Manage Docker containers, inspect status/ports, stream logs, and prune images |
+| `/repo` | Open active Git repository status, branch switcher, and recent repository selector panel (hotkey: `F9`) |
+| `/expmod [query]` | Explore installed PowerShell & Python modules, exported cmdlets/functions, and inline help |
+| `/env [query]` | Search environment variables, inspect User/Machine `PATH` directories, and parse `.env` files |
+| `/cert <host>` | Inspect SSL/TLS certificates, expiry dates, SANs, and cipher suites for any HTTPS host (alias: `/ssl`) |
+| `/curl <cmd|url>` | Convert cURL commands to code (`fetch`, Python, Go) or probe HTTP endpoints |
+| `/dns <domain>` | Lookup DNS records (`A`, `AAAA`, `MX`, `TXT`, `CNAME`, `NS`) and propagation (alias: `/dig`) |
+| `/diff` | Compare text and JSON snippets, clipboard vs input, and inspect line/key differences |
+| `/clip [query]` | Browse recent clipboard history, format copied JSON, or transform clipboard text |
+| `/key [query]` | Inspect keyboard events, key codes, Windows Virtual-Key (`VK_*`) codes, and Electron accelerators (alias: `/kbd`) |
 | `/teams <query>` | Fuzzy-search contacts and team/channel deep links, open a Teams chat or navigate to a channel |
 | `/mail <query>` | Fuzzy-search contacts, compose an email in your default mail client |
 | `/snippet <query>` | Fuzzy-search snippets, copy text directly to clipboard |
 | `/fav <query>` | Fuzzy-search saved links, open URL in default browser |
 | `/g <query>` | Open a Google search in your default web browser (alias: `/google`, clipboard fallback) |
-| `/timer [minutes]` | Open the Focus & Pomodoro countdown timer panel with 5m/10m/15m/30m/45m/60m presets, arrow-key selector navigation, and session tracking (alias: `/focus`) |
+| `/timer [minutes]` | Open the Focus & Pomodoro countdown timer panel with 5m/10m/15m/30m/45m/60m presets, arrow-key selector navigation, and session tracking |
 | `/focus <query>` | Fuzzy-search open desktop windows by title, restore and bring to front |
 | `/calc <expression>` | Evaluate a math expression inline; Enter copies the result to clipboard |
 | `/<custom name> <args>` | Run a user-defined custom PowerShell command, or browse a folder of scripts (see [Custom commands](#custom-commands)) |
@@ -56,7 +75,7 @@ A global-hotkey command palette, persistent command bar, and drop-down terminal 
 | `/lorem [count|type]` | Generate placeholder text (paragraphs, sentences) and mock data (names, emails, phones, addresses, companies) |
 | `/mime <query>` | Two-way lookup between file extensions and standard MIME content types (e.g. `.webp`, `application/pdf`, `text/html`) |
 | `/port [port]` | Inspect active listening TCP ports and running processes; Enter kills the blocking process or copies PID |
-| `/profile [action]` | Manage, backup, restore, clean history, validate, or reset user profile and configuration |
+| `/profile [action]` | Open the Profile Switcher, Backup & Maintenance panel, or run profile actions (`backup`, `restore`, `clean-history`, `validate`, `reset`) |
 | `/pt [query]` | Launch Microsoft PowerToys utilities & tools (Hosts, FancyZones, OCR, Ruler, ColorPicker, Awake, etc., alias: `/powertoys`) |
 | `/pwd [length|type]` | Generate cryptographically secure passwords, Diceware passphrases, PINs, and 256-bit API secrets |
 | `/qr [url|text]` | Generate QR codes from URLs or text with clipboard copy for SVG Data URI, SVG XML, or ASCII terminal art |
@@ -65,6 +84,8 @@ A global-hotkey command palette, persistent command bar, and drop-down terminal 
 | `/unit <expr>` | Unit converter for data storage (GB/MB), bandwidth (Mbps), physical units, and number bases (dec/hex/bin/oct) |
 | `/url <url>` | Parse URL components (host, path, port), extract individual query params, and generate cURL / fetch / PowerShell snippets |
 | `/uuid [id]` | Generate UUIDs/GUIDs in multiple formats (standard, uppercase, no-hyphens, C# GUID, Base64, UUIDv7) or inspect existing IDs |
+| `/notifications` | Open the Acrylic Notification Center and execution history alerts (alias: `/notify`) |
+| `/history [query|clear]` | Browse, search, re-run, or clear recent command execution history |
 | `/settings` | Open interactive configuration manager (alias: `/config`). Supports typing subcommands like `/settings layout`, `/settings edit`, `/settings contacts` |
 | `/control [#]` | Toggle active keyboard/mouse input sharing with another computer (e.g. `/control 2` or `/control 192.168.1.105`) |
 | `/release` | Release input sharing connection and restore local control regardless of whether input is local or remote |
@@ -72,7 +93,6 @@ A global-hotkey command palette, persistent command bar, and drop-down terminal 
 | `/view` | Toggle persistent command bar on/off; `/view reset` returns all buttons to default dock |
 | `/show` | Turn on and display the persistent command dock on screen |
 | `/hide` | Hide the persistent command dock from the screen |
-| `/move` | Interactively drag command bar, terminal, and notification icons to new positions |
 | `/default` | Set or clear default command prioritized at top of suggestions list |
 | `/restart` | Relaunch the application |
 | `/exit` | Exit and close the application (alias: `/quit`) |
@@ -97,16 +117,120 @@ SudoLaunch provides seamless execution controls right from the palette footer:
 - **Footer Hints**:
   - The palette footer dynamically displays `↵ Run in Terminal` alongside `Ctrl+↵ Run Elevated` for immediate keyboard feedback.
 
+## System Management Control Center (`/system` & `🧰` Dock Module)
+
+Click the `🧰` icon on the Shelf / Orbit Dock or run `/system` (alias: `/sys`) to open the **`1040 × 720` System Management Control Center** — an integrated workstation management suite with 6 top-level categories:
+
+### 1. 🪽 WinGet & Package Updates
+- **Updates Available (`winget upgrade --include-pinned`)**:
+  - Inspect outdated packages with `current → available` version diffs, source tags, and pin status badges (`📌 Pinned`, `🛑 Blocked`, `🔒 Gated`).
+  - **Multi-Select Batch Queue**: Select multiple packages via row checkboxes and run **🚀 Upgrade Selected (`N`)**, **📌 Pin Selected (`N`)**, or **🗑️ Uninstall Selected (`N`)** with live `[Step X / Total]` streaming progress and expandable console logs.
+  - **One-Click Upgrade All**: Run `winget upgrade --all` (with an optional `--include-pinned` toggle) either in-panel or inside the persistent SudoLaunch Terminal (`>_`).
+- **Right-Hand Package Inspector Drawer (`winget show`)**:
+  - Click any package row or its `ℹ️` button to open a split-pane inspector querying `winget show --id <id>` and `winget show --id <id> --versions`.
+  - View publisher, license, installer type, full description, and one-click links to **🌐 Homepage**, **📝 Release Notes**, and **🏢 Publisher**.
+  - Choose any historical or latest version from the **Target Version** dropdown, configure **Install Scope** (`Default`, `User`, `Machine`), **Interactive UI**, or **Force (`--force`)**, or **🔒 Gate-Pin** directly to that version series.
+- **Installed Packages (`winget list`)**:
+  - Instant text filter and filter chips for `WinGet Managed`, `All Installed`, `Has Update`, and `Pinned`, with one-click Update, Pin/Edit Pin, and two-click confirmed Uninstall.
+- **Pinned Packages (`winget pin`)**:
+  - Manage package pins across all three WinGet pin modes:
+    - **📌 Standard Pin (`Pinning`)**: Skipped by `upgrade --all`, upgradable explicitly with `--include-pinned`.
+    - **🛑 Blocking Pin (`--blocking`)**: Blocks all upgrades until explicitly unpinned.
+    - **🔒 Version-Gated Pin (`--version <pattern>`)**: Locks updates to a wildcard version range (e.g. `2.56.*` or `24.*`).
+- **Search & Install Catalog (`winget search`)**:
+  - Search the WinGet repository with popular quick-tag chips (`PowerToys`, `Git`, `Node.js`, `Python`, `7zip`, `Docker`, `VSCode`, `Sysinternals`, `uv`, `Ripgrep`) and one-click Install / Reinstall.
+- **🌐 Ecosystem Updates (`npm`, `pip`, `WSL`)**:
+  - Multi-manager update aggregator that checks outdated global **npm** packages (`npm outdated -g`), **Python pip** packages (`pip list --outdated`), and **WSL** kernel/engine status (`wsl --update`).
+- **📸 Workstation Snapshots (Export / Import)**:
+  - Save and restore `winget import`-compatible JSON snapshots enriched with your SudoLaunch pin configurations in `~/.sudolaunch/winget-snapshots/`. Supports **📌 Restore Pins Only** or **📦 Import All (`>_`)**.
+- **🪟 Windows Update & Pending Reboot Status**:
+  - Checks all 4 Windows Pending Reboot registry indicators (`Component Based Servicing\RebootPending`, `WindowsUpdate\Auto Update\RebootRequired`, `Session Manager\PendingFileRenameOperations`, and `UpdateExeVolatile`) and surfaces a high-visibility **`⚠️ Reboot Pending`** badge in the header when a restart is required.
+  - Displays OS version/build, system uptime (`days / hours`), last boot time, `wuauserv` service state, on-demand **Pending Windows & Driver Updates** scanning (`Microsoft.Update.Session` local cache & online), **Recently Installed KB Hotfixes** (`Get-HotFix`) with Microsoft Support KB lookup links, and one-click **Schedule Restart (60s)** / **Cancel Restart (`shutdown /a`)** controls.
+- **Background Update Polling**:
+  - Automatically checks for available WinGet updates in the background and displays a live badge on the `🧰` Dock icon.
+
+### 2. 🛠️ Dev Runtimes, PATH Doctor & Environment Variables
+- **Developer Runtimes Scanner (`/system runtimes`)**:
+  - Audits 12 core developer toolchains (`node`, `npm`, `python`, `uv`, `go`, `pwsh`, `git`, `dotnet`, `rustc`, `docker`, `java`, `winget`) with live Registry `PATH` resolution, displaying active version, binary path, and **`where.exe` PATH Shadowing Conflict warnings** when multiple binaries exist on `PATH`.
+  - One-click **📂 Reveal Binary in Explorer** or **⬆️ Upgrade / Install via WinGet** (including `GoLang.Go`).
+- **PATH Environment Doctor (`/system path`)**:
+  - Inspects `Machine` and `User` `PATH` directories and flags **⚠️ Missing / Broken Folders** and **🔁 Duplicate Entries**.
+- **🔑 Persistent Environment Variables Editor (`/system envvars`)**:
+  - Inspect, search, create, edit, and delete persistent **`User`** (`HKCU\Environment`) and **`Machine`** (`HKLM\...\Environment`) Registry variables via `[System.Environment]::SetEnvironmentVariable(...)`.
+  - Automatically masks secret/token keys (`TOKEN`, `SECRET`, `KEY`, `PASSWORD`, `AUTH`, `PAT`) with an eye toggle (`👁️`/`🙈`) to reveal or copy values safely, and elevates via UAC when modifying `Machine`-scoped variables.
+
+### 3. ⚙️ Windows Services, Startup Apps & Scheduled Tasks
+- **Windows Services Manager (`/system services`)**:
+  - Star/pin favorite developer and system services (`Docker`, `ssh-agent`, `WslService`, `Spooler`, etc., persisted in `~/.sudolaunch/pinned-services.json`), filter by `Pinned`, `Running`, or `Stopped`, and **Start / Stop / Restart** with automatic UAC elevation fallback.
+- **Startup Apps Inspector (`/system startup`)**:
+  - Lists Windows login startup entries across `HKCU Run`, `HKLM Run`, and the `Startup` folder.
+- **📅 Scheduled Tasks Inspector (`/system tasks`)**:
+  - Inspect Windows Task Scheduler jobs (`Get-ScheduledTask` + `Get-ScheduledTaskInfo`) with smart filtering that hides noisy built-in `\Microsoft\Windows\*` tasks by default to spotlight user, developer, and 3rd-party background updaters.
+  - Displays state (`Ready`, `Running`, `Disabled`), last run time, next run time, and last task result code (`0x0`), with one-click **▶️ Run Now**, **⏸️ Disable**, and **✅ Enable** actions.
+
+### 4. 🔌 Active Ports, Processes, Hosts File & Network/DNS
+- **Listening TCP Ports & Local Firewall Helper (`/system ports`)**:
+  - Live table of active TCP listening ports with a **⚡ Dev & Web Ports** filter (`3000–9999`, `80`, `443`, `5432`, `6379`, etc.), process name, PID, and RAM usage.
+  - One-click **🌐 Open `http://localhost:<port>`**, **🧱 Allow Firewall** (creates a `Private`-profile inbound rule via `New-NetFirewallRule` for local mobile/LAN testing), or **🛑 Kill Process**.
+- **Top Resource Processes (`/system procs`)**:
+  - Inspect top processes sorted by Memory (MB) or CPU time (s) with window titles, binary reveal, and two-click process termination.
+- **📝 Hosts File Editor (`/system hosts`)**:
+  - Visual manager for `C:\Windows\System32\drivers\etc\hosts` supporting one-click enable/disable toggles (commenting/uncommenting lines in-place), adding custom `IP → Hostname` mappings with optional inline comments, deleting entries, and automatic UAC elevation + `ipconfig /flushdns`.
+- **🌐 Network Adapters & Quick DNS Switcher (`/system network`)**:
+  - Displays active physical, Wi-Fi, VPN, and virtual/vEthernet adapters with IPv4, MAC address, link speed, and active DNS servers.
+  - One-click **Quick DNS Switcher** per adapter for **Cloudflare (`1.1.1.1`)**, **Google (`8.8.8.8`)**, **Quad9 (`9.9.9.9`)**, or **Automatic (`DHCP`)**, plus global **🚿 Flush DNS Cache**, **🔄 Renew DHCP Lease**, and **🧹 Reset Winsock**.
+
+### 5. 🧹 Disk Cleanup, SMART Health & Power / OS Repair
+- **Dev & System Cache Cleanup (`/system cache`)**:
+  - Scans directory sizes and file counts across **WinGet Download Cache**, **npm Package Cache**, **Go Build Cache (`%LOCALAPPDATA%\go-build`)**, **Python pip Cache**, **Astral uv Cache**, **Application Crash Dumps**, and **Windows User Temp (`%TEMP%`)**, with one-click selective cleanup and space reclamation reporting.
+- **💾 Storage Volumes & Physical Disk SMART Health (`/system storage`)**:
+  - Visual capacity bars for local fixed and removable volumes (`Get-Volume`) alongside physical NVMe/SSD/HDD hardware diagnostics (`Get-PhysicalDisk`) showing bus type, media type, health status (`Healthy` / `Warning`), and operational state.
+- **🔋 Power Plan Switcher, Sleep Locks & Windows Repair Toolkit (`/system power`)**:
+  - Switch active Windows power schemes (**Balanced**, **High Performance**, **Ultimate Performance**, **Power Saver**) via `powercfg`, and inspect active **Wake / Sleep Locks (`powercfg /requests`)** preventing the display or system from sleeping.
+  - Built-in **Windows System Repair & Maintenance** action cards for **🐧 Restart WSL 2 (`wsl --shutdown`)**, **🩺 SFC System File Scan (`sfc /scannow`)**, **⚡ DISM CheckHealth**, **🛠️ DISM RestoreHealth**, **🧹 DISM Component Cleanup**, **🏪 Reset Microsoft Store (`wsreset.exe`)**, and **🔋 Generate Battery Health Report (`powercfg /batteryreport`)**.
+
+### 6. 🛡️ Security Posture & Event Log Crash Triage
+- **🛡️ Windows Defender, Exclusions & BitLocker (`/system security`)**:
+  - Audits **Windows Defender** real-time protection, Tamper Protection, signature age, and last scan timestamps with one-click **🔄 Update Signatures (`Update-MpSignature`)** and **🔍 Quick Scan (`Start-MpScan -ScanType QuickScan`)**.
+  - Manage **Defender Folder Exclusions** (`ExclusionPath`) to speed up heavy compiler/Node/Rust workspace builds (`Add-MpPreference` / `Remove-MpPreference`), inspect **BitLocker Volume Encryption** status & protection state across drives, and audit members of the local **`Administrators`** group.
+- **🚨 Event Log & Application Crash Triage (`/system events`)**:
+  - Queries recent `Critical` and `Error` entries from the Windows **`Application`** and **`System`** logs (`Get-WinEvent`), surfacing `.NET Runtime` exceptions, `Application Error` (Event ID `1000` faulting module crashes), `Service Control Manager` failures, and `DistributedCOM` errors with expandable stack traces and one-click clipboard copy.
+
+## Customizable Shortcuts Overlay (`/shortcuts` & `⌨️` Dock Module)
+
+Click the `⌨️` icon on the Shelf / Orbit Dock or run `/shortcuts` (aliases: `/sc`, `/hotkeys`) to toggle the **`740 × 460` Customizable Shortcuts Overlay** — a draggable, always-on-top frosted-glass window styled after the SudoLaunch PowerShell Terminal (`.term-shell` / `.term-header`) that remembers its custom screen coordinates (`shortcutsWindowPosition`):
+
+- **6 Built-In Tabs + Unlimited Custom Tabs (`+ Tab`)**:
+  - **⭐ Favorites (`favorites`)**: Your starred high-frequency shortcuts across all tabs, plus saved `/fav` bookmarks (`links.json`).
+  - **🧰 PowerToys (`powertoys`)**: 20+ Microsoft PowerToys shortcuts with visual `<kbd>` keycaps (`Win+Shift+C` Color Picker, `Win+Shift+T` Text Extractor OCR, `Win+Shift+M` Measure Tool, `Win+Shift+/` Shortcut Guide, `Win+Ctrl+T` Always on Top, `Win+Ctrl+Alt+V` Paste as Plain Text, `Win+Shift+Q` Workspaces, `Win+Shift+A` Advanced Paste, `Alt+Space` PowerToys Run, Hosts Editor, FancyZones, Registry Preview, Environment Variables, Awake, Peek, Crop & Lock, Mouse Highlighter, Crosshairs, Find My Mouse).
+  - **🐳 Docker (`docker`)**: 9 Docker CLI/GUI shortcuts (`docker ps -a`, `docker stats`, `docker compose up -d`, `docker compose down`, `docker compose logs -f`, `docker system df`, `docker system prune -f`, Launch Docker Desktop) **plus a live Docker Containers Quick-Action Strip** with one-click `▶ Start`, `⏹ Stop`, `↻ Restart`, and `📜 Logs` buttons per container.
+  - **🪟 Windows (`windows`)**: 16 Windows 10/11 & Virtual Desktop shortcuts (`Win+V` Clipboard History, `Win+Shift+S` Snipping Tool, `Win+.` Emoji Picker, `Win+Ctrl+D` / `Win+Ctrl+←/→` / `Win+Ctrl+F4` Virtual Desktops, `Win+Z` Snap Layouts, `Ctrl+Shift+Esc` Task Manager, `Win+Ctrl+Shift+B` Reset Graphics Driver, `Win+X` Quick Link Menu, `Win+G` Xbox Game Bar, `Win+I` Settings, `Win+E` File Explorer, `Win+L` Lock Workstation).
+  - **💻 Dev & Git (`dev`)**: 13 SudoLaunch, VS Code, Terminal, and Browser DevTools shortcuts (`Ctrl+Space` Command Palette, `Ctrl+Alt+T` Drop-Down Terminal, `F9` Git Branch Switcher, `Ctrl+Shift+P` VS Code Command Palette, `` Ctrl+` `` Toggle Integrated Terminal, `Ctrl+Shift+G` Source Control, `Shift+Alt+F` Format Document, `F12` Browser DevTools, plus one-click openers for `/system`, `/system ports`, and `/system envvars`).
+  - **⚡ Custom (`custom`)**: Automatically surfaces your custom PowerShell commands (`~/.sudolaunch/commands/*.json`) alongside any user-created shortcuts.
+  - **Custom User Tabs (`+ Tab`)**: Create your own named tabs with custom icons (e.g. `🎮 Gaming`, `🎨 Figma`, `☁️ AWS`) and assign shortcuts to them.
+- **Click-to-Execute Engine (6 Action Modes)**:
+  - **⌨️ Simulate Keystroke (`keystroke`)**: Briefly yields OS focus (`blurShortcutsWindow`) to the underlying application window and injects the hardware key combination via `resources/bin/sendkey.exe` (with a `user32.dll keybd_event` fallback for extended punctuation/navigation keys like `Win+.`).
+  - **🧰 PowerToys Direct Launch (`powertoys`)**: Invokes the native PowerToys runner or falls back to simulating its registered hotkey.
+  - **>_ SudoLaunch Terminal (`terminal`)**: Expands the persistent SudoLaunch PowerShell terminal and runs the command visibly.
+  - **⚡ Background / Elevated PowerShell (`powershell`)**: Executes PowerShell in the background or with UAC Administrator elevation (`Ctrl+Click` or `elevated: true`).
+  - **🚀 Launch App / URL (`launch`)**: Opens any URL, executable, or folder path via `shell.openExternal` / `shell.openPath`.
+  - **⌘ SudoLaunch Module (`palette`)**: Opens a SudoLaunch palette module (`/system`, `/repo`, `/timer`, `/settings`, etc.).
+- **In-Overlay Customization (`~/.sudolaunch/shortcuts.json`)**:
+  - **★ Star / Unstar**: Click `★` on any card to pin or unpin it from the **⭐ Favorites** tab.
+  - **`+ Shortcut` & `✎ Edit` Modal with Live `🎹 Record Keys`**: Add custom shortcuts or override any built-in shortcut's key combination, title, tab, or action payload. Click **`🎹 Record Keys`** and press any key combination on your keyboard to capture `Win+Shift+...` / `Ctrl+Alt+...` tokens automatically.
+  - **📌 Stay Open vs. ⚡ Auto-Close**: Toggle whether the overlay remains pinned on screen after clicking a shortcut or automatically hides.
+  - **◑ Grayscale / 🎨 Color Toggle & Resizable Window**: Toggle monochrome grayscale mode directly in the header (`shortcutsGrayscale`), and drag the right edge, bottom edge, or `◢` corner grip to resize the overlay (`shortcutsWindowSize`, double-click `◢` to reset to `740 × 460`).
+
 ## Modular Dock, Layouts & Notifications
 
-Alongside the hotkey popup, SudoLaunch features a sleek frosted-glass acrylic dock providing instant access to shell sessions, notifications, universal search, focus countdowns, and Git branch switching.
+Alongside the hotkey popup, SudoLaunch features a sleek frosted-glass acrylic dock providing instant access to shell sessions, notifications, universal search, focus countdowns, Git branch switching, and System Management.
 
 ### 1. Three Dock Display Layout Modes
 
 SudoLaunch supports 3 configurable dock presentation modes (switchable via `/settings` or `/view`):
 
 - **Shelf Pill Tray Mode (`layout-shelf`)**:
-  - Displays modular interactive controls in a floating glass pill tray (`[ >_ ] [ 🔔 ] [ / ] [ ⏱️ ] [ 🔀 ]`).
+  - Displays modular interactive controls in a floating glass pill tray (`[ >_ ] [ 🔔 ] [ / ] [ ⏱️ ] [ 🔀 ] [ 🧰 ] [ ⌨️ ]`).
   - Features an ambient breathing glow bar along the top edge, collapsible idle state, and instant module popouts.
 - **Circular / Radial Orbit Mode (`layout-circle`)**:
   - Arranges dock modules in a dynamic revolving planetary orbit around a central beacon.
@@ -135,13 +259,7 @@ All dock modes honor your chosen **Dock Glow Color** with a refined 20% reduced 
 - `/hide`: Hides the persistent command dock cluster completely from the screen (`barEnabled: false`). When hidden, pressing <kbd>Ctrl+Space</kbd> opens the centered standalone palette where typing `/show` brings the dock back.
 - `/view`: Toggles the dock on/off; `/view reset` returns all dock buttons back to their default home anchor.
 
-### 5. Instant Dock Summon (<kbd>Ctrl+Right Click</kbd>)
-
-- **Summon Directly to Cursor**: Press <kbd>Ctrl</kbd> + **Right Click** anywhere across Windows to summon the dock immediately beside your mouse pointer.
-- **Context Menu Suppression**: Intercepts low-level right-clicks when <kbd>Ctrl</kbd> is held down, suppressing standard Windows desktop/context menus.
-- **Multi-Monitor Safe Clamping**: Positions automatically clamp inside the active work area so all dock icons remain 100% visible on screen.
-
-### 6. Acrylic Notification Center
+### 5. Acrylic Notification Center
 
 - **Rich Acrylic Design**: Floating glassmorphic drawer anchored to your desktop with real-time status glow accents:
   - 🟢 **Emerald**: Successful command completions and clean executions.
@@ -213,18 +331,24 @@ Toggle active keyboard and mouse control between multiple SudoLaunch instances a
 
 ## Command bar
 
-Alongside the hotkey popup, a frosted-glass icon dock sits on screen (`[ >_ ] [ / ] [ 🔔 ]` — bottom-center by default) and stays docked on screen — it's on by default and doesn't hide when you click away.
+Alongside the hotkey popup, a frosted-glass icon dock sits on screen (`[ >_ ] [ 🔔 ] [ / ] [ ⏱️ ] [ 🔀 ] [ 🧰 ] [ ⌨️ ]` — bottom-center Shelf mode by default) and stays docked on screen — it's on by default and doesn't hide when you click away.
 
-- **Three Integrated Actions**:
+- **Configurable Dock Modules**:
   - `>_` toggles the persistent drop-down PowerShell terminal.
-  - `/` toggles the centered command palette.
   - `🔔` toggles the floating notification center with active unread counter badge.
+  - `/` toggles the centered command palette.
+  - `⏱️` toggles the Focus & Pomodoro countdown timer panel.
+  - `🔀` toggles the active Git repository status & branch switcher (`F9`).
+  - `🧰` toggles the `1040×720` System Management Control Center (`/system`).
+  - `⌨️` toggles the `740×460` Customizable Shortcuts Overlay (`/shortcuts`).
+  - `👤` toggles the Profile Switcher & Backup Archive manager (`/profile`).
+  - `⚙️` opens Settings & Configuration (`/settings`).
 - **Expand**: Click the `/` icon or press `Ctrl+Space` (when the bar is enabled) to open the palette. The window smoothly expands and hovers above the docked icon without obscuring the dock buttons or taskbar.
 - **Collapse**: Executing a command or pressing Escape collapses the palette back to the docked icon.
-- **Reposition (`/move`)**: Type `/move` to enter move mode where you can drag the dock buttons anywhere on screen (or move them individually via `/move-bar` and `/move-term`). Positions are saved in `settings.json` and restored across restarts.
+- **Home Position & Anchoring**: Configure the resting dock anchor (`left`, `middle`, `right`, or `custom` screen coordinates) and target `monitor` in `/settings`.
 - **Edge-Aware Docking**: When docked near the left or right edges of the screen, the dock buttons automatically switch to a vertical layout to prevent off-screen clipping.
-- **Reset (`/view reset`)**: Returns the command bar, terminal, and notification buttons back to their default dock.
-- **Toggle Visibility (`/view`)**: Toggles the persistent bar on/off entirely. When disabled, `Ctrl+Space` opens the centered standalone popup window instead.
+- **Reset (`/view reset`)**: Returns the command bar, terminal, and notification buttons back to their default home anchor.
+- **Toggle Visibility (`/view`, `/show`, `/hide`)**: Toggles the persistent bar on/off. When disabled, `Ctrl+Space` opens the centered standalone popup window instead.
 
 ## Terminal
 
@@ -255,8 +379,11 @@ Type `/settings` (or `/config`) into the command palette to open the interactive
 - **Snippets (`/settings snippets`)**: Add, edit, or delete reusable text snippets (`name`, `text`).
 - **Links (`/settings links`)**: Add, edit, or delete browser bookmarks (`name`, `url`).
 - **Edit Teams Links (`/settings team-links`)**: Manually add, edit, or delete direct deep links to Microsoft Teams channels and teams (`name`, `url`, `description`).
-- **Settings (`/settings edit`)**: Configure global hotkeys, history tracking & limit, auto-start on login, mouse input toggle, default command, single-character shortcuts (`/t`, `/f`, `/s`), and the GIF/lookup folder paths.
+- **Swap Peers (`/settings peers`)**: Configure peer computers and expected TLS certificate fingerprints for `/control`.
+- **SSH Hosts (`/settings sshHosts`)**: Add, edit, or delete saved SSH host connections (`name`, `host`, `user`, `port`, `identityFile`, `extraArgs`) for `/ssh`.
+- **Settings (`/settings edit`)**: Configure global hotkeys, dock layout (`shelf`, `circle`, `horizontal`), dock glow color & style, home position anchor, monitor, history tracking & limit, auto-start on login, mouse input toggle, default command, single-character shortcuts (`/t`, `/f`, `/s`), and the GIF/lookup folder paths.
 - **Interactive Toggle Screens**:
+  - **Shelf / Dock Modules**: Choose and reorder which module icons (`term`, `notify`, `bar`, `focus`, `git`, `system`, `shortcuts`, `profile`, `settings`) appear on the dock.
   - **App Visibility**: Choose which Windows applications appear in `/app`.
   - **Search Commands**: Choose which commands participate in `/search` fan-out.
   - **Command Visibility**: Choose which commands appear in palette suggestions.
@@ -273,8 +400,13 @@ Configuration files are stored in `%USERPROFILE%\.sudolaunch\`. On first run, Su
 - `snippets.json` — Snippets list for `/snippet` (`[{ "name", "text" }]`)
 - `links.json` — Saved links for `/fav` (`[{ "name", "url" }]`)
 - `teamLinks.json` — Direct channel/team deep links for `/teams` (`[{ "name", "url", "description" }]`)
-- `settings.json` — App preferences (`hotkey`, `terminalHotkey`, `historyEnabled`, `historyLimit`, `autoStart`, `disableMouseInput`, `defaultCommand`, `disabledApps`, `teamsShortcut`, `favShortcut`, `snippetShortcut`, `searchExcludedCommands`, `hiddenCommands`, `gifFolder`, `lookupFolder`, `barEnabled`, `barPosition`, `termPosition`, `termWindowPosition`)
+- `peers.json` — Peer machines and pinned TLS fingerprints for `/control` input sharing
+- `sshHosts.json` — Saved SSH connections merged alongside `~/.ssh/config` for `/ssh`
+- `pinned-services.json` — User-pinned favorite Windows Services for `/system` (Services tab)
+- `shortcuts.json` — User-starred favorites, custom tabs, custom shortcuts, and built-in shortcut overrides for `/shortcuts` (`⌨️` Shortcuts Overlay)
+- `settings.json` — App preferences (`hotkey`, `terminalHotkey`, `historyEnabled`, `historyLimit`, `autoStart`, `disableMouseInput`, `defaultCommand`, `disabledApps`, `teamsShortcut`, `favShortcut`, `snippetShortcut`, `searchExcludedCommands`, `hiddenCommands`, `gifFolder`, `lookupFolder`, `barEnabled`, `dockLayout`, `dockHomePosition`, `dockGlowColor`, `dockGlowStyle`, `shelfIcons`, `monitor`, `terminalWidth`, `shortcutsWindowPosition`, `shortcutsStayOpen`)
 - `history.json` — App-managed execution history of recent commands
+- `winget-snapshots\` — Folder storing exported WinGet package + pin snapshots created in `/system`
 - `commands\` — Folder containing custom command `.json` files (supports subfolders for category-based organization)
 - `maintenance\` — Folder containing script examples (seeded with `example-update-modules.ps1`)
 - `gif\` — Default folder for storing `.gif` files used by `/gif`

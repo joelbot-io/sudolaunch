@@ -7,7 +7,7 @@
     - Verifies Node.js, npm, Python, Visual C++ Build Tools, and .NET csc.exe
     - Clears the NoDefaultCurrentDirectoryInExePath security variable that breaks node-pty's GetCommitHash.bat
     - Recompiles the Win32 sendkey.exe utility from source
-    - Rebuilds native addons: node-window-manager, electron-clipboard-ex, node-pty
+    - Rebuilds native addons: node-window-manager, extract-file-icon, electron-clipboard-ex, node-pty
     - Verifies TypeScript build integrity
 
 .PARAMETER Clean
@@ -158,23 +158,6 @@ if (-not $SkipSendKey -and $cscPath) {
         Write-WarningMsg "swaphook.cs source not found at: $swaphookSource"
     }
 
-    $cursorhookSource = Join-Path $PSScriptRoot "..\src\main\tools\cursorhook.cs"
-    $cursorhookBin = Join-Path $PSScriptRoot "..\resources\bin\cursorhook.exe"
-
-    if (Test-Path $cursorhookSource) {
-        $binDir = Split-Path -Parent $cursorhookBin
-        if (-not (Test-Path $binDir)) { New-Item -Path $binDir -ItemType Directory -Force | Out-Null }
-
-        & $cscPath /target:winexe /out:$cursorhookBin /optimize+ $cursorhookSource | Out-Null
-        if (Test-Path $cursorhookBin) {
-            $binInfo = Get-Item $cursorhookBin
-            Write-Success "cursorhook.exe compiled ($([Math]::Round($binInfo.Length / 1KB, 1)) KB) -> $cursorhookBin"
-        } else {
-            Write-WarningMsg "cursorhook.exe compilation did not produce an output file."
-        }
-    } else {
-        Write-WarningMsg "cursorhook.cs source not found at: $cursorhookSource"
-    }
 }
 
 # 4. Clean Caches if requested
@@ -196,8 +179,8 @@ if ($Clean) {
 
 # 5. Rebuild Native Modules
 Write-Host ""
-Write-Step "4. Rebuilding native Electron modules (node-window-manager, electron-clipboard-ex, node-pty)..."
-$rebuildCmd = "npx electron-rebuild -f -w node-window-manager,electron-clipboard-ex,node-pty"
+Write-Step "4. Rebuilding native Electron modules (node-window-manager, extract-file-icon, electron-clipboard-ex, node-pty)..."
+$rebuildCmd = "npx electron-rebuild -f -w node-window-manager,extract-file-icon,electron-clipboard-ex,node-pty"
 Write-Host "  Executing: $rebuildCmd`n" -ForegroundColor Gray
 
 & cmd.exe /c $rebuildCmd

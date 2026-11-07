@@ -79,8 +79,8 @@ export interface Settings {
   teamsShortcut: string
   favShortcut: string
   snippetShortcut: string
-  // CommandNames excluded from the "search" command's fan-out. Empty by default —
-  // every searchable command participates.
+  // CommandNames excluded from the "search" command's fan-out. Defaults to
+  // DEFAULT_SEARCH_EXCLUDED_COMMANDS (commands marked with excludeFromSearch: true).
   searchExcludedCommands: CommandName[]
   // CommandNames hidden from the command list UI suggestions. Empty by default — all visible.
   // Still executable when typed.
@@ -108,13 +108,20 @@ export interface Settings {
   // Top-left of the expanded terminal window when moved via its drag handle —
   // null means "open centered relative to the dock icon".
   termWindowPosition: { x: number; y: number } | null
+  // Top-left of the expanded shortcuts overlay window when moved via its drag handle —
+  // null means "open centered relative to the dock icon".
+  shortcutsWindowPosition?: { x: number; y: number } | null
+  // Custom width & height of the shortcuts overlay window when resized (default 740x460)
+  shortcutsWindowSize?: { width: number; height: number } | null
+  // Whether the shortcuts overlay stays open after clicking a shortcut (default true)
+  shortcutsStayOpen?: boolean
+  // Whether the shortcuts overlay renders in monochrome grayscale mode (default false)
+  shortcutsGrayscale?: boolean
   // Input sharing settings (/control #)
   swapEnabled: boolean
   swapMachineId: number
   swapPort: number
   swapToggleHotkey: string
-  // Whether Ctrl + Right Click anywhere summons the dock icon to the cursor
-  ctrlRightClickSummon: boolean
   // Dock arrangement: 'shelf' (bottom-center pill tray, new default), 'horizontal' (linear dock),
   // or 'circle' (radial orbit hovering around cursor)
   dockLayout?: 'horizontal' | 'circle' | 'shelf'
@@ -163,17 +170,21 @@ export type ShelfModuleId =
   | 'term'
   | 'bar'
   | 'notify'
+  | 'shortcuts'
   | 'settings'
   | 'focus'
   | 'git'
   | 'profile'
+  | 'system'
 
 export const DEFAULT_SHELF_ICONS: ShelfModuleId[] = [
   'term',
   'notify',
   'bar',
+  'shortcuts',
   'focus',
-  'git'
+  'git',
+  'system'
 ]
 
 export const SHELF_MODULE_INFO: Record<
@@ -183,10 +194,378 @@ export const SHELF_MODULE_INFO: Record<
   term: { name: 'Persistent Terminal', icon: '>_', description: 'Slide-up terminal for quick commands' },
   bar: { name: 'Command Palette', icon: '/', description: 'Quick search, calculation, and commands' },
   notify: { name: 'Notifications', icon: '🔔', description: 'System alerts and notification center' },
+  shortcuts: { name: 'Shortcuts Overlay', icon: '⌨️', description: 'Customizable shortcuts & hotkeys overlay (Favorites, PowerToys, Docker, Windows, Dev)' },
   settings: { name: 'Settings & Config', icon: '⚙️', description: 'Preferences and shortcut configuration' },
   focus: { name: 'Focus Timer', icon: '⏱️', description: 'Pomodoro focus timer with live dock badge' },
   git: { name: 'Git Status & Branch', icon: '🔀', description: 'Active git repository status and branch switcher' },
-  profile: { name: 'Profile Switcher', icon: '👤', description: 'Profile switcher, backup, and restore' }
+  profile: { name: 'Profile Switcher', icon: '👤', description: 'Profile switcher, backup, and restore' },
+  system: { name: 'System Management', icon: '🧰', description: 'WinGet package manager, updates, pins, and system tools' }
+}
+
+export type ShortcutActionType =
+  | 'hotkey'
+  | 'terminal'
+  | 'powershell'
+  | 'open'
+  | 'sudolaunch'
+  | 'powertoys'
+
+export interface ShortcutOverlayItem {
+  id: string
+  label: string
+  description: string
+  tab: string
+  icon: string
+  keys: string
+  actionType: ShortcutActionType
+  actionPayload: string
+  elevated?: boolean
+  favorite?: boolean
+  isBuiltIn?: boolean
+  installed?: boolean
+  badge?: string
+}
+
+export interface DockerQuickContainer {
+  id: string
+  name: string
+  image: string
+  status: string
+  running: boolean
+  ports: string
+}
+
+export interface ShortcutsOverlayTabInfo {
+  id: string
+  label: string
+  icon: string
+  count: number
+  isCustomTab?: boolean
+}
+
+export interface ShortcutsOverlayData {
+  items: ShortcutOverlayItem[]
+  tabs: ShortcutsOverlayTabInfo[]
+  dockerContainers: DockerQuickContainer[]
+  dockerAvailable: boolean
+  powerToysInstalled: boolean
+  stayOpen: boolean
+  grayscale: boolean
+  windowSize: { width: number; height: number }
+}
+
+export interface WingetPackageItem {
+  name: string
+  id: string
+  version: string
+  available?: string
+  source?: string
+  isPinned?: boolean
+  pinType?: 'Pinning' | 'Blocking' | 'Gating' | string
+  pinnedVersion?: string
+}
+
+export interface WingetPinItem {
+  name: string
+  id: string
+  version: string
+  source: string
+  pinType: 'Pinning' | 'Blocking' | 'Gating' | string
+  pinnedVersion?: string
+}
+
+export interface WingetSearchResult {
+  name: string
+  id: string
+  version: string
+  match?: string
+  source?: string
+  isInstalled?: boolean
+  installedVersion?: string
+}
+
+export interface WingetPinOptions {
+  id: string
+  mode: 'standard' | 'blocking' | 'installed' | 'version'
+  versionPattern?: string
+  elevated?: boolean
+}
+
+export interface WingetActionParams {
+  action: 'install' | 'upgrade' | 'upgrade-all' | 'uninstall'
+  id?: string
+  name?: string
+  version?: string
+  scope?: 'default' | 'user' | 'machine'
+  interactive?: boolean
+  force?: boolean
+  elevated?: boolean
+  includePinned?: boolean
+  inTerminal?: boolean
+}
+
+export interface WingetBatchActionParams {
+  action: 'upgrade' | 'uninstall' | 'install'
+  packages: Array<{ id: string; name: string }>
+  elevated?: boolean
+  includePinned?: boolean
+}
+
+export interface WingetOperationState {
+  id: string
+  action: 'install' | 'upgrade' | 'upgrade-all' | 'uninstall' | 'batch'
+  packageId?: string
+  packageName?: string
+  status: 'running' | 'success' | 'error'
+  progressText: string
+  logLines: string[]
+  elevated?: boolean
+  startedAt: number
+  batchCurrent?: number
+  batchTotal?: number
+}
+
+export interface WingetPackageDetails {
+  id: string
+  name: string
+  version: string
+  publisher?: string
+  publisherUrl?: string
+  author?: string
+  moniker?: string
+  description?: string
+  homepage?: string
+  license?: string
+  licenseUrl?: string
+  releaseNotes?: string
+  releaseNotesUrl?: string
+  tags?: string[]
+  installerType?: string
+  installerUrl?: string
+  availableVersions: string[]
+}
+
+export interface WingetSnapshotItem {
+  filename: string
+  name: string
+  createdAt: string
+  timestamp: number
+  packageCount: number
+  pinCount: number
+  sizeKb: number
+}
+
+export interface EcosystemUpdateItem {
+  manager: 'npm' | 'pip' | 'psmodule' | 'wsl'
+  id: string
+  name: string
+  currentVersion: string
+  latestVersion: string
+  location?: string
+}
+
+export interface DevRuntimeStatus {
+  id: string
+  name: string
+  icon: string
+  wingetId?: string
+  installed: boolean
+  version: string
+  activePath: string
+  allPaths: string[]
+  hasShadowConflict: boolean
+}
+
+export interface PathEntryHealth {
+  path: string
+  scope: 'User' | 'Machine'
+  exists: boolean
+  isDuplicate: boolean
+}
+
+export interface SystemServiceItem {
+  name: string
+  displayName: string
+  status: 'Running' | 'Stopped' | string
+  startType: 'Automatic' | 'Manual' | 'Disabled' | string
+  isPinned?: boolean
+  category?: string
+}
+
+export interface SystemStartupAppItem {
+  name: string
+  command: string
+  location: string
+}
+
+export interface SystemPortItem {
+  proto: string
+  localAddress: string
+  port: number
+  pid: number
+  processName: string
+  memoryMb?: number
+  path?: string
+  isCommonDevPort?: boolean
+}
+
+export interface SystemProcessItem {
+  pid: number
+  name: string
+  memoryMb: number
+  cpuSec: number
+  windowTitle?: string
+  path?: string
+}
+
+export interface CleanupTargetItem {
+  id: string
+  name: string
+  icon: string
+  category: 'Developer Cache' | 'System Temp'
+  description: string
+  path: string
+  exists: boolean
+  sizeMb: number
+  fileCount?: number
+}
+
+export interface WindowsPendingUpdateItem {
+  title: string
+  kbs: string
+  isDownloaded: boolean
+  rebootRequired: boolean
+  severity: string
+  sizeMb: number
+}
+
+export interface WindowsHotfixItem {
+  hotFixId: string
+  description: string
+  installedOn: string
+}
+
+export interface WindowsUpdateStatus {
+  rebootPending: boolean
+  rebootReasons: string[]
+  osCaption: string
+  osVersion: string
+  osBuild: string
+  lastBootTime: string
+  uptimeDays: number
+  uptimeHours: number
+  wuaServiceStatus: string
+  recentHotfixes: WindowsHotfixItem[]
+  pendingUpdates: WindowsPendingUpdateItem[]
+  pendingScanned: boolean
+  lastCheckedAt: string
+}
+
+export interface SystemEnvVarItem {
+  name: string
+  value: string
+  scope: 'User' | 'Machine'
+  isSecret: boolean
+}
+
+export interface SystemScheduledTaskItem {
+  name: string
+  path: string
+  state: string
+  author: string
+  description: string
+  lastRunTime: string
+  lastResult: string
+  nextRunTime: string
+  isSystemTask: boolean
+}
+
+export interface SystemHostEntryItem {
+  lineIndex: number
+  ip: string
+  hostname: string
+  comment: string
+  enabled: boolean
+}
+
+export interface SystemNetworkAdapterItem {
+  name: string
+  description: string
+  status: string
+  macAddress: string
+  ipv4: string
+  gateway: string
+  dnsServers: string[]
+}
+
+export interface SystemStorageVolumeItem {
+  driveLetter: string
+  label: string
+  fileSystem: string
+  healthStatus: string
+  totalGb: number
+  freeGb: number
+  usedGb: number
+  usedPercent: number
+}
+
+export interface SystemPhysicalDiskItem {
+  friendlyName: string
+  mediaType: string
+  busType: string
+  healthStatus: string
+  operationalStatus: string
+  sizeGb: number
+}
+
+export interface SystemPowerPlanItem {
+  guid: string
+  name: string
+  isActive: boolean
+}
+
+export interface SystemSleepLockItem {
+  category: string
+  requester: string
+  details: string
+}
+
+export interface SystemStorageAndPowerOverview {
+  volumes: SystemStorageVolumeItem[]
+  disks: SystemPhysicalDiskItem[]
+  powerPlans: SystemPowerPlanItem[]
+  sleepLocks: SystemSleepLockItem[]
+}
+
+export interface SystemBitLockerVolumeItem {
+  mountPoint: string
+  volumeStatus: string
+  protectionStatus: string
+  encryptionPercent: number
+}
+
+export interface SystemSecurityPosture {
+  realtimeProtectionEnabled: boolean
+  antivirusEnabled: boolean
+  tamperProtectionEnabled: boolean
+  behaviorMonitorEnabled: boolean
+  signatureVersion: string
+  signatureLastUpdated: string
+  quickScanAgeDays: number
+  exclusionPaths: string[]
+  exclusionProcesses: string[]
+  bitLockerVolumes: SystemBitLockerVolumeItem[]
+  localAdmins: string[]
+}
+
+export interface SystemEventLogItem {
+  id: number
+  recordId: number
+  timeCreated: string
+  logName: string
+  level: 'Critical' | 'Error' | 'Warning'
+  providerName: string
+  message: string
 }
 
 export interface FocusTimerState {
@@ -299,83 +678,90 @@ export type CommandName =
   | 'clip'
   | 'show'
   | 'hide'
+  | 'system'
+  | 'shortcuts'
 
 export interface CommandDef {
   name: CommandName
   description: string
+  // When true, excluded from universal "/search" fan-out by default so heavy system queries
+  // (processes, ports, network/hardware IDs, env vars, module scans) and single-input
+  // generators/transformers don't stutter or flood universal search results.
+  excludeFromSearch?: boolean
 }
 
 export const COMMANDS: CommandDef[] = [
   { name: 'app', description: 'Launch an installed application' },
-  { name: 'calc', description: 'Evaluate a math expression' },
-  { name: 'case', description: 'Convert text case (camelCase, kebab-case, snake_case, PascalCase, etc.)' },
-  { name: 'chmod', description: 'Convert and calculate Linux/Unix file permissions (755, rwxr-xr-x)' },
-  { name: 'color', description: 'Convert color models (HEX, RGB, HSL) and copy formats' },
-  { name: 'cron', description: 'Explain cron expressions in plain English and compute upcoming runs' },
+  { name: 'calc', description: 'Evaluate a math expression', excludeFromSearch: true },
+  { name: 'case', description: 'Convert text case (camelCase, kebab-case, snake_case, PascalCase, etc.)', excludeFromSearch: true },
+  { name: 'chmod', description: 'Convert and calculate Linux/Unix file permissions (755, rwxr-xr-x)', excludeFromSearch: true },
+  { name: 'color', description: 'Convert color models (HEX, RGB, HSL) and copy formats', excludeFromSearch: true },
+  { name: 'cron', description: 'Explain cron expressions in plain English and compute upcoming runs', excludeFromSearch: true },
   { name: 'custom', description: 'Run a custom command, or browse a folder of scripts' },
-  { name: 'default', description: 'Set the default command that shows first in suggestions' },
+  { name: 'default', description: 'Set the default command that shows first in suggestions', excludeFromSearch: true },
   { name: 'emoji', description: 'Search and copy Unicode emojis by name, keyword, or shortcode' },
-  { name: 'exit', description: 'Exit and close the application (alias: /quit)' },
+  { name: 'exit', description: 'Exit and close the application (alias: /quit)', excludeFromSearch: true },
   { name: 'fav', description: 'Open a saved link in the browser' },
   { name: 'focus', description: 'Switch to an open desktop window by title' },
   { name: 'g', description: 'Open a Google search in your browser (alias: /google)' },
   { name: 'gif', description: 'Copy a GIF from your GIF folder to the clipboard' },
   { name: 'git', description: 'Search common Git recipes, recovery shortcuts, and commands' },
-  { name: 'hash', description: 'Generate hashes (SHA-256, MD5) and decode Base64, URL, or JWT' },
-  { name: 'history', description: 'Browse, filter, and clear command history (/history clear)' },
-  { name: 'http', description: 'Search HTTP status codes and standard HTTP header references' },
-  { name: 'ip', description: 'Inspect network interfaces, local IPs, and MAC addresses' },
-  { name: 'json', description: 'Prettify, minify, validate, or stringify JSON from text or clipboard' },
+  { name: 'hash', description: 'Generate hashes (SHA-256, MD5) and decode Base64, URL, or JWT', excludeFromSearch: true },
+  { name: 'history', description: 'Browse, filter, and clear command history (/history clear)', excludeFromSearch: true },
+  { name: 'http', description: 'Search HTTP status codes and standard HTTP header references', excludeFromSearch: true },
+  { name: 'ip', description: 'Inspect network interfaces, local IPs, and MAC addresses', excludeFromSearch: true },
+  { name: 'json', description: 'Prettify, minify, validate, or stringify JSON from text or clipboard', excludeFromSearch: true },
   { name: 'lookup', description: 'Search a local JSON data table' },
-  { name: 'lorem', description: 'Generate placeholder text, mock dummy data, emails, and names' },
+  { name: 'lorem', description: 'Generate placeholder text, mock dummy data, emails, and names', excludeFromSearch: true },
   { name: 'mail', description: 'Compose an email to a contact' },
-  { name: 'mime', description: 'Search MIME content types and file extensions (e.g. .json, image/webp)' },
-  { name: 'notifications', description: 'Open notification center and execution history alerts (alias: /notify)' },
-  { name: 'port', description: 'Inspect listening TCP ports and kill blocking processes' },
-  { name: 'profile', description: 'Manage, backup, restore, validate, or reset the user profile and config' },
+  { name: 'mime', description: 'Search MIME content types and file extensions (e.g. .json, image/webp)', excludeFromSearch: true },
+  { name: 'notifications', description: 'Open notification center and execution history alerts (alias: /notify)', excludeFromSearch: true },
+  { name: 'port', description: 'Inspect listening TCP ports and kill blocking processes', excludeFromSearch: true },
+  { name: 'profile', description: 'Manage, backup, restore, validate, or reset the user profile and config', excludeFromSearch: true },
   { name: 'pt', description: 'Launch Microsoft PowerToys utilities and tools (alias: /powertoys)' },
-  { name: 'pwd', description: 'Generate secure passwords, passphrases, PINs, and API tokens' },
-  { name: 'qr', description: 'Generate QR codes from URLs or text with clipboard copy' },
-  { name: 'regex', description: 'Library of standard regex patterns and live regex tester' },
-  { name: 'release', description: 'Release keyboard and mouse input sharing from /control' },
-  { name: 'repo', description: 'Open active Git repository status, branch switcher, and recent repos' },
-  { name: 'restart', description: 'Relaunch the application' },
-  { name: 'search', description: 'Search across other commands at once' },
-  { name: 'settings', description: 'Open settings and configuration manager' },
+  { name: 'pwd', description: 'Generate secure passwords, passphrases, PINs, and API tokens', excludeFromSearch: true },
+  { name: 'qr', description: 'Generate QR codes from URLs or text with clipboard copy', excludeFromSearch: true },
+  { name: 'regex', description: 'Library of standard regex patterns and live regex tester', excludeFromSearch: true },
+  { name: 'release', description: 'Release keyboard and mouse input sharing from /control', excludeFromSearch: true },
+  { name: 'repo', description: 'Open active Git repository status, branch switcher, and recent repos', excludeFromSearch: true },
+  { name: 'restart', description: 'Relaunch the application', excludeFromSearch: true },
+  { name: 'search', description: 'Search across other commands at once', excludeFromSearch: true },
+  { name: 'settings', description: 'Open settings and configuration manager', excludeFromSearch: true },
   { name: 'snippet', description: 'Copy a saved snippet to the clipboard' },
   { name: 'teams', description: 'Open a Teams chat with a contact' },
-  { name: 'term', description: 'Open or run a command in the persistent terminal' },
-  { name: 'text', description: 'Analyze text statistics, sort, deduplicate, and join lines' },
-  { name: 'timer', description: 'Open Pomodoro and countdown focus timer panel' },
-  { name: 'tz', description: 'Convert timestamps and timezones to local time' },
-  { name: 'unit', description: 'Convert data units, bandwidth, physical units, and number bases' },
-  { name: 'url', description: 'Parse URL components, extract query parameters, and build cURL snippets' },
-  { name: 'uuid', description: 'Generate UUIDs/GUIDs in multiple formats and inspect IDs' },
-  { name: 'view', description: 'Toggle the command bar or change its position' },
-  { name: 'control', description: 'Toggle active keyboard and mouse input sharing with another computer (/control #)' },
-  { name: 'cert', description: 'Inspect SSL/TLS certificates, expiry dates, SANs, and cipher suites (alias: /ssl)' },
-  { name: 'curl', description: 'Convert cURL commands to code (fetch, Python, Go) or probe HTTP endpoints' },
-  { name: 'diff', description: 'Compare text and JSON snippets, clipboard vs input, and inspect changes' },
-  { name: 'dns', description: 'Lookup DNS records (A, AAAA, MX, TXT, CNAME, NS) and propagation (alias: /dig)' },
-  { name: 'docker', description: 'Manage Docker containers, inspect status/ports, logs, and prune images' },
-  { name: 'env', description: 'Search environment variables, inspect PATH directories, and parse .env files' },
-  { name: 'expmod', description: 'Explore PowerShell & Python modules, cmdlets, functions, and help' },
+  { name: 'term', description: 'Open or run a command in the persistent terminal', excludeFromSearch: true },
+  { name: 'text', description: 'Analyze text statistics, sort, deduplicate, and join lines', excludeFromSearch: true },
+  { name: 'timer', description: 'Open Pomodoro and countdown focus timer panel', excludeFromSearch: true },
+  { name: 'tz', description: 'Convert timestamps and timezones to local time', excludeFromSearch: true },
+  { name: 'unit', description: 'Convert data units, bandwidth, physical units, and number bases', excludeFromSearch: true },
+  { name: 'url', description: 'Parse URL components, extract query parameters, and build cURL snippets', excludeFromSearch: true },
+  { name: 'uuid', description: 'Generate UUIDs/GUIDs in multiple formats and inspect IDs', excludeFromSearch: true },
+  { name: 'view', description: 'Toggle the command bar or change its position', excludeFromSearch: true },
+  { name: 'control', description: 'Toggle active keyboard and mouse input sharing with another computer (/control #)', excludeFromSearch: true },
+  { name: 'cert', description: 'Inspect SSL/TLS certificates, expiry dates, SANs, and cipher suites (alias: /ssl)', excludeFromSearch: true },
+  { name: 'curl', description: 'Convert cURL commands to code (fetch, Python, Go) or probe HTTP endpoints', excludeFromSearch: true },
+  { name: 'diff', description: 'Compare text and JSON snippets, clipboard vs input, and inspect changes', excludeFromSearch: true },
+  { name: 'dns', description: 'Lookup DNS records (A, AAAA, MX, TXT, CNAME, NS) and propagation (alias: /dig)', excludeFromSearch: true },
+  { name: 'docker', description: 'Manage Docker containers, inspect status/ports, logs, and prune images', excludeFromSearch: true },
+  { name: 'env', description: 'Search environment variables, inspect PATH directories, and parse .env files', excludeFromSearch: true },
+  { name: 'expmod', description: 'Explore PowerShell & Python modules, cmdlets, functions, and help', excludeFromSearch: true },
   { name: 'ssh', description: 'Connect to SSH hosts from ~/.ssh/config or saved connections' },
-  { name: 'proc', description: 'Inspect running processes by RAM/CPU and kill hung tasks (alias: /ps, Ctrl+Enter elevated)' },
-  { name: 'svc', description: 'Browse, start, stop, and restart Windows Services' },
-  { name: 'wsl', description: 'Launch WSL Linux distributions in terminal or File Explorer' },
-  { name: 'pkg', description: 'Inspect developer runtimes (Node, Python, Git) and manage WinGet packages (alias: /winget)' },
-  { name: 'clip', description: 'Browse recent clipboard history, format JSON, or transform copied text' },
-  { name: 'key', description: 'Inspect keyboard events, key codes, Windows VK codes, and accelerators (alias: /kbd)' },
-  { name: 'show', description: 'Show the persistent command dock on screen' },
-  { name: 'hide', description: 'Hide the persistent command dock from the screen' }
+  { name: 'proc', description: 'Inspect running processes by RAM/CPU and kill hung tasks (alias: /ps, Ctrl+Enter elevated)', excludeFromSearch: true },
+  { name: 'svc', description: 'Browse, start, stop, and restart Windows Services', excludeFromSearch: true },
+  { name: 'wsl', description: 'Launch WSL Linux distributions in terminal or File Explorer', excludeFromSearch: true },
+  { name: 'pkg', description: 'Inspect developer runtimes (Node, Python, Go, Rust, Git, .NET, Docker) and manage WinGet packages (alias: /winget)', excludeFromSearch: true },
+  { name: 'system', description: 'Open System Management panel — WinGet package manager, updates, pins, and system tools (alias: /sys)', excludeFromSearch: true },
+  { name: 'clip', description: 'Browse recent clipboard history, format JSON, or transform copied text', excludeFromSearch: true },
+  { name: 'key', description: 'Inspect keyboard events, key codes, Windows VK codes, and accelerators (alias: /kbd)', excludeFromSearch: true },
+  { name: 'show', description: 'Show the persistent command dock on screen', excludeFromSearch: true },
+  { name: 'hide', description: 'Hide the persistent command dock from the screen', excludeFromSearch: true },
+  { name: 'shortcuts', description: 'Open the customizable Shortcuts Overlay window (Favorites, PowerToys, Docker, Windows, Dev; alias: /sc)', excludeFromSearch: true }
 ]
 
-// Commands that participate in the "search" command's fan-out — everything except
-// "calc" (not search-shaped) and "search" itself. Used both to build the SEARCHABLE
-// dispatch table in commands/search.ts and to drive the "Search Commands" toggle
+// Commands that can participate in the "search" command's fan-out. Used both to build the
+// SEARCHABLE dispatch table in commands/search.ts and to drive the "Search Commands" toggle
 // screen in ConfigManager.tsx.
-export const SEARCHABLE_COMMAND_NAMES: Exclude<CommandName, 'calc' | 'search' | 'view' | 'term' | 'restart' | 'default' | 'settings' | 'control' | 'release' | 'exit' | 'profile' | 'history' | 'show' | 'hide'>[] = [
+export const SEARCHABLE_COMMAND_NAMES: Exclude<CommandName, 'calc' | 'search' | 'view' | 'term' | 'restart' | 'default' | 'settings' | 'control' | 'release' | 'exit' | 'profile' | 'history' | 'show' | 'hide' | 'system' | 'shortcuts'>[] = [
   'app',
   'case',
   'chmod',
@@ -416,6 +802,13 @@ export const SEARCHABLE_COMMAND_NAMES: Exclude<CommandName, 'calc' | 'search' | 
   'clip',
   'key'
 ]
+
+const SEARCHABLE_SET = new Set<CommandName>(SEARCHABLE_COMMAND_NAMES)
+
+// Default commands excluded from "/search" fan-out based on `excludeFromSearch: true` on COMMANDS.
+export const DEFAULT_SEARCH_EXCLUDED_COMMANDS: CommandName[] = COMMANDS.filter(
+  (c) => c.excludeFromSearch && SEARCHABLE_SET.has(c.name)
+).map((c) => c.name)
 
 export interface CommandFolder {
   id: string
@@ -491,8 +884,8 @@ export const DEFAULT_COMMAND_LAYOUT: CommandLayout = {
       id: 'folder:sys',
       name: 'System',
       icon: '⚙️',
-      description: 'Profile, settings, control, history, and system controls',
-      commands: ['profile', 'settings', 'notifications', 'default', 'history', 'view', 'show', 'hide', 'control', 'release', 'restart', 'exit']
+      description: 'Profile, settings, system management, shortcuts, control, history, and system controls',
+      commands: ['system', 'shortcuts', 'profile', 'settings', 'notifications', 'default', 'history', 'view', 'show', 'hide', 'control', 'release', 'restart', 'exit']
     }
   ]
 }
@@ -528,6 +921,8 @@ export interface CustomCommand {
   folder?: string
   parameters: CustomCommandParam[]
   showTerminal?: boolean
+  // Optional flag ("ExcludeFromSearch": true in JSON) to omit this custom command from "/search" fan-out.
+  excludeFromSearch?: boolean
 }
 
 export type ConfigType = 'contacts' | 'snippets' | 'links' | 'teamLinks' | 'settings' | 'peers' | 'sshHosts'
@@ -656,7 +1051,6 @@ export const CONFIG_TYPES: ConfigTypeDef[] = [
       { key: 'swapMachineId', label: 'This Machine # (e.g. 1)', type: 'number' },
       { key: 'swapPort', label: 'Swap Port (default 41234)', type: 'number' },
       { key: 'swapToggleHotkey', label: 'Swap Toggle Hotkey (ScrollLock / Pause / Control+Alt+S)', type: 'text' },
-      { key: 'ctrlRightClickSummon', label: 'Summon dock on Ctrl+Right Click', type: 'boolean' },
       { key: 'autoReturnHome', label: 'Auto-return dock to home position (above clock)', type: 'boolean' },
       { key: 'dockHomePosition', label: 'Dock home position anchor (left, middle, right, custom)', type: 'text' },
       { key: 'autoReturnDelaySec', label: 'Auto-return delay in seconds', type: 'number' },
@@ -680,4 +1074,3 @@ export interface SudoNotification {
   commandInput?: string
   read?: boolean
 }
-

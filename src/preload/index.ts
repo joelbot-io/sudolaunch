@@ -15,7 +15,34 @@ import type {
   GitRepoStatus,
   KnownRepoItem,
   ProfileItem,
-  BackupArchiveItem
+  BackupArchiveItem,
+  WingetPackageItem,
+  WingetPinItem,
+  WingetSearchResult,
+  WingetPinOptions,
+  WingetActionParams,
+  WingetBatchActionParams,
+  WingetOperationState,
+  WingetPackageDetails,
+  WingetSnapshotItem,
+  EcosystemUpdateItem,
+  DevRuntimeStatus,
+  PathEntryHealth,
+  SystemServiceItem,
+  SystemStartupAppItem,
+  SystemPortItem,
+  SystemProcessItem,
+  CleanupTargetItem,
+  WindowsUpdateStatus,
+  SystemEnvVarItem,
+  SystemScheduledTaskItem,
+  SystemHostEntryItem,
+  SystemNetworkAdapterItem,
+  SystemStorageAndPowerOverview,
+  SystemSecurityPosture,
+  SystemEventLogItem,
+  ShortcutOverlayItem,
+  ShortcutsOverlayData
 } from '../shared/types'
 
 const api = {
@@ -266,7 +293,268 @@ const api = {
   deleteProfile: (id: string): Promise<ProfileItem[]> => ipcRenderer.invoke('profile-delete', id),
   listBackupArchives: (): Promise<BackupArchiveItem[]> => ipcRenderer.invoke('profile-archives-list'),
   restoreSpecificBackup: (filename: string): Promise<void> =>
-    ipcRenderer.invoke('profile-archive-restore', filename)
+    ipcRenderer.invoke('profile-archive-restore', filename),
+
+  // WinGet / System Management APIs
+  getWingetUpdates: (force?: boolean): Promise<WingetPackageItem[]> =>
+    ipcRenderer.invoke('winget-get-updates', force),
+  getWingetInstalled: (force?: boolean): Promise<WingetPackageItem[]> =>
+    ipcRenderer.invoke('winget-get-installed', force),
+  getWingetPins: (force?: boolean): Promise<WingetPinItem[]> =>
+    ipcRenderer.invoke('winget-get-pins', force),
+  searchWingetCatalog: (query: string): Promise<WingetSearchResult[]> =>
+    ipcRenderer.invoke('winget-search', query),
+  getWingetPackageDetails: (id: string): Promise<WingetPackageDetails | null> =>
+    ipcRenderer.invoke('winget-get-details', id),
+  addWingetPin: (
+    options: WingetPinOptions
+  ): Promise<{ success: boolean; message: string; pins: WingetPinItem[] }> =>
+    ipcRenderer.invoke('winget-pin-add', options),
+  removeWingetPin: (
+    id: string,
+    elevated?: boolean
+  ): Promise<{ success: boolean; message: string; pins: WingetPinItem[] }> =>
+    ipcRenderer.invoke('winget-pin-remove', id, elevated),
+  resetWingetPins: (
+    elevated?: boolean
+  ): Promise<{ success: boolean; message: string; pins: WingetPinItem[] }> =>
+    ipcRenderer.invoke('winget-pin-reset', elevated),
+  runWingetAction: (
+    params: WingetActionParams
+  ): Promise<{ started: boolean; mode: 'in-panel' | 'elevated' | 'terminal'; message?: string }> =>
+    ipcRenderer.invoke('winget-run-action', params),
+  runWingetBatchAction: (
+    params: WingetBatchActionParams
+  ): Promise<{ started: boolean; message?: string }> =>
+    ipcRenderer.invoke('winget-run-batch', params),
+  cancelWingetOperation: (): Promise<boolean> => ipcRenderer.invoke('winget-cancel-op'),
+  getWingetOperationState: (): Promise<WingetOperationState | null> =>
+    ipcRenderer.invoke('winget-get-op-state'),
+  listWingetSnapshots: (): Promise<WingetSnapshotItem[]> =>
+    ipcRenderer.invoke('winget-list-snapshots'),
+  createWingetSnapshot: (
+    label?: string
+  ): Promise<{ success: boolean; message: string; snapshots: WingetSnapshotItem[] }> =>
+    ipcRenderer.invoke('winget-create-snapshot', label),
+  restoreWingetSnapshot: (
+    filename: string,
+    mode: 'pins-only' | 'full-import'
+  ): Promise<{ success: boolean; message: string }> =>
+    ipcRenderer.invoke('winget-restore-snapshot', filename, mode),
+  deleteWingetSnapshot: (filename: string): Promise<WingetSnapshotItem[]> =>
+    ipcRenderer.invoke('winget-delete-snapshot', filename),
+  openWingetSnapshotsFolder: (): Promise<void> =>
+    ipcRenderer.invoke('winget-open-snapshots-folder'),
+  getEcosystemUpdates: (force?: boolean): Promise<EcosystemUpdateItem[]> =>
+    ipcRenderer.invoke('system-get-ecosystem-updates', force),
+  runEcosystemUpdate: (params: {
+    manager: 'npm' | 'pip' | 'psmodule' | 'wsl'
+    id?: string
+    all?: boolean
+    inTerminal?: boolean
+  }): Promise<{ success: boolean; message: string }> =>
+    ipcRenderer.invoke('system-run-ecosystem-update', params),
+  getDevRuntimesStatus: (force?: boolean): Promise<DevRuntimeStatus[]> =>
+    ipcRenderer.invoke('system-get-runtimes', force),
+  getPathHealth: (): Promise<PathEntryHealth[]> => ipcRenderer.invoke('system-get-path-health'),
+  getSystemServices: (force?: boolean): Promise<SystemServiceItem[]> =>
+    ipcRenderer.invoke('system-get-services', force),
+  togglePinSystemService: (name: string): Promise<SystemServiceItem[]> =>
+    ipcRenderer.invoke('system-toggle-pin-service', name),
+  runSystemServiceAction: (params: {
+    name: string
+    action: 'start' | 'stop' | 'restart' | 'auto' | 'manual' | 'disabled'
+    elevated?: boolean
+  }): Promise<{ success: boolean; message: string; services: SystemServiceItem[] }> =>
+    ipcRenderer.invoke('system-run-service-action', params),
+  getSystemStartupApps: (): Promise<SystemStartupAppItem[]> =>
+    ipcRenderer.invoke('system-get-startup-apps'),
+  getSystemPorts: (): Promise<SystemPortItem[]> => ipcRenderer.invoke('system-get-ports'),
+  getSystemProcesses: (): Promise<SystemProcessItem[]> =>
+    ipcRenderer.invoke('system-get-processes'),
+  killSystemProcess: (
+    pid: number,
+    elevated?: boolean
+  ): Promise<{ success: boolean; message: string }> =>
+    ipcRenderer.invoke('system-kill-process', pid, elevated),
+  getCleanupTargets: (): Promise<CleanupTargetItem[]> =>
+    ipcRenderer.invoke('system-get-cleanup-targets'),
+  cleanSystemTargets: (
+    ids: string[]
+  ): Promise<{ success: boolean; message: string; targets: CleanupTargetItem[] }> =>
+    ipcRenderer.invoke('system-clean-targets', ids),
+  getWindowsUpdateStatus: (options?: {
+    force?: boolean
+    scanPending?: boolean
+    online?: boolean
+  }): Promise<WindowsUpdateStatus> =>
+    ipcRenderer.invoke('system-get-windows-update-status', options),
+  runWindowsUpdateAction: (
+    action:
+      | 'open-settings'
+      | 'open-history'
+      | 'trigger-scan'
+      | 'schedule-reboot-60s'
+      | 'cancel-reboot'
+  ): Promise<{ success: boolean; message: string }> =>
+    ipcRenderer.invoke('system-run-windows-update-action', action),
+  getSystemEnvVars: (): Promise<SystemEnvVarItem[]> =>
+    ipcRenderer.invoke('system-get-env-vars'),
+  setSystemEnvVar: (params: {
+    name: string
+    value: string
+    scope: 'User' | 'Machine'
+    elevated?: boolean
+  }): Promise<{ success: boolean; message: string; items: SystemEnvVarItem[] }> =>
+    ipcRenderer.invoke('system-set-env-var', params),
+  deleteSystemEnvVar: (params: {
+    name: string
+    scope: 'User' | 'Machine'
+    elevated?: boolean
+  }): Promise<{ success: boolean; message: string; items: SystemEnvVarItem[] }> =>
+    ipcRenderer.invoke('system-delete-env-var', params),
+  getSystemScheduledTasks: (force?: boolean): Promise<SystemScheduledTaskItem[]> =>
+    ipcRenderer.invoke('system-get-scheduled-tasks', force),
+  runSystemScheduledTaskAction: (params: {
+    taskPath: string
+    taskName: string
+    action: 'run' | 'enable' | 'disable'
+    elevated?: boolean
+  }): Promise<{ success: boolean; message: string; tasks: SystemScheduledTaskItem[] }> =>
+    ipcRenderer.invoke('system-run-scheduled-task-action', params),
+  getSystemHostsEntries: (): Promise<SystemHostEntryItem[]> =>
+    ipcRenderer.invoke('system-get-hosts-entries'),
+  saveSystemHostEntry: (params: {
+    action: 'toggle' | 'add' | 'delete'
+    lineIndex?: number
+    ip?: string
+    hostname?: string
+    comment?: string
+  }): Promise<{ success: boolean; message: string; entries: SystemHostEntryItem[] }> =>
+    ipcRenderer.invoke('system-save-host-entry', params),
+  getSystemNetworkAdapters: (): Promise<SystemNetworkAdapterItem[]> =>
+    ipcRenderer.invoke('system-get-network-adapters'),
+  runSystemNetworkAction: (params: {
+    action:
+      | 'flush-dns'
+      | 'reset-winsock'
+      | 'set-dns'
+      | 'allow-port-firewall'
+      | 'open-hosts-folder'
+    adapterName?: string
+    dnsPreset?: 'cloudflare' | 'google' | 'quad9' | 'dhcp'
+    port?: number
+  }): Promise<{ success: boolean; message: string }> =>
+    ipcRenderer.invoke('system-run-network-action', params),
+  getSystemStorageAndPower: (): Promise<SystemStorageAndPowerOverview> =>
+    ipcRenderer.invoke('system-get-storage-and-power'),
+  runSystemPowerOrRepairAction: (params: {
+    action:
+      | 'set-power-plan'
+      | 'wsl-shutdown'
+      | 'sfc-scannow'
+      | 'dism-check'
+      | 'dism-restore'
+      | 'dism-cleanup'
+      | 'wsreset'
+      | 'battery-report'
+    planGuid?: string
+  }): Promise<{ success: boolean; message: string }> =>
+    ipcRenderer.invoke('system-run-power-or-repair-action', params),
+  getSystemSecurityPosture: (force?: boolean): Promise<SystemSecurityPosture> =>
+    ipcRenderer.invoke('system-get-security-posture', force),
+  runSystemSecurityAction: (params: {
+    action:
+      | 'update-signatures'
+      | 'quick-scan'
+      | 'open-defender'
+      | 'add-exclusion-path'
+      | 'remove-exclusion-path'
+    targetPath?: string
+  }): Promise<{ success: boolean; message: string; posture?: SystemSecurityPosture }> =>
+    ipcRenderer.invoke('system-run-security-action', params),
+  getSystemEventLogs: (): Promise<SystemEventLogItem[]> =>
+    ipcRenderer.invoke('system-get-event-logs'),
+  openExternalUrl: (url: string): Promise<void> =>
+    ipcRenderer.invoke('system-open-external', url),
+  revealPathInExplorer: (targetPath: string): Promise<void> =>
+    ipcRenderer.invoke('system-reveal-path', targetPath),
+  onWingetOperationProgress: (
+    callback: (state: WingetOperationState | null) => void
+  ): (() => void) => {
+    const listener = (
+      _event: Electron.IpcRendererEvent,
+      state: WingetOperationState | null
+    ): void => callback(state)
+    ipcRenderer.on('winget-operation-progress', listener)
+    return () => ipcRenderer.removeListener('winget-operation-progress', listener)
+  },
+  onWingetUpdatesCount: (callback: (count: number) => void): (() => void) => {
+    const listener = (_event: Electron.IpcRendererEvent, count: number): void => callback(count)
+    ipcRenderer.on('winget-updates-count', listener)
+    return () => ipcRenderer.removeListener('winget-updates-count', listener)
+  },
+  shortcutsToggle: (initialTab?: string): void => ipcRenderer.send('shortcuts-toggle', initialTab),
+  shortcutsOpen: (initialTab?: string): void => ipcRenderer.send('shortcuts-open', initialTab),
+  shortcutsReady: (): void => ipcRenderer.send('shortcuts-ready'),
+  getShortcutsOverlayData: (): Promise<ShortcutsOverlayData> =>
+    ipcRenderer.invoke('shortcuts-get-data'),
+  executeShortcutItem: (
+    item: ShortcutOverlayItem,
+    elevated?: boolean
+  ): Promise<{ ok: boolean; message: string }> =>
+    ipcRenderer.invoke('shortcuts-execute', item, elevated),
+  toggleShortcutFavorite: (id: string): Promise<ShortcutsOverlayData> =>
+    ipcRenderer.invoke('shortcuts-toggle-favorite', id),
+  saveShortcutItem: (item: ShortcutOverlayItem): Promise<ShortcutsOverlayData> =>
+    ipcRenderer.invoke('shortcuts-save-item', item),
+  deleteShortcutItem: (id: string): Promise<ShortcutsOverlayData> =>
+    ipcRenderer.invoke('shortcuts-delete-item', id),
+  addShortcutCustomTab: (label: string, icon?: string): Promise<ShortcutsOverlayData> =>
+    ipcRenderer.invoke('shortcuts-add-tab', label, icon),
+  deleteShortcutCustomTab: (tabId: string): Promise<ShortcutsOverlayData> =>
+    ipcRenderer.invoke('shortcuts-delete-tab', tabId),
+  restoreDefaultShortcuts: (): Promise<ShortcutsOverlayData> =>
+    ipcRenderer.invoke('shortcuts-restore-defaults'),
+  runDockerShortcutContainerAction: (
+    containerNameOrId: string,
+    action: 'start' | 'stop' | 'restart' | 'shell' | 'logs'
+  ): Promise<{ ok: boolean; message: string; data: ShortcutsOverlayData }> =>
+    ipcRenderer.invoke('shortcuts-docker-action', containerNameOrId, action),
+  setShortcutsStayOpen: (stayOpen: boolean): Promise<ShortcutsOverlayData> =>
+    ipcRenderer.invoke('shortcuts-set-stay-open', stayOpen),
+  setShortcutsGrayscale: (grayscale: boolean): Promise<ShortcutsOverlayData> =>
+    ipcRenderer.invoke('shortcuts-set-grayscale', grayscale),
+  resizeShortcutsWindow: (width: number, height: number): Promise<ShortcutsOverlayData> =>
+    ipcRenderer.invoke('shortcuts-resize', width, height),
+  onShortcutsExpanded: (callback: (expanded: boolean) => void): (() => void) => {
+    const listener = (_event: Electron.IpcRendererEvent, expanded: boolean): void =>
+      callback(expanded)
+    ipcRenderer.on('shortcuts-expanded', listener)
+    return () => ipcRenderer.removeListener('shortcuts-expanded', listener)
+  },
+  onShortcutsGrowOrigin: (callback: (origin: GrowOrigin) => void): (() => void) => {
+    const listener = (_event: Electron.IpcRendererEvent, origin: GrowOrigin): void =>
+      callback(origin)
+    ipcRenderer.on('shortcuts-grow-origin', listener)
+    return () => ipcRenderer.removeListener('shortcuts-grow-origin', listener)
+  },
+  onShortcutsCollapsing: (callback: (origin: GrowOrigin) => void): (() => void) => {
+    const listener = (_event: Electron.IpcRendererEvent, origin: GrowOrigin): void =>
+      callback(origin)
+    ipcRenderer.on('shortcuts-collapsing', listener)
+    return () => ipcRenderer.removeListener('shortcuts-collapsing', listener)
+  },
+  onShortcutsSelectTab: (callback: (tabId: string) => void): (() => void) => {
+    const listener = (_event: Electron.IpcRendererEvent, tabId: string): void => callback(tabId)
+    ipcRenderer.on('shortcuts-select-tab', listener)
+    return () => ipcRenderer.removeListener('shortcuts-select-tab', listener)
+  },
+  onShortcutsActive: (callback: (active: boolean) => void): (() => void) => {
+    const listener = (_event: Electron.IpcRendererEvent, active: boolean): void => callback(active)
+    ipcRenderer.on('shortcuts-active', listener)
+    return () => ipcRenderer.removeListener('shortcuts-active', listener)
+  }
 }
 
 contextBridge.exposeInMainWorld('api', api)

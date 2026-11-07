@@ -14,7 +14,7 @@ import {
   type GitRepoStatus
 } from '../../shared/types'
 import ConfigManager from './ConfigManager'
-import { FocusTimerPanel, GitStatusPanel, ProfilePanel } from './ShelfPanels'
+import { FocusTimerPanel, GitStatusPanel, ProfilePanel, SystemManagementPanel, type WingetSubTab } from './ShelfPanels'
 import { windowMode } from './windowMode'
 import { formatAccelerator } from './accelerator'
 import { useGrowAnimation } from './useGrowAnimation'
@@ -54,6 +54,8 @@ const COMMAND_ICONS: Record<string, string> = {
   svc: '🛠️',
   wsl: '🐧',
   pkg: '📦',
+  system: '🧰',
+  shortcuts: '⌨️',
   clip: '📎',
   diff: '⇄',
   cert: '🔒',
@@ -129,58 +131,7 @@ function parseInput(
 
   const spaceIdx = raw.indexOf(' ')
   if (spaceIdx === -1) {
-    const name = raw.slice(1)
-    if (name === 'settings' || name === 'config') {
-      return { command: 'settings', query: '' }
-    }
-    if (name === 'g' || name === 'google') {
-      return { command: 'g', query: '' }
-    }
-    if (name === 'powertoys' || name === 'pt') {
-      return { command: 'pt', query: '' }
-    }
-    if (name === 'exit' || name === 'quit') {
-      return { command: 'exit', query: '' }
-    }
-    if (name === 'repo') {
-      return { command: 'repo', query: '' }
-    }
-    if (name === 'notifications' || name === 'notify') {
-      return { command: 'notifications', query: '' }
-    }
-    if (name === 'timer') {
-      return { command: 'timer', query: '' }
-    }
-    if (name === 'cert' || name === 'ssl') {
-      return { command: 'cert', query: '' }
-    }
-    if (name === 'dns' || name === 'dig') {
-      return { command: 'dns', query: '' }
-    }
-    if (name === 'key' || name === 'kbd') {
-      return { command: 'key', query: '' }
-    }
-    if (name === 'proc' || name === 'ps') {
-      return { command: 'proc', query: '' }
-    }
-    if (name === 'pkg' || name === 'winget') {
-      return { command: 'pkg', query: '' }
-    }
-    if (name === 'show') {
-      return { command: 'show', query: '' }
-    }
-    if (name === 'hide') {
-      return { command: 'hide', query: '' }
-    }
-    if (customNames.has(name)) {
-      return { command: 'custom', query: name }
-    }
-    const matchedCmd = COMMANDS.find((c) => c.name === name)?.name
-    const nonZeroArg = new Set<CommandName>(['calc', 'search', 'restart', 'default', 'view', 'term', 'control', 'release', 'exit', 'settings', 'show', 'hide'])
-    if (matchedCmd && !nonZeroArg.has(matchedCmd)) {
-      return { command: matchedCmd, query: '' }
-    }
-    return { command: null, query: name }
+    return { command: null, query: raw.slice(1) }
   }
   const name = raw.slice(1, spaceIdx)
   const rest = raw.slice(spaceIdx + 1)
@@ -193,6 +144,8 @@ function parseInput(
   if (name === 'key' || name === 'kbd') return { command: 'key', query: rest }
   if (name === 'proc' || name === 'ps') return { command: 'proc', query: rest }
   if (name === 'pkg' || name === 'winget') return { command: 'pkg', query: rest }
+  if (name === 'system' || name === 'sys') return { command: 'system', query: rest }
+  if (name === 'shortcuts' || name === 'sc' || name === 'hotkeys') return { command: 'shortcuts', query: rest }
   if (name === 'show') return { command: 'show', query: rest }
   if (name === 'hide') return { command: 'hide', query: rest }
   if (name === 'google') return { command: 'g', query: rest }
@@ -242,7 +195,10 @@ export default function CommandPalette(): JSX.Element {
   const [focusState, setFocusState] = useState<FocusTimerState | null>(null)
   const [gitStatus, setGitStatus] = useState<GitRepoStatus | null>(null)
   const [gitBranches, setGitBranches] = useState<string[]>([])
-  const [activeModuleView, setActiveModuleView] = useState<'focus' | 'git' | 'profile' | null>(null)
+  const [activeModuleView, setActiveModuleView] = useState<'focus' | 'git' | 'profile' | 'system' | null>(null)
+  const [systemSubTab, setSystemSubTab] = useState<WingetSubTab>('updates')
+  const [wingetUpdatesCount, setWingetUpdatesCount] = useState(0)
+  const [shortcutsActive, setShortcutsActive] = useState(false)
   const [termUnread, setTermUnread] = useState(false)
   const [notifyCount, setNotifyCount] = useState(0)
   const [shelfPaletteActive, setShelfPaletteActive] = useState(false)
@@ -395,7 +351,7 @@ export default function CommandPalette(): JSX.Element {
     (name: string): boolean => {
       const lower = name.toLowerCase()
       if (COMMANDS.some((c) => c.name.toLowerCase() === lower)) return true
-      if (['settings', 'config', 'g', 'google', 'powertoys', 'pt', 'exit', 'quit', 'notify', 'timer', 'ssl', 'dig', 'kbd'].includes(lower)) return true
+      if (['settings', 'config', 'g', 'google', 'powertoys', 'pt', 'exit', 'quit', 'notify', 'timer', 'ssl', 'dig', 'kbd', 'sys', 'system', 'winget', 'ps', 'shortcuts', 'sc', 'hotkeys'].includes(lower)) return true
       if (Object.keys(shortcuts).some((k) => k.toLowerCase() === lower)) return true
       if (customCommands.some((c) => c.command.toLowerCase() === lower)) return true
       if (layout.folders.some((f) => f.name.toLowerCase() === lower || f.id.toLowerCase() === lower)) return true
@@ -526,6 +482,10 @@ export default function CommandPalette(): JSX.Element {
             } else if (mode === 'profile') {
               setSettingsTarget(null)
               setActiveModuleView('profile')
+            } else if (mode === 'system') {
+              setSettingsTarget(null)
+              setSystemSubTab('updates')
+              setActiveModuleView('system')
             } else {
               setSettingsTarget(null)
               setActiveModuleView(null)
@@ -585,6 +545,8 @@ export default function CommandPalette(): JSX.Element {
           refreshGit()
         } else if (mode === 'profile') {
           // profile ready
+        } else if (mode === 'system') {
+          // system ready
         } else {
           refreshHistory()
           refreshSettings()
@@ -707,6 +669,12 @@ export default function CommandPalette(): JSX.Element {
       window.api.onShelfPaletteActive?.((active, mode) => {
         setShelfPaletteActive(active)
         setActiveShelfModule(mode ?? (active ? 'bar' : null))
+      }),
+      window.api.onWingetUpdatesCount?.((count) => {
+        setWingetUpdatesCount(count)
+      }),
+      window.api.onShortcutsActive?.((active) => {
+        setShortcutsActive(active)
       })
     ]
     return () => {
@@ -986,14 +954,24 @@ export default function CommandPalette(): JSX.Element {
   }, [])
 
   const formatCommandList = useCallback((): ListItem[] => {
+    const selectCommandWithSpace = (cmdName: string): void => {
+      const nextVal = `/${cmdName} `
+      setValue(nextVal)
+      requestAnimationFrame(() => {
+        if (inputRef.current) {
+          inputRef.current.focus()
+          inputRef.current.setSelectionRange(nextVal.length, nextVal.length)
+        }
+      })
+    }
+
     const selectBuiltin = (name: CommandName, elevated = false) => {
       if (name === 'term') {
         window.api.executeCommand('term', { label: 'term', value: 'term' }, '', elevated).then(handleExecuteResult)
       } else if (name === 'repo') {
         setActiveModuleView('git')
       } else if (name === 'settings') {
-        setValue('/settings')
-        inputRef.current?.focus()
+        selectCommandWithSpace('settings')
       } else if (name === 'notifications') {
         if (windowMode === 'bar') {
           window.api.barDeactivate()
@@ -1003,11 +981,20 @@ export default function CommandPalette(): JSX.Element {
         window.api.notifyOpen?.() ?? window.api.notifyToggle()
       } else if (name === 'timer') {
         setActiveModuleView('focus')
+      } else if (name === 'system') {
+        setSystemSubTab('updates')
+        setActiveModuleView('system')
+      } else if (name === 'shortcuts') {
+        if (windowMode === 'bar') {
+          window.api.barDeactivate()
+        } else {
+          window.api.hidePalette()
+        }
+        window.api.shortcutsOpen?.() ?? window.api.shortcutsToggle?.()
       } else if (name === 'show' || name === 'hide') {
         runCommand(name, { label: name === 'show' ? 'Show command dock' : 'Hide command dock', value: name })
       } else {
-        setValue(`/${name} `)
-        inputRef.current?.focus()
+        selectCommandWithSpace(name)
       }
     }
 
@@ -1036,10 +1023,7 @@ export default function CommandPalette(): JSX.Element {
           badge: isDef ? '★ Default' : 'Custom',
           section: sectionName,
           sectionIcon,
-          onSelect: () => {
-            setValue(`/${custom.command} `)
-            inputRef.current?.focus()
-          }
+          onSelect: () => selectCommandWithSpace(custom.command)
         }
       }
       return null
@@ -1145,78 +1129,89 @@ export default function CommandPalette(): JSX.Element {
 
     // 3. User typed search filter e.g. "/g" or "/git" or "/calc":
     const needle = value.slice(1).toLowerCase()
-    const items: ListItem[] = []
     const seen = new Set<string>()
+    const scoredCards: Array<{ card: ListItem; score: number }> = []
 
-    // Match all visible commands across all folders and root (startsWith prioritized first, then includes)
+    const ALIAS_MAP: Partial<Record<CommandName, string[]>> = {
+      settings: ['config'],
+      g: ['google'],
+      pt: ['powertoys'],
+      exit: ['quit'],
+      notifications: ['notify'],
+      cert: ['ssl'],
+      dns: ['dig'],
+      key: ['kbd'],
+      proc: ['ps'],
+      pkg: ['winget'],
+      system: ['sys'],
+      shortcuts: ['sc', 'hotkeys']
+    }
+
     const visibleBuiltins = COMMANDS.filter((c) => !hiddenCommands.has(c.name))
-    const matchingBuiltins = visibleBuiltins.filter((b) => {
-      const parentFolder = layout.folders.find((f) => f.commands.includes(b.name))
-      return (
-        b.name.toLowerCase().includes(needle) ||
-        b.description.toLowerCase().includes(needle) ||
-        (parentFolder && parentFolder.name.toLowerCase().includes(needle))
-      )
-    })
-    matchingBuiltins.sort((a, b) => {
-      if (defaultCommand) {
-        if (a.name === defaultCommand) return -1
-        if (b.name === defaultCommand) return 1
-      }
-      const aStarts = a.name.toLowerCase().startsWith(needle)
-      const bStarts = b.name.toLowerCase().startsWith(needle)
-      if (aStarts && !bStarts) return -1
-      if (!aStarts && bStarts) return 1
-      return 0
-    })
-
-    for (const builtin of matchingBuiltins) {
+    for (const builtin of visibleBuiltins) {
       if (seen.has(builtin.name)) continue
-      seen.add(builtin.name)
+      const nameLower = builtin.name.toLowerCase()
+      const shortcut = shortcutFor(builtin.name)?.toLowerCase()
+      const aliases = ALIAS_MAP[builtin.name] ?? []
       const parentFolder = layout.folders.find((f) => f.commands.includes(builtin.name))
+      const exactMatch =
+        nameLower === needle ||
+        shortcut === needle ||
+        aliases.some((al) => al === needle)
+      const startsMatch =
+        nameLower.startsWith(needle) ||
+        (shortcut !== undefined && shortcut.startsWith(needle)) ||
+        aliases.some((al) => al.startsWith(needle))
+      const nameIncludes =
+        nameLower.includes(needle) ||
+        aliases.some((al) => al.includes(needle))
+      const otherMatch =
+        builtin.description.toLowerCase().includes(needle) ||
+        Boolean(parentFolder && parentFolder.name.toLowerCase().includes(needle))
+
+      if (!exactMatch && !startsMatch && !nameIncludes && !otherMatch) continue
+      seen.add(builtin.name)
       const isDef = builtin.name === defaultCommand
       const card = buildCommandCard(
         builtin.name,
-        parentFolder ? parentFolder.name : 'Quick Launch',
-        parentFolder?.icon ?? '✨',
+        'Matching Commands',
+        '⌘',
         isDef
       )
-      if (card) items.push(card)
+      if (card) {
+        const score = exactMatch ? 0 : startsMatch ? 1 : nameIncludes ? 2 : 3
+        scoredCards.push({ card, score })
+      }
     }
 
-    const matchingCustom = customCommands.filter((c) => {
-      const parentFolder = layout.folders.find((f) => f.commands.includes(c.command))
-      return (
-        c.command.toLowerCase().includes(needle) ||
-        (c.label && c.label.toLowerCase().includes(needle)) ||
-        (parentFolder && parentFolder.name.toLowerCase().includes(needle))
-      )
-    })
-    matchingCustom.sort((a, b) => {
-      if (defaultCommand) {
-        if (a.command === defaultCommand) return -1
-        if (b.command === defaultCommand) return 1
-      }
-      const aStarts = a.command.toLowerCase().startsWith(needle)
-      const bStarts = b.command.toLowerCase().startsWith(needle)
-      if (aStarts && !bStarts) return -1
-      if (!aStarts && bStarts) return 1
-      return 0
-    })
-
-    for (const custom of matchingCustom) {
+    for (const custom of customCommands) {
       if (seen.has(custom.command)) continue
-      seen.add(custom.command)
+      const cmdLower = custom.command.toLowerCase()
       const parentFolder = layout.folders.find((f) => f.commands.includes(custom.command))
+      const exactMatch = cmdLower === needle
+      const startsMatch = cmdLower.startsWith(needle)
+      const nameIncludes = cmdLower.includes(needle)
+      const otherMatch =
+        Boolean(custom.label && custom.label.toLowerCase().includes(needle)) ||
+        Boolean(parentFolder && parentFolder.name.toLowerCase().includes(needle))
+
+      if (!exactMatch && !startsMatch && !nameIncludes && !otherMatch) continue
+      seen.add(custom.command)
       const isDef = custom.command === defaultCommand
       const card = buildCommandCard(
         custom.command,
-        parentFolder ? parentFolder.name : 'Custom Commands',
-        parentFolder?.icon ?? '⚡',
+        'Matching Commands',
+        '⌘',
         isDef
       )
-      if (card) items.push(card)
+      if (card) {
+        const score = exactMatch ? 0 : startsMatch ? 1 : nameIncludes ? 2 : 3
+        scoredCards.push({ card, score })
+      }
     }
+
+    scoredCards.sort((a, b) => a.score - b.score)
+    const items = scoredCards.map((entry) => entry.card)
 
     return items
   }, [value, activeFolder, folderSubQuery, layout, hiddenCommands, defaultCommand, shortcutFor, customCommands, runCommand])
@@ -1312,6 +1307,21 @@ export default function CommandPalette(): JSX.Element {
           }
           if (command === 'profile') {
             setActiveModuleView('profile')
+            return
+          }
+          if (command === 'system') {
+            if (r.value.startsWith('__openSystemPanel::')) {
+              const sub = r.value.split('::')[1] as WingetSubTab
+              setSystemSubTab(sub || 'updates')
+            } else {
+              setSystemSubTab('updates')
+            }
+            setActiveModuleView('system')
+            return
+          }
+          if (command === 'pkg' && r.value === '__open_system_winget') {
+            setSystemSubTab('updates')
+            setActiveModuleView('system')
             return
           }
           if (command === 'control' && r.value === '__managePeers') {
@@ -1501,6 +1511,11 @@ export default function CommandPalette(): JSX.Element {
   )
 
   function handleKeyDown(e: React.KeyboardEvent): void {
+    if ((e.ctrlKey || e.metaKey) && !e.shiftKey && !e.altKey && e.key.toLowerCase() === 'e' && command === 'teams') {
+      e.preventDefault()
+      setSettingsTarget('teams')
+      return
+    }
     if (
       command === 'key' &&
       !['Escape', 'Enter', 'ArrowDown', 'ArrowUp', 'ArrowLeft', 'ArrowRight', 'Tab'].includes(e.key)
@@ -1630,6 +1645,9 @@ export default function CommandPalette(): JSX.Element {
         setActiveModuleView('git')
       } else if (command === 'profile') {
         setActiveModuleView('profile')
+      } else if (command === 'system') {
+        setSystemSubTab('updates')
+        setActiveModuleView('system')
       } else if (command === 'notifications') {
         if (windowMode === 'bar') {
           window.api.barDeactivate()
@@ -1637,6 +1655,13 @@ export default function CommandPalette(): JSX.Element {
           window.api.hidePalette()
         }
         window.api.notifyOpen?.() ?? window.api.notifyToggle()
+      } else if (command === 'shortcuts') {
+        if (windowMode === 'bar') {
+          window.api.barDeactivate()
+        } else {
+          window.api.hidePalette()
+        }
+        window.api.shortcutsOpen?.() ?? window.api.shortcutsToggle?.()
       }
     } else if (e.key === 'Tab') {
       const item = items[activeIndex]
@@ -1863,6 +1888,74 @@ export default function CommandPalette(): JSX.Element {
                 </span>
               </button>
             )
+          case 'system':
+            return (
+              <button
+                key="system"
+                type="button"
+                className={`shelf-icon shelf-icon-system ${shelfPaletteActive && activeShelfModule === 'system' ? 'is-active' : ''}`}
+                onClick={() => {
+                  window.api.barActivate('system')
+                }}
+              >
+                <span className="shelf-icon-glyph">
+                  <svg
+                    width="18"
+                    height="18"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  >
+                    <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z" />
+                    <polyline points="3.27 6.96 12 12.01 20.73 6.96" />
+                    <line x1="12" y1="22.08" x2="12" y2="12" />
+                  </svg>
+                </span>
+                {wingetUpdatesCount > 0 && (
+                  <span className="shelf-badge-indicator" style={{ background: '#3b82f6' }}>
+                    {wingetUpdatesCount > 99 ? '99+' : wingetUpdatesCount}
+                  </span>
+                )}
+              </button>
+            )
+          case 'shortcuts':
+            return (
+              <button
+                key="shortcuts"
+                type="button"
+                className={`shelf-icon shelf-icon-shortcuts ${shortcutsActive ? 'is-active' : ''}`}
+                title="Shortcuts Overlay [⌨️] (/shortcuts)"
+                onClick={() => {
+                  window.api.shortcutsToggle?.()
+                }}
+              >
+                <span className="shelf-icon-glyph">
+                  <svg
+                    width="18"
+                    height="18"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  >
+                    <rect x="2" y="4" width="20" height="16" rx="2" ry="2" />
+                    <path d="M6 8h.001" />
+                    <path d="M10 8h.001" />
+                    <path d="M14 8h.001" />
+                    <path d="M18 8h.001" />
+                    <path d="M8 12h.001" />
+                    <path d="M12 12h.001" />
+                    <path d="M16 12h.001" />
+                    <path d="M7 16h10" />
+                  </svg>
+                </span>
+              </button>
+            )
           default:
             return null
         }
@@ -2068,6 +2161,46 @@ export default function CommandPalette(): JSX.Element {
               </svg>
             )
             onClick = () => window.api.barActivate('profile')
+            break
+          case 'system':
+            title =
+              wingetUpdatesCount > 0
+                ? `System Management [🧰] (${wingetUpdatesCount} package updates)`
+                : 'System Management [🧰] (/system)'
+            isModuleActive = shelfPaletteActive && activeShelfModule === 'system'
+            if (wingetUpdatesCount > 0) {
+              badgeContent = (
+                <span className="circle-orbit-badge" style={{ background: '#3b82f6' }}>
+                  {wingetUpdatesCount > 9 ? '9+' : wingetUpdatesCount}
+                </span>
+              )
+            }
+            iconContent = (
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z" />
+                <polyline points="3.27 6.96 12 12.01 20.73 6.96" />
+                <line x1="12" y1="22.08" x2="12" y2="12" />
+              </svg>
+            )
+            onClick = () => window.api.barActivate('system')
+            break
+          case 'shortcuts':
+            title = 'Shortcuts Overlay [⌨️] (/shortcuts)'
+            isModuleActive = shortcutsActive
+            iconContent = (
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <rect x="2" y="4" width="20" height="16" rx="2" ry="2" />
+                <path d="M6 8h.001" />
+                <path d="M10 8h.001" />
+                <path d="M14 8h.001" />
+                <path d="M18 8h.001" />
+                <path d="M8 12h.001" />
+                <path d="M12 12h.001" />
+                <path d="M16 12h.001" />
+                <path d="M7 16h10" />
+              </svg>
+            )
+            onClick = () => window.api.shortcutsToggle?.()
             break
           default:
             return null
@@ -2342,6 +2475,24 @@ export default function CommandPalette(): JSX.Element {
     )
   }
 
+  if (activeModuleView === 'system') {
+    return (
+      <div className={paletteClassName} style={growStyle} onAnimationEnd={onGrowEnd}>
+        <SystemManagementPanel
+          initialWingetTab={systemSubTab}
+          onClose={() => {
+            if (windowMode === 'bar') {
+              window.api.barDeactivate()
+            } else {
+              window.api.hidePalette()
+            }
+          }}
+          onBackToPalette={() => setActiveModuleView(null)}
+        />
+      </div>
+    )
+  }
+
   return (
     <div
       className={`${paletteClassName} palette-launchpad`}
@@ -2461,6 +2612,11 @@ export default function CommandPalette(): JSX.Element {
         {(command === 'custom' || command === 'term') && (
           <span className="palette-footer-hint">
             <kbd className="palette-kbd">Ctrl+↵</kbd> Run Elevated
+          </span>
+        )}
+        {command === 'teams' && (
+          <span className="palette-footer-hint">
+            <kbd className="palette-kbd">Ctrl+E</kbd> Add / Edit
           </span>
         )}
         {tabHintLabel && (

@@ -36,6 +36,12 @@ import {
   repositionTerminal
 } from './terminalWindow'
 import { createNotificationWindow, registerNotificationIpc } from './notifyWindow'
+import {
+  createShortcutsWindow,
+  repositionShortcuts,
+  toggleShortcutsWindow
+} from './shortcutsWindow'
+import { registerShortcutsIpc } from './shortcutsManager'
 import { killPty } from './terminal'
 import {
   createBarWindow,
@@ -55,12 +61,13 @@ import {
   COMMAND_LAYOUT_PATH
 } from './commandLayout'
 import { initSwap, shutdownSwap, startSwapServer } from './swap/swapManager'
-import { startCursorHook, stopCursorHook } from './cursorHook'
 import { DockGeometry } from './dock/DockGeometry'
 import { getDockDisplay } from './display'
 import { dockManager } from './dock/DockManager'
 import { registerFocusTimerIpc } from './focusTimer'
 import { registerGitStatusIpc } from './gitStatus'
+import { registerWingetIpc } from './wingetManager'
+import { registerSystemManagerIpc } from './systemManager'
 import {
   executeProfileAction,
   listProfiles,
@@ -345,6 +352,7 @@ function revealPaletteWindow(targetMode?: string): void {
 
 function getPaletteSizeForMode(targetMode: string): { width: number; height: number } {
   if (targetMode === 'focus') return DockGeometry.FOCUS_PANEL_SIZE
+  if (targetMode === 'system') return DockGeometry.SYSTEM_PANEL_SIZE
   if (targetMode === 'git' || targetMode === 'profile' || targetMode === 'settings') {
     return DockGeometry.MODULE_PANEL_SIZE
   }
@@ -602,6 +610,10 @@ function registerIpcHandlers(): void {
         click: () => toggleTerminal()
       },
       {
+        label: 'Open Shortcuts Overlay',
+        click: () => toggleShortcutsWindow()
+      },
+      {
         label: 'Settings',
         click: () => revealPaletteWindow('settings')
       },
@@ -652,9 +664,12 @@ function registerIpcHandlers(): void {
   ipcMain.on('open-command-layout-file', () => shell.openPath(COMMAND_LAYOUT_PATH))
   registerTerminalIpc()
   registerNotificationIpc()
+  registerShortcutsIpc()
   registerBarIpc()
   registerFocusTimerIpc()
   registerGitStatusIpc()
+  registerWingetIpc()
+  registerSystemManagerIpc()
   ipcMain.handle('profile-execute', (_event, action: string) => executeProfileAction(action))
   ipcMain.handle('profile-list', () => listProfiles())
   ipcMain.handle('profile-switch', (_event, id: string) => switchProfile(id))
@@ -678,6 +693,7 @@ app.whenReady().then(() => {
   createBarWindow(appIcon)
   createTerminalWindow(appIcon)
   createNotificationWindow(appIcon)
+  createShortcutsWindow(appIcon)
   createTray()
   const initialSettings = readSettings()
   paletteHotkey.register(initialSettings.hotkey)
@@ -688,7 +704,6 @@ app.whenReady().then(() => {
   applyAutoStart(initialSettings.autoStart)
   setBarVisible(initialSettings.barEnabled)
   initSwap()
-  startCursorHook()
 
   screen.on('display-metrics-changed', () => repositionBarForDisplayChange())
 
@@ -697,19 +712,18 @@ app.whenReady().then(() => {
     dockManager.broadcast('config-changed')
   })
 
-  let lastDockLayout = readSettings().dockLayout ?? 'shelf'
-  let lastHomePos = readSettings().dockHomePosition ?? 'middle'
-  let lastCustomCoords = JSON.stringify(readSettings().dockHomeCustomCoordinates ?? { x: 50, y: 80 })
+  let lastBarEnabled = initialSettings.barEnabled
+  let lastDockLayout = initialSettings.dockLayout ?? 'shelf'
+  let lastHomePos = initialSettings.dockHomePosition ?? 'middle'
+  let lastCustomCoords = JSON.stringify(initialSettings.dockHomeCustomCoordinates ?? { x: 50, y: 80 })
 
   watchSettings((settings) => {
     paletteHotkey.register(settings.hotkey)
     terminalHotkey.register(settings.terminalHotkey)
     applyAutoStart(settings.autoStart)
-    setBarVisible(settings.barEnabled)
-    if (settings.ctrlRightClickSummon === false) {
-      stopCursorHook()
-    } else {
-      startCursorHook()
+    if (settings.barEnabled !== lastBarEnabled) {
+      lastBarEnabled = settings.barEnabled
+      setBarVisible(settings.barEnabled)
     }
     if (settings.swapEnabled !== false) {
       startSwapServer(settings.swapPort).catch((err) => console.error('[SwapServer] Failed to start:', err))
@@ -734,6 +748,7 @@ app.whenReady().then(() => {
       repositionBarForShelfIcons()
       repositionBarForDisplayChange()
       repositionTerminal()
+      repositionShortcuts()
     }
 
     mainWindow?.webContents.send('config-changed')
@@ -756,8 +771,8 @@ app.whenReady().then(() => {
       createBarWindow(appIcon)
       createTerminalWindow(appIcon)
       createNotificationWindow(appIcon)
+      createShortcutsWindow(appIcon)
       setBarVisible(readSettings().barEnabled)
-      startCursorHook()
     }
   })
 })
@@ -770,5 +785,4 @@ app.on('will-quit', () => {
   globalShortcut.unregisterAll()
   killPty()
   shutdownSwap()
-  stopCursorHook()
 })

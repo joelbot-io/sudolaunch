@@ -1,6 +1,6 @@
 import { app, clipboard, shell } from 'electron'
 import { existsSync } from 'fs'
-import { join } from 'path'
+import { basename, join } from 'path'
 import { spawn } from 'child_process'
 import Fuse from 'fuse.js'
 import type { SearchResultItem } from '../../shared/types'
@@ -44,7 +44,7 @@ const POWER_TOYS_TOOLS: PowerToyTool[] = [
     id: 'colorpicker',
     name: 'Color Picker',
     hotkey: 'Win+Shift+C',
-    executableRelPath: 'PowerToys.ColorPickerUI.exe',
+    executableRelPath: 'WinUI3Apps\\PowerToys.ColorPickerUI.exe',
     category: 'Design & Graphics',
     description: 'Quick screen eyedropper with HEX, RGB, CMYK, and HSL copy',
     keywords: ['color', 'picker', 'eyedropper', 'hex', 'rgb', 'screen', 'palette']
@@ -53,7 +53,7 @@ const POWER_TOYS_TOOLS: PowerToyTool[] = [
     id: 'ocr',
     name: 'Text Extractor (PowerOCR)',
     hotkey: 'Win+Shift+T',
-    executableRelPath: 'PowerToys.PowerOCR.exe',
+    executableRelPath: 'WinUI3Apps\\PowerToys.PowerOCR.exe',
     category: 'Productivity & Text',
     description: 'Optical character recognition (OCR) tool to copy unselectable text from screen',
     keywords: ['ocr', 'text', 'extractor', 'screen', 'grab', 'copy text', 'image to text']
@@ -269,8 +269,14 @@ export function search(query: string): SearchResultItem[] {
     let isInstalled = false
 
     if (ptRoot) {
-      fullPath = join(ptRoot, tool.executableRelPath)
-      isInstalled = existsSync(fullPath)
+      const exeName = basename(tool.executableRelPath)
+      const candidates = [
+        join(ptRoot, tool.executableRelPath),
+        join(ptRoot, 'WinUI3Apps', exeName),
+        join(ptRoot, exeName)
+      ]
+      fullPath = candidates.find((c) => existsSync(c)) ?? join(ptRoot, tool.executableRelPath)
+      isInstalled = existsSync(fullPath) || existsSync(join(ptRoot, 'PowerToys.exe'))
     }
 
     const cleanHotkey = extractCleanHotkey(tool.hotkey)

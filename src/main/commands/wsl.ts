@@ -18,7 +18,7 @@ interface WslDistro {
 let cachedDistros: { timestamp: number; list: WslDistro[]; error?: string } | null = null
 
 async function getWslDistros(force = false): Promise<{ list: WslDistro[]; error?: string }> {
-  if (!force && cachedDistros && Date.now() - cachedDistros.timestamp < 3500) {
+  if (!force && cachedDistros && Date.now() - cachedDistros.timestamp < 7000) {
     return cachedDistros
   }
 

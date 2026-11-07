@@ -63,6 +63,8 @@ import * as pkg from './pkg'
 import * as clip from './clip'
 import * as show from './show'
 import * as hide from './hide'
+import * as system from './system'
+import * as shortcuts from './shortcuts'
 
 const searchers: Record<Exclude<CommandName, 'calc'>, (query: string) => SearchResultItem[] | Promise<SearchResultItem[]>> = {
   app: app.search,
@@ -126,7 +128,9 @@ const searchers: Record<Exclude<CommandName, 'calc'>, (query: string) => SearchR
   pkg: pkg.search,
   clip: clip.search,
   show: show.search,
-  hide: hide.search
+  hide: hide.search,
+  system: system.search,
+  shortcuts: shortcuts.search
 }
 
 const executors: Record<CommandName, (item: SearchResultItem, query: string, elevated?: boolean) => Promise<void>> = {
@@ -192,7 +196,9 @@ const executors: Record<CommandName, (item: SearchResultItem, query: string, ele
   pkg: pkg.execute,
   clip: clip.execute,
   show: show.execute,
-  hide: hide.execute
+  hide: hide.execute,
+  system: system.execute,
+  shortcuts: shortcuts.execute
 }
 
 export function search(command: CommandName, query: string): SearchResultItem[] | Promise<SearchResultItem[]> {

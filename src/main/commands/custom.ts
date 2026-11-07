@@ -49,8 +49,9 @@ function browseResults(commands: CustomCommand[], filter: string): SearchResultI
   })
 }
 
-export function search(query: string): SearchResultItem[] {
-  const commands = loadCustomCommands()
+export function search(query: string, options?: { fromUniversalSearch?: boolean }): SearchResultItem[] {
+  const allCommands = loadCustomCommands()
+  const commands = options?.fromUniversalSearch ? allCommands.filter((c) => !c.excludeFromSearch) : allCommands
   const { name, argsStr } = splitNameAndArgs(query)
   const exact = commands.find((c) => c.command === name)
   if (!exact) {

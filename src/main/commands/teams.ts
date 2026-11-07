@@ -20,12 +20,11 @@ function searchTeamLinks(query: string): SearchResultItem[] {
 }
 
 export function search(query: string, options?: { excludeTeamLinks?: boolean }): SearchResultItem[] {
-  // Team/channel deep links first (unless excluded), then 1:1 chat contacts — mirrors how a user picks a
-  // destination in Teams itself (teams/channels above the DM list).
+  // Prioritize 1:1 chat contacts (people) first, followed by Team/channel deep links.
   if (options?.excludeTeamLinks) {
     return searchContacts(query)
   }
-  return [...searchTeamLinks(query), ...searchContacts(query)]
+  return [...searchContacts(query), ...searchTeamLinks(query)]
 }
 
 export async function execute(item: SearchResultItem): Promise<void> {

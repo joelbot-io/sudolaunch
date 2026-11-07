@@ -2,7 +2,7 @@ import { shell } from 'electron'
 import { existsSync, statSync } from 'fs'
 import { basename, resolve } from 'path'
 import { homedir } from 'os'
-import type { CommandName, SearchResultItem } from '../../shared/types'
+import { COMMANDS, type CommandName, type SearchResultItem } from '../../shared/types'
 import { readSettings } from '../config'
 import * as teams from './teams'
 import * as mail from './mail'
@@ -43,54 +43,65 @@ import * as expmod from './expmod'
 import * as ssh from './ssh'
 import * as clip from './clip'
 
+const DEFAULT_EXCLUDED_BY_DEF = new Set<CommandName>(
+  COMMANDS.filter((c) => c.excludeFromSearch).map((c) => c.name)
+)
+
 interface Searchable {
   name: CommandName
+  excludeFromSearch?: boolean
   search: (query: string) => SearchResultItem[]
   execute: (item: SearchResultItem) => Promise<void>
 }
 
 // Imports each command module directly (same as commands/index.ts) rather than going
 // through that module's private searchers/executors maps, to avoid a circular import.
-const SEARCHABLE: Searchable[] = [
+// Each entry inherits `excludeFromSearch` from COMMANDS in shared/types.ts by default.
+const RAW_SEARCHABLE: Searchable[] = [
   { name: 'teams', search: (query) => teams.search(query, { excludeTeamLinks: true }), execute: teams.execute },
   { name: 'mail', search: mail.search, execute: mail.execute },
   { name: 'snippet', search: snippet.search, execute: snippet.execute },
   { name: 'fav', search: fav.search, execute: fav.execute },
   { name: 'g', search: g.search, execute: g.execute },
   { name: 'app', search: app.search, execute: app.execute },
-  { name: 'custom', search: custom.search, execute: custom.execute },
+  { name: 'custom', search: (query) => custom.search(query, { fromUniversalSearch: true }), execute: custom.execute },
   { name: 'focus', search: focus.search, execute: focus.execute },
   { name: 'gif', search: gif.search, execute: gif.execute },
   { name: 'lookup', search: lookup.search, execute: lookup.execute },
-  { name: 'tz', search: tz.search, execute: tz.execute },
-  { name: 'case', search: caseCmd.search, execute: caseCmd.execute },
-  { name: 'chmod', search: chmod.search, execute: chmod.execute },
-  { name: 'color', search: color.search, execute: color.execute },
-  { name: 'cron', search: cron.search, execute: cron.execute },
+  { name: 'tz', excludeFromSearch: true, search: tz.search, execute: tz.execute },
+  { name: 'case', excludeFromSearch: true, search: caseCmd.search, execute: caseCmd.execute },
+  { name: 'chmod', excludeFromSearch: true, search: chmod.search, execute: chmod.execute },
+  { name: 'color', excludeFromSearch: true, search: color.search, execute: color.execute },
+  { name: 'cron', excludeFromSearch: true, search: cron.search, execute: cron.execute },
   { name: 'emoji', search: emoji.search, execute: emoji.execute },
   { name: 'git', search: git.search, execute: git.execute },
-  { name: 'hash', search: hash.search, execute: hash.execute },
-  { name: 'http', search: http.search, execute: http.execute },
-  { name: 'ip', search: ip.search, execute: ip.execute },
-  { name: 'json', search: json.search, execute: json.execute },
-  { name: 'lorem', search: lorem.search, execute: lorem.execute },
-  { name: 'mime', search: mime.search, execute: mime.execute },
-  { name: 'port', search: port.search, execute: port.execute },
+  { name: 'hash', excludeFromSearch: true, search: hash.search, execute: hash.execute },
+  { name: 'http', excludeFromSearch: true, search: http.search, execute: http.execute },
+  { name: 'ip', excludeFromSearch: true, search: ip.search, execute: ip.execute },
+  { name: 'json', excludeFromSearch: true, search: json.search, execute: json.execute },
+  { name: 'lorem', excludeFromSearch: true, search: lorem.search, execute: lorem.execute },
+  { name: 'mime', excludeFromSearch: true, search: mime.search, execute: mime.execute },
+  { name: 'port', excludeFromSearch: true, search: port.search, execute: port.execute },
   { name: 'pt', search: pt.search, execute: pt.execute },
-  { name: 'pwd', search: pwd.search, execute: pwd.execute },
-  { name: 'qr', search: qr.search, execute: qr.execute },
-  { name: 'regex', search: regex.search, execute: regex.execute },
-  { name: 'text', search: text.search, execute: text.execute },
-  { name: 'unit', search: unit.search, execute: unit.execute },
-  { name: 'url', search: url.search, execute: url.execute },
-  { name: 'uuid', search: uuid.search, execute: uuid.execute },
-  { name: 'diff', search: diff.search, execute: diff.execute },
-  { name: 'env', search: env.search, execute: env.execute },
-  { name: 'expmod', search: expmod.searchSync, execute: expmod.execute },
+  { name: 'pwd', excludeFromSearch: true, search: pwd.search, execute: pwd.execute },
+  { name: 'qr', excludeFromSearch: true, search: qr.search, execute: qr.execute },
+  { name: 'regex', excludeFromSearch: true, search: regex.search, execute: regex.execute },
+  { name: 'text', excludeFromSearch: true, search: text.search, execute: text.execute },
+  { name: 'unit', excludeFromSearch: true, search: unit.search, execute: unit.execute },
+  { name: 'url', excludeFromSearch: true, search: url.search, execute: url.execute },
+  { name: 'uuid', excludeFromSearch: true, search: uuid.search, execute: uuid.execute },
+  { name: 'diff', excludeFromSearch: true, search: diff.search, execute: diff.execute },
+  { name: 'env', excludeFromSearch: true, search: env.search, execute: env.execute },
+  { name: 'expmod', excludeFromSearch: true, search: expmod.searchSync, execute: expmod.execute },
   { name: 'ssh', search: ssh.search, execute: ssh.execute },
-  { name: 'clip', search: clip.search, execute: clip.execute },
-  { name: 'key', search: key.search, execute: key.execute }
+  { name: 'clip', excludeFromSearch: true, search: clip.search, execute: clip.execute },
+  { name: 'key', excludeFromSearch: true, search: key.search, execute: key.execute }
 ]
+
+const SEARCHABLE: Searchable[] = RAW_SEARCHABLE.map((entry) => ({
+  ...entry,
+  excludeFromSearch: entry.excludeFromSearch ?? DEFAULT_EXCLUDED_BY_DEF.has(entry.name)
+}))
 
 function getDirectResult(rawQuery: string): SearchResultItem | null {
   const q = rawQuery.trim()
@@ -142,8 +153,14 @@ function getDirectResult(rawQuery: string): SearchResultItem | null {
 }
 
 export function search(query: string): SearchResultItem[] {
+  if (!query.trim()) return []
   const direct = getDirectResult(query)
-  const excluded = new Set(readSettings().searchExcludedCommands)
+  const settingsExcluded = readSettings().searchExcludedCommands
+  const excluded = new Set<CommandName>(
+    Array.isArray(settingsExcluded) && settingsExcluded.length > 0
+      ? settingsExcluded
+      : SEARCHABLE.filter((c) => c.excludeFromSearch).map((c) => c.name)
+  )
   const enabled = SEARCHABLE.filter((c) => !excluded.has(c.name))
 
   const results: SearchResultItem[] = []

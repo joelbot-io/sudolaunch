@@ -4,6 +4,7 @@ import {
   CONFIG_TYPES,
   COMMANDS,
   SEARCHABLE_COMMAND_NAMES,
+  DEFAULT_SEARCH_EXCLUDED_COMMANDS,
   DEFAULT_COMMAND_LAYOUT,
   type ConfigTypeDef,
   type ConfigEntry,
@@ -37,11 +38,13 @@ type Level =
   | { kind: 'folderAddCommand'; folderId: string }
   | { kind: 'commandAssignFolder'; commandName: string }
   | { kind: 'newFolder' }
-  | { kind: 'form'; typeDef: ConfigTypeDef; index: number | null; draft: ConfigEntry; focusFieldKey?: string }
+  | { kind: 'teamsManager' }
+  | { kind: 'form'; typeDef: ConfigTypeDef; index: number | null; draft: ConfigEntry; focusFieldKey?: string; returnToTeamsManager?: boolean }
 
 function getInitialLevel(target?: string): Level {
   if (!target || target === 'types' || target === 'all') return { kind: 'types' }
   if (target === 'settings' || target === 'edit' || target === 'system') return { kind: 'settings' }
+  if (target === 'teams') return { kind: 'teamsManager' }
   if (target === 'apps') return { kind: 'apps' }
   if (target === 'searchCommands') return { kind: 'searchCommands' }
   if (target === 'hiddenCommands') return { kind: 'hiddenCommands' }
@@ -67,7 +70,7 @@ const APPS_ACTION_COUNT = 2
 // Same idea as the apps row, one more fixed toggle screen appended after it.
 const SEARCH_COMMANDS_ROW_LABEL = 'Search Commands'
 const SEARCH_COMMANDS_ROW_DESCRIPTION = 'Choose which commands the "search" command fans out to'
-const SEARCH_COMMANDS_ACTION_COUNT = 2
+const SEARCH_COMMANDS_ACTION_COUNT = 3
 const SEARCH_COMMAND_DEFS = SEARCHABLE_COMMAND_NAMES.map(
   (name) => COMMANDS.find((c) => c.name === name)!
 )
@@ -82,11 +85,14 @@ const DEFAULT_COMMAND_ROW_DESCRIPTION = 'Choose which command appears first in s
 const DOCK_SLOTS_ROW_LABEL = 'Dock Slots & Modules'
 const DOCK_SLOTS_ROW_DESCRIPTION = 'Choose which icons appear on the shelf dock and customize their order'
 const DOCK_SLOTS_ACTION_COUNT = 2
-const ALL_SHELF_MODULES: ShelfModuleId[] = ['term', 'bar', 'notify', 'settings', 'focus', 'git', 'profile']
+const ALL_SHELF_MODULES: ShelfModuleId[] = ['term', 'bar', 'notify', 'settings', 'focus', 'git', 'profile', 'system']
 
 const COMMAND_LAYOUT_ROW_LABEL = 'Command Layout'
 const COMMAND_LAYOUT_ROW_DESCRIPTION = 'Rearrange commands, organize into subfolders, and configure display order'
 const COMMAND_LAYOUT_ACTION_COUNT = 3
+
+const TEAMS_MANAGER_ROW_LABEL = 'Teams Contacts & Channels'
+const TEAMS_MANAGER_ACTION_COUNT = 2
 const FOLDER_EDIT_ACTION_COUNT = 3
 
 // Same fuzzy-match settings used throughout main/commands/*.ts (teams.ts, fav.ts, app.ts,
@@ -165,6 +171,9 @@ export default function ConfigManager({ initialTarget, onExit }: Props): JSX.Ele
   const [customCommands, setCustomCommands] = useState<CustomCommand[]>([])
   const [newFolderName, setNewFolderName] = useState('')
   const [newFolderIcon, setNewFolderIcon] = useState('📁')
+  const [teamContacts, setTeamContacts] = useState<ConfigEntry[]>([])
+  const [teamLinksList, setTeamLinksList] = useState<ConfigEntry[]>([])
+  const [pendingTeamsDeleteKey, setPendingTeamsDeleteKey] = useState<string | null>(null)
 
   const refreshSettings = useCallback(() => {
     window.api.getConfigEntries('settings').then((list) => {
@@ -218,6 +227,10 @@ export default function ConfigManager({ initialTarget, onExit }: Props): JSX.Ele
     }
     if (initialTarget === 'settings' || initialTarget === 'edit' || initialTarget === 'system') {
       setLevel({ kind: 'settings' })
+      return
+    }
+    if (initialTarget === 'teams') {
+      setLevel({ kind: 'teamsManager' })
       return
     }
     const typeDef = CONFIG_TYPES.find((t) => t.type === initialTarget)
@@ -285,13 +298,26 @@ export default function ConfigManager({ initialTarget, onExit }: Props): JSX.Ele
     })
   }, [])
 
+  const loadTeamsManagerEntries = useCallback(() => {
+    Promise.all([
+      window.api.getConfigEntries('contacts'),
+      window.api.getConfigEntries('teamLinks')
+    ]).then(([contacts, links]) => {
+      setTeamContacts(contacts)
+      setTeamLinksList(links)
+      setActiveIndex(0)
+    })
+  }, [])
+
   useEffect(() => {
     if (level.kind === 'list') {
       loadEntries(level.typeDef)
+    } else if (level.kind === 'teamsManager') {
+      loadTeamsManagerEntries()
     }
     // Deliberately keyed on `level` itself (a fresh object each time we enter list mode)
     // rather than `loadEntries`/`level.typeDef`, so re-entering the same type still refetches.
-  }, [level, loadEntries])
+  }, [level, loadEntries, loadTeamsManagerEntries])
 
   useEffect(() => {
     if (level.kind !== 'apps') return
@@ -385,6 +411,12 @@ export default function ConfigManager({ initialTarget, onExit }: Props): JSX.Ele
       window.api.saveConfigEntry('settings', { searchExcludedCommands: Array.from(next) }, 0)
       return next
     })
+  }
+
+  function resetSearchCommandsToDefault(): void {
+    const next = new Set<CommandName>(DEFAULT_SEARCH_EXCLUDED_COMMANDS)
+    setExcludedSearchCommands(next)
+    window.api.saveConfigEntry('settings', { searchExcludedCommands: Array.from(next) }, 0)
   }
 
   function setAllSearchCommandsExcluded(excluded: boolean): void {
@@ -607,11 +639,31 @@ export default function ConfigManager({ initialTarget, onExit }: Props): JSX.Ele
     setLevel({ kind: 'form', typeDef, index, draft: { ...entries[index] } })
   }
 
+  function openNewTeamsEntry(typeDef: ConfigTypeDef): void {
+    setError(null)
+    setFilter('')
+    setLevel({ kind: 'form', typeDef, index: null, draft: emptyDraft(typeDef), returnToTeamsManager: true })
+  }
+
+  function openEditTeamsEntry(typeDef: ConfigTypeDef, index: number, entry: ConfigEntry): void {
+    setError(null)
+    setFilter('')
+    setLevel({ kind: 'form', typeDef, index, draft: { ...entry }, returnToTeamsManager: true })
+  }
+
   function backOneLevel(): void {
     setError(null)
     setFilter('')
     setActiveIndex(0)
     clearPendingDelete()
+    if (level.kind === 'teamsManager') {
+      if (initialTarget === 'teams') {
+        onExit('/teams ')
+      } else {
+        setLevel({ kind: 'types' })
+      }
+      return
+    }
     if (level.kind === 'settings') {
       if (initialTarget === 'settings' || initialTarget === 'edit' || initialTarget === 'system') {
         onExit('/')
@@ -621,6 +673,10 @@ export default function ConfigManager({ initialTarget, onExit }: Props): JSX.Ele
       return
     }
     if (level.kind === 'form') {
+      if (level.returnToTeamsManager) {
+        setLevel({ kind: 'teamsManager' })
+        return
+      }
       if (level.typeDef.singleton) {
         setLevel({ kind: 'types' })
         return
@@ -669,6 +725,10 @@ export default function ConfigManager({ initialTarget, onExit }: Props): JSX.Ele
       return
     }
     await window.api.saveConfigEntry(typeDef.type, draft, index)
+    if (level.returnToTeamsManager) {
+      setLevel({ kind: 'teamsManager' })
+      return
+    }
     if (typeDef.singleton) {
       setLevel({ kind: 'types' })
       return
@@ -682,12 +742,32 @@ export default function ConfigManager({ initialTarget, onExit }: Props): JSX.Ele
       pendingDeleteTimeoutRef.current = null
     }
     setPendingDeleteIndex(null)
+    setPendingTeamsDeleteKey(null)
   }
 
   async function deleteEntryAt(typeDef: ConfigTypeDef, index: number): Promise<void> {
     await window.api.deleteConfigEntry(typeDef.type, index)
     clearPendingDelete()
     loadEntries(typeDef)
+  }
+
+  async function deleteTeamsItemAt(typeDef: ConfigTypeDef, index: number): Promise<void> {
+    await window.api.deleteConfigEntry(typeDef.type, index)
+    clearPendingDelete()
+    loadTeamsManagerEntries()
+  }
+
+  function requestTeamsItemDelete(typeDef: ConfigTypeDef, index: number, itemKey: string): void {
+    if (pendingTeamsDeleteKey === itemKey) {
+      deleteTeamsItemAt(typeDef, index)
+      return
+    }
+    if (pendingDeleteTimeoutRef.current) clearTimeout(pendingDeleteTimeoutRef.current)
+    setPendingTeamsDeleteKey(itemKey)
+    pendingDeleteTimeoutRef.current = setTimeout(() => {
+      pendingDeleteTimeoutRef.current = null
+      setPendingTeamsDeleteKey(null)
+    }, 3000)
   }
 
   // First call arms the row (and auto-disarms after 3s); the matching second call — on the
@@ -1108,15 +1188,6 @@ export default function ConfigManager({ initialTarget, onExit }: Props): JSX.Ele
         }
       },
       {
-        key: 'ctrlRightClickSummon',
-        label: 'Ctrl+Right Click Dock Summon',
-        sublabel: 'Summon dock icon instantly to cursor position on Ctrl+Right Click · ↵ to toggle',
-        badge: settings.ctrlRightClickSummon ? 'Enabled' : 'Disabled',
-        badgeType: settings.ctrlRightClickSummon ? 'toggle-on' : 'toggle-off',
-        keywords: 'ctrl right click summon teleport cursor mouse dock',
-        onSelect: () => updateSetting('ctrlRightClickSummon', !settings.ctrlRightClickSummon)
-      },
-      {
         key: 'disableMouseInput',
         label: 'Disable Mouse Input',
         sublabel: 'Keyboard-only mode: ignore mouse hover & clicks in palette · ↵ to toggle',
@@ -1257,6 +1328,36 @@ export default function ConfigManager({ initialTarget, onExit }: Props): JSX.Ele
         )
       : []
 
+  const contactsTypeDef = useMemo(() => CONFIG_TYPES.find((t) => t.type === 'contacts')!, [])
+  const teamLinksTypeDef = useMemo(() => CONFIG_TYPES.find((t) => t.type === 'teamLinks')!, [])
+
+  const filteredTeamsManagerItems = useMemo(() => {
+    if (level.kind !== 'teamsManager') return []
+    const combined = [
+      ...teamContacts.map((entry, originalIndex) => ({
+        key: `contact-${originalIndex}`,
+        kind: 'contact' as const,
+        badge: 'Person',
+        typeDef: contactsTypeDef,
+        entry,
+        originalIndex,
+        title: String(entry.name ?? '(untitled)'),
+        subtitle: String(entry.email ?? '')
+      })),
+      ...teamLinksList.map((entry, originalIndex) => ({
+        key: `team-${originalIndex}`,
+        kind: 'team' as const,
+        badge: 'Team',
+        typeDef: teamLinksTypeDef,
+        entry,
+        originalIndex,
+        title: String(entry.name ?? '(untitled)'),
+        subtitle: String(entry.url ?? '')
+      }))
+    ]
+    return fuzzyFilter(combined, ['title', 'subtitle', 'badge'], filter)
+  }, [level.kind, teamContacts, teamLinksList, contactsTypeDef, teamLinksTypeDef, filter])
+
   function handleRootKeyDown(e: React.KeyboardEvent): void {
     if (e.key === 'Escape') {
       e.preventDefault()
@@ -1336,8 +1437,9 @@ export default function ConfigManager({ initialTarget, onExit }: Props): JSX.Ele
         setActiveIndex((i) => Math.max(i - 1, 0))
       } else if (e.key === 'Enter' || e.key === ' ') {
         e.preventDefault()
-        if (activeIndex === 0) setAllSearchCommandsExcluded(false)
-        else if (activeIndex === 1) setAllSearchCommandsExcluded(true)
+        if (activeIndex === 0) resetSearchCommandsToDefault()
+        else if (activeIndex === 1) setAllSearchCommandsExcluded(false)
+        else if (activeIndex === 2) setAllSearchCommandsExcluded(true)
         else {
           const def = filteredSearchCommandDefs[activeIndex - SEARCH_COMMANDS_ACTION_COUNT]
           if (def) toggleSearchCommandExcluded(def.name)
@@ -1512,6 +1614,34 @@ export default function ConfigManager({ initialTarget, onExit }: Props): JSX.Ele
         }
         setLevel({ kind: 'commandLayout' })
       }
+    } else if (level.kind === 'teamsManager') {
+      if ((e.ctrlKey || e.metaKey) && !e.shiftKey && !e.altKey && e.key.toLowerCase() === 'e') {
+        e.preventDefault()
+        backOneLevel()
+        return
+      }
+      const count = TEAMS_MANAGER_ACTION_COUNT + filteredTeamsManagerItems.length
+      if (e.key === 'ArrowDown') {
+        e.preventDefault()
+        setActiveIndex((i) => Math.min(i + 1, Math.max(count - 1, 0)))
+      } else if (e.key === 'ArrowUp') {
+        e.preventDefault()
+        setActiveIndex((i) => Math.max(i - 1, 0))
+      } else if (e.key === 'Enter') {
+        e.preventDefault()
+        if (activeIndex === 0) {
+          openNewTeamsEntry(contactsTypeDef)
+        } else if (activeIndex === 1) {
+          openNewTeamsEntry(teamLinksTypeDef)
+        } else {
+          const target = filteredTeamsManagerItems[activeIndex - TEAMS_MANAGER_ACTION_COUNT]
+          if (target) openEditTeamsEntry(target.typeDef, target.originalIndex, target.entry)
+        }
+      } else if (e.key === 'Delete' && activeIndex >= TEAMS_MANAGER_ACTION_COUNT) {
+        e.preventDefault()
+        const target = filteredTeamsManagerItems[activeIndex - TEAMS_MANAGER_ACTION_COUNT]
+        if (target) requestTeamsItemDelete(target.typeDef, target.originalIndex, target.key)
+      }
     } else if (level.kind === 'list') {
       const count = filteredEntries.length + 1 // +1 for "Add new"
       if (e.key === 'ArrowDown') {
@@ -1559,9 +1689,11 @@ export default function ConfigManager({ initialTarget, onExit }: Props): JSX.Ele
                       ? `Command Layout / /${level.commandName} / Move to Folder`
                       : level.kind === 'newFolder'
                         ? 'Command Layout / Create Folder'
-                        : level.kind !== 'types'
-                          ? level.typeDef.label
-                          : '') +
+                        : level.kind === 'teamsManager'
+                          ? TEAMS_MANAGER_ROW_LABEL
+                          : level.kind !== 'types'
+                            ? level.typeDef.label
+                            : '') +
     (level.kind === 'form' ? (level.index === null ? ' / New' : ' / Edit') : '')
 
   return (
@@ -1690,17 +1822,28 @@ export default function ConfigManager({ initialTarget, onExit }: Props): JSX.Ele
             ref={activeIndex === 0 ? activeItemRef : undefined}
             className={activeIndex === 0 ? 'palette-item active' : 'palette-item'}
             onMouseEnter={() => setActiveIndex(0)}
-            onClick={() => setAllSearchCommandsExcluded(false)}
+            onClick={() => resetSearchCommandsToDefault()}
           >
-            <span className="palette-item-label">Select all</span>
+            <span className="palette-item-text">
+              <span className="palette-item-label">↺ Reset to recommended fast defaults</span>
+              <span className="palette-item-sublabel">Exclude heavy system, process, hardware, environment, and generator commands</span>
+            </span>
           </li>
           <li
             ref={activeIndex === 1 ? activeItemRef : undefined}
             className={activeIndex === 1 ? 'palette-item active' : 'palette-item'}
             onMouseEnter={() => setActiveIndex(1)}
+            onClick={() => setAllSearchCommandsExcluded(false)}
+          >
+            <span className="palette-item-label">Select all (include all in /search)</span>
+          </li>
+          <li
+            ref={activeIndex === 2 ? activeItemRef : undefined}
+            className={activeIndex === 2 ? 'palette-item active' : 'palette-item'}
+            onMouseEnter={() => setActiveIndex(2)}
             onClick={() => setAllSearchCommandsExcluded(true)}
           >
-            <span className="palette-item-label">Select none</span>
+            <span className="palette-item-label">Select none (exclude all from /search)</span>
           </li>
           {filteredSearchCommandDefs.length === 0 && <li className="palette-empty">No results</li>}
           {filteredSearchCommandDefs.map((c, idx) => (
@@ -1715,7 +1858,7 @@ export default function ConfigManager({ initialTarget, onExit }: Props): JSX.Ele
             >
               <span className="palette-item-text">
                 <span className="palette-item-label">/{c.name}</span>
-                <span className="palette-item-sublabel">{c.description}</span>
+                <span className="palette-item-sublabel">{c.description}{c.excludeFromSearch ? ' · Excluded by default' : ''}</span>
               </span>
               <span className={`config-toggle-badge ${!excludedSearchCommands.has(c.name) ? 'config-toggle-on' : 'config-toggle-off'}`}>
                 {!excludedSearchCommands.has(c.name) ? 'Included' : 'Excluded'}
@@ -2284,6 +2427,77 @@ export default function ConfigManager({ initialTarget, onExit }: Props): JSX.Ele
         </div>
       )}
 
+      {level.kind === 'teamsManager' && (
+        <>
+          <ul className={disableMouseInput ? 'palette-list ignore-mouse' : 'palette-list'}>
+            <li
+              ref={activeIndex === 0 ? activeItemRef : undefined}
+              className={activeIndex === 0 ? 'palette-item active' : 'palette-item'}
+              onMouseEnter={() => setActiveIndex(0)}
+              onClick={() => openNewTeamsEntry(contactsTypeDef)}
+            >
+              <span className="palette-item-text">
+                <span className="palette-item-label">+ Add New Contact (Person)</span>
+                <span className="palette-item-sublabel">Add a person by name and email for 1:1 Teams chat or call</span>
+              </span>
+              <span className="config-toggle-badge">New Person</span>
+            </li>
+            <li
+              ref={activeIndex === 1 ? activeItemRef : undefined}
+              className={activeIndex === 1 ? 'palette-item active' : 'palette-item'}
+              onMouseEnter={() => setActiveIndex(1)}
+              onClick={() => openNewTeamsEntry(teamLinksTypeDef)}
+            >
+              <span className="palette-item-text">
+                <span className="palette-item-label">+ Add New Team / Channel Link</span>
+                <span className="palette-item-sublabel">Add a Teams channel or group chat deep link</span>
+              </span>
+              <span className="config-toggle-badge">New Team</span>
+            </li>
+            {filteredTeamsManagerItems.map((item, idx) => {
+              const rowIdx = idx + TEAMS_MANAGER_ACTION_COUNT
+              const isPendingDelete = pendingTeamsDeleteKey === item.key
+              return (
+                <li
+                  key={item.key}
+                  ref={rowIdx === activeIndex ? activeItemRef : undefined}
+                  className={rowIdx === activeIndex ? 'palette-item active' : 'palette-item'}
+                  onMouseEnter={() => setActiveIndex(rowIdx)}
+                  onClick={() => openEditTeamsEntry(item.typeDef, item.originalIndex, item.entry)}
+                >
+                  <span className="palette-item-text">
+                    <span className="palette-item-label">{item.title}</span>
+                    {item.subtitle && <span className="palette-item-sublabel">{item.subtitle}</span>}
+                  </span>
+                  <span className="config-toggle-badge" style={{ marginRight: 8 }}>{item.badge}</span>
+                  <button
+                    type="button"
+                    className={
+                      isPendingDelete
+                        ? 'config-item-delete config-item-delete-confirm'
+                        : 'config-item-delete'
+                    }
+                    title={isPendingDelete ? 'Click again to confirm delete' : 'Delete'}
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      requestTeamsItemDelete(item.typeDef, item.originalIndex, item.key)
+                    }}
+                  >
+                    {isPendingDelete ? 'Confirm?' : '✕'}
+                  </button>
+                </li>
+              )
+            })}
+          </ul>
+          <div className="config-footer-hints">
+            <span><kbd>↵</kbd> Add / Edit</span>
+            <span><kbd>Del</kbd> Delete</span>
+            <span><kbd>↑</kbd><kbd>↓</kbd> Navigate</span>
+            <span><kbd>Esc</kbd> Back to /teams</span>
+          </div>
+        </>
+      )}
+
       {level.kind === 'list' && (
         <ul className={disableMouseInput ? 'palette-list ignore-mouse' : 'palette-list'}>
           {filteredEntries.map(({ entry, originalIndex }, idx) => (
@@ -2421,8 +2635,13 @@ export default function ConfigManager({ initialTarget, onExit }: Props): JSX.Ele
                 }
                 onClick={async () => {
                   if (pendingDeleteIndex === level.index) {
-                    await deleteEntryAt(level.typeDef, level.index as number)
-                    setLevel({ kind: 'list', typeDef: level.typeDef })
+                    if (level.returnToTeamsManager) {
+                      await deleteTeamsItemAt(level.typeDef, level.index as number)
+                      setLevel({ kind: 'teamsManager' })
+                    } else {
+                      await deleteEntryAt(level.typeDef, level.index as number)
+                      setLevel({ kind: 'list', typeDef: level.typeDef })
+                    }
                     return
                   }
                   requestDelete(level.typeDef, level.index as number)

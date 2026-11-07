@@ -14,14 +14,14 @@
     - .env, .env.* (environment secrets)
 
     When -IncludeNative is passed, bundles pre-compiled Windows x64 native binaries
-    (node-pty, node-window-manager) into resources/native-prebuilds so target machines
+    (node-pty, node-window-manager, extract-file-icon) into resources/native-prebuilds so target machines
     without Visual Studio C++ compilers can run immediately via npm install.
 
 .PARAMETER OutFile
     Destination path for the generated ZIP file. Defaults to .\sudolaunch-v<version>-source.zip.
 
 .PARAMETER IncludeNative
-    Includes pre-compiled Windows x64 native binaries for node-pty and node-window-manager.
+    Includes pre-compiled Windows x64 native binaries for node-pty, node-window-manager, and extract-file-icon.
     Enables instant setup on target machines without requiring Visual Studio C++ build tools.
 
 .PARAMETER IncludeGit
@@ -109,23 +109,33 @@ Write-Step "Scanning repository at: $repoRoot"
 # If -IncludeNative is requested, ensure resources/native-prebuilds is up to date
 $prebuildDir = Join-Path $repoRoot "resources\native-prebuilds\win32-x64"
 if ($IncludeNative) {
-    Write-Step "Harvesting pre-compiled native binaries (node-pty, node-window-manager)..."
+    Write-Step "Harvesting pre-compiled native binaries (node-pty, node-window-manager, extract-file-icon)..."
     $ptyRelease = Join-Path $repoRoot "node_modules\node-pty\build\Release"
     $wmRelease = Join-Path $repoRoot "node_modules\node-window-manager\build\Release"
+    $iconRelease = Join-Path $repoRoot "node_modules\extract-file-icon\build\Release"
 
     $ptyDest = Join-Path $prebuildDir "node-pty"
     $wmDest = Join-Path $prebuildDir "node-window-manager"
+    $iconDest = Join-Path $prebuildDir "extract-file-icon"
 
     if (Test-Path $ptyRelease) {
         if (-not (Test-Path $ptyDest)) { New-Item -Path $ptyDest -ItemType Directory -Force | Out-Null }
         Copy-Item (Join-Path $ptyRelease "*.node") $ptyDest -Force -ErrorAction SilentlyContinue
         Copy-Item (Join-Path $ptyRelease "winpty.dll") $ptyDest -Force -ErrorAction SilentlyContinue
         Copy-Item (Join-Path $ptyRelease "winpty-agent.exe") $ptyDest -Force -ErrorAction SilentlyContinue
+        Copy-Item (Join-Path $ptyRelease ".forge-meta") $ptyDest -Force -ErrorAction SilentlyContinue
     }
 
     if (Test-Path $wmRelease) {
         if (-not (Test-Path $wmDest)) { New-Item -Path $wmDest -ItemType Directory -Force | Out-Null }
         Copy-Item (Join-Path $wmRelease "addon.node") $wmDest -Force -ErrorAction SilentlyContinue
+        Copy-Item (Join-Path $wmRelease ".forge-meta") $wmDest -Force -ErrorAction SilentlyContinue
+    }
+
+    if (Test-Path $iconRelease) {
+        if (-not (Test-Path $iconDest)) { New-Item -Path $iconDest -ItemType Directory -Force | Out-Null }
+        Copy-Item (Join-Path $iconRelease "addon.node") $iconDest -Force -ErrorAction SilentlyContinue
+        Copy-Item (Join-Path $iconRelease ".forge-meta") $iconDest -Force -ErrorAction SilentlyContinue
     }
 
     Write-Success "Native binaries bundled for Windows x64 (no C++ compiler needed on target machine)."

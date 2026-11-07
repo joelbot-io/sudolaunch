@@ -2,7 +2,7 @@ import { app } from 'electron'
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'fs'
 import { join } from 'path'
 import { watch as chokidarWatch } from 'chokidar'
-import { DEFAULT_SHELF_ICONS } from '../shared/types'
+import { DEFAULT_SHELF_ICONS, DEFAULT_SEARCH_EXCLUDED_COMMANDS } from '../shared/types'
 import type {
   Contact,
   Snippet,
@@ -43,7 +43,7 @@ export const DEFAULT_SETTINGS: Settings = {
   teamsShortcut: 't',
   favShortcut: 'f',
   snippetShortcut: 's',
-  searchExcludedCommands: ['tz', 'ip', 'uuid', 'pwd', 'lorem', 'case', 'hash', 'qr', 'curl', 'diff', 'env', 'key'],
+  searchExcludedCommands: [...DEFAULT_SEARCH_EXCLUDED_COMMANDS],
   hiddenCommands: [],
   gifFolder: '',
   lookupFolder: '',
@@ -52,11 +52,14 @@ export const DEFAULT_SETTINGS: Settings = {
   barPosition: null,
   termPosition: null,
   termWindowPosition: null,
+  shortcutsWindowPosition: null,
+  shortcutsWindowSize: null,
+  shortcutsStayOpen: true,
+  shortcutsGrayscale: false,
   swapEnabled: true,
   swapMachineId: 1,
   swapPort: 41234,
   swapToggleHotkey: 'ScrollLock',
-  ctrlRightClickSummon: true,
   autoReturnHome: true,
   autoReturnDelaySec: 8,
   dockHomePosition: 'middle',
@@ -76,6 +79,28 @@ export const SEED_PEERS: SwapPeer[] = [
 export const SEED_CONTACTS: Contact[] = [
   { name: 'Jane Doe', alias: 'jane.doe', email: 'jane.doe@example.com', teamsId: 'jane.doe@example.com' }
 ]
+
+// In-memory caches to avoid synchronous disk reads + JSON parsing on every search keystroke.
+// Invalidated automatically on write* calls and Chokidar file-change notifications.
+let cachedContacts: Contact[] | null = null
+let cachedSnippets: Snippet[] | null = null
+let cachedLinks: Link[] | null = null
+let cachedTeamLinks: TeamLink[] | null = null
+let cachedPeers: SwapPeer[] | null = null
+let cachedSshHosts: SshHost[] | null = null
+let cachedSettings: Settings | null = null
+let cachedHistory: HistoryEntry[] | null = null
+
+export function invalidateConfigCache(): void {
+  cachedContacts = null
+  cachedSnippets = null
+  cachedLinks = null
+  cachedTeamLinks = null
+  cachedPeers = null
+  cachedSshHosts = null
+  cachedSettings = null
+  cachedHistory = null
+}
 
 function seedFile(path: string, defaultValue: unknown): void {
   if (!existsSync(path)) {
@@ -107,78 +132,120 @@ function readJson<T>(path: string, fallback: T): T {
 }
 
 export function readContacts(): Contact[] {
-  return readJson<Contact[]>(PATHS.contacts, [])
+  if (!cachedContacts) {
+    cachedContacts = readJson<Contact[]>(PATHS.contacts, [])
+  }
+  return cachedContacts
 }
 
 export function readSnippets(): Snippet[] {
-  return readJson<Snippet[]>(PATHS.snippets, [])
+  if (!cachedSnippets) {
+    cachedSnippets = readJson<Snippet[]>(PATHS.snippets, [])
+  }
+  return cachedSnippets
 }
 
 export function readLinks(): Link[] {
-  return readJson<Link[]>(PATHS.links, [])
+  if (!cachedLinks) {
+    cachedLinks = readJson<Link[]>(PATHS.links, [])
+  }
+  return cachedLinks
 }
 
 export function readTeamLinks(): TeamLink[] {
-  return readJson<TeamLink[]>(PATHS.teamLinks, [])
+  if (!cachedTeamLinks) {
+    cachedTeamLinks = readJson<TeamLink[]>(PATHS.teamLinks, [])
+  }
+  return cachedTeamLinks
 }
 
 export function readPeers(): SwapPeer[] {
-  return readJson<SwapPeer[]>(PATHS.peers, [])
+  if (!cachedPeers) {
+    cachedPeers = readJson<SwapPeer[]>(PATHS.peers, [])
+  }
+  return cachedPeers
 }
 
 export function readSshHosts(): SshHost[] {
-  return readJson<SshHost[]>(PATHS.sshHosts, [])
+  if (!cachedSshHosts) {
+    cachedSshHosts = readJson<SshHost[]>(PATHS.sshHosts, [])
+  }
+  return cachedSshHosts
 }
 
 export function readSettings(): Settings {
-  const loaded = { ...DEFAULT_SETTINGS, ...readJson<Partial<Settings>>(PATHS.settings, {}) }
+  if (cachedSettings) return cachedSettings
+  const rawSettings = readJson<Partial<Settings>>(PATHS.settings, {})
+  const loaded: Settings = { ...DEFAULT_SETTINGS, ...rawSettings }
   if (
     Array.isArray(loaded.shelfIcons) &&
-    loaded.shelfIcons.length === 5 &&
-    loaded.shelfIcons[0] === 'term' &&
-    loaded.shelfIcons[1] === 'bar' &&
-    loaded.shelfIcons[2] === 'notify' &&
-    loaded.shelfIcons[3] === 'focus' &&
-    loaded.shelfIcons[4] === 'git'
+    ((loaded.shelfIcons.length === 5 &&
+      loaded.shelfIcons[0] === 'term' &&
+      loaded.shelfIcons[1] === 'bar' &&
+      loaded.shelfIcons[2] === 'notify' &&
+      loaded.shelfIcons[3] === 'focus' &&
+      loaded.shelfIcons[4] === 'git') ||
+      (loaded.shelfIcons.length === 6 &&
+        loaded.shelfIcons[0] === 'term' &&
+        loaded.shelfIcons[1] === 'notify' &&
+        loaded.shelfIcons[2] === 'bar' &&
+        loaded.shelfIcons[3] === 'focus' &&
+        loaded.shelfIcons[4] === 'git' &&
+        loaded.shelfIcons[5] === 'system'))
   ) {
     loaded.shelfIcons = [...DEFAULT_SHELF_ICONS]
   }
+  if (!Array.isArray(loaded.searchExcludedCommands)) {
+    loaded.searchExcludedCommands = [...DEFAULT_SEARCH_EXCLUDED_COMMANDS]
+  }
+  cachedSettings = loaded
   return loaded
 }
 
 export function readHistory(): HistoryEntry[] {
-  return readJson<HistoryEntry[]>(PATHS.history, [])
+  if (!cachedHistory) {
+    cachedHistory = readJson<HistoryEntry[]>(PATHS.history, [])
+  }
+  return cachedHistory
 }
 
 export function writeHistory(entries: HistoryEntry[]): void {
+  cachedHistory = entries
   writeFileSync(PATHS.history, JSON.stringify(entries, null, 2), 'utf-8')
 }
 
 export function writeContacts(contacts: Contact[]): void {
+  cachedContacts = contacts
   writeFileSync(PATHS.contacts, JSON.stringify(contacts, null, 2), 'utf-8')
 }
 
 export function writeSnippets(snippets: Snippet[]): void {
+  cachedSnippets = snippets
   writeFileSync(PATHS.snippets, JSON.stringify(snippets, null, 2), 'utf-8')
 }
 
 export function writeLinks(links: Link[]): void {
+  cachedLinks = links
   writeFileSync(PATHS.links, JSON.stringify(links, null, 2), 'utf-8')
 }
 
 export function writeTeamLinks(teamLinks: TeamLink[]): void {
+  cachedTeamLinks = teamLinks
   writeFileSync(PATHS.teamLinks, JSON.stringify(teamLinks, null, 2), 'utf-8')
 }
 
 export function writePeers(peers: SwapPeer[]): void {
+  cachedPeers = peers
   writeFileSync(PATHS.peers, JSON.stringify(peers, null, 2), 'utf-8')
 }
 
 export function writeSshHosts(sshHosts: SshHost[]): void {
+  cachedSshHosts = sshHosts
   writeFileSync(PATHS.sshHosts, JSON.stringify(sshHosts, null, 2), 'utf-8')
 }
 
 export function writeSettings(settings: Settings): void {
+  cachedSettings = settings
   writeFileSync(PATHS.settings, JSON.stringify(settings, null, 2), 'utf-8')
 }
 
@@ -188,19 +255,19 @@ export function writeSettings(settings: Settings): void {
 export function getConfigEntries(type: ConfigType): ConfigEntry[] {
   switch (type) {
     case 'contacts':
-      return readContacts() as unknown as ConfigEntry[]
+      return [...readContacts()] as unknown as ConfigEntry[]
     case 'snippets':
-      return readSnippets() as unknown as ConfigEntry[]
+      return [...readSnippets()] as unknown as ConfigEntry[]
     case 'links':
-      return readLinks() as unknown as ConfigEntry[]
+      return [...readLinks()] as unknown as ConfigEntry[]
     case 'teamLinks':
-      return readTeamLinks() as unknown as ConfigEntry[]
+      return [...readTeamLinks()] as unknown as ConfigEntry[]
     case 'peers':
-      return readPeers() as unknown as ConfigEntry[]
+      return [...readPeers()] as unknown as ConfigEntry[]
     case 'sshHosts':
-      return readSshHosts() as unknown as ConfigEntry[]
+      return [...readSshHosts()] as unknown as ConfigEntry[]
     case 'settings':
-      return [readSettings() as unknown as ConfigEntry]
+      return [{ ...readSettings() } as unknown as ConfigEntry]
   }
 }
 
@@ -256,11 +323,22 @@ function watchFiles(paths: string[], onChange: (path: string) => void): void {
 }
 
 export function watchConfig(onChange: () => void): void {
-  watchFiles([PATHS.contacts, PATHS.snippets, PATHS.links, PATHS.teamLinks, PATHS.peers, PATHS.sshHosts], () => onChange())
+  watchFiles([PATHS.contacts, PATHS.snippets, PATHS.links, PATHS.teamLinks, PATHS.peers, PATHS.sshHosts], () => {
+    cachedContacts = null
+    cachedSnippets = null
+    cachedLinks = null
+    cachedTeamLinks = null
+    cachedPeers = null
+    cachedSshHosts = null
+    onChange()
+  })
 }
 
 export function watchSettings(onChange: (settings: Settings) => void): void {
-  watchFiles([PATHS.settings], () => onChange(readSettings()))
+  watchFiles([PATHS.settings], () => {
+    cachedSettings = null
+    onChange(readSettings())
+  })
 }
 
 export { PATHS as CONFIG_PATHS }

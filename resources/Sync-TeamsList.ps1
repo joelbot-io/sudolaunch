@@ -81,15 +81,15 @@ if ($IncludeSharePointUrl) {
 
 foreach ($module in $requiredModules) {
     if (-not (Get-Module -ListAvailable -Name $module)) {
-        Write-Warning "Module '$module' is not installed."
-        $install = Read-Host "Would you like to install module '$module' now? (Y/N)"
-        if ($install -match '^[Yy]') {
-            Write-Host "Installing module '$module'..." -ForegroundColor Yellow
-            Install-Module -Name $module -Scope CurrentUser -Repository PSGallery -Force
+        Write-Host "Module '$module' is not installed. Installing '$module' (CurrentUser)..." -ForegroundColor Yellow
+        if ($PSVersionTable.PSEdition -eq 'Desktop' -and -not (Get-PackageProvider -Name NuGet -ListAvailable -ErrorAction SilentlyContinue)) {
+            Write-Host "Installing NuGet package provider..." -ForegroundColor Gray
+            Install-PackageProvider -Name NuGet -MinimumVersion 2.8.5.201 -Scope CurrentUser -Force -Confirm:$false | Out-Null
         }
-        else {
-            throw "Prerequisite module '$module' is missing. Please run: Install-Module $module -Scope CurrentUser"
-        }
+        Install-Module -Name $module -Scope CurrentUser -Repository PSGallery -Force -AllowClobber -Confirm:$false
+        Write-Host "Installed module '$module'." -ForegroundColor Green
+    } else {
+        Write-Host "Module '$module' is already installed." -ForegroundColor Gray
     }
     Import-Module $module -ErrorAction SilentlyContinue
 }

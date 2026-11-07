@@ -10,6 +10,10 @@ interface PortEntry {
   processName?: string
 }
 
+const PORT_CACHE_TTL_MS = 6000
+let cachedPorts: PortEntry[] | null = null
+let cachedPortsAt = 0
+
 function getProcessMap(): Map<number, string> {
   const map = new Map<number, string>()
   try {
@@ -31,6 +35,10 @@ function getProcessMap(): Map<number, string> {
 }
 
 function getListeningPorts(): PortEntry[] {
+  const now = Date.now()
+  if (cachedPorts && now - cachedPortsAt < PORT_CACHE_TTL_MS) {
+    return cachedPorts
+  }
   const entries: PortEntry[] = []
   try {
     const raw = execSync('netstat -ano -p tcp', { encoding: 'utf8', timeout: 2500, windowsHide: true })
@@ -65,7 +73,9 @@ function getListeningPorts(): PortEntry[] {
   } catch {
     // ignore
   }
-  return entries.sort((a, b) => a.port - b.port)
+  cachedPorts = entries.sort((a, b) => a.port - b.port)
+  cachedPortsAt = now
+  return cachedPorts
 }
 
 export function search(query: string): SearchResultItem[] {
@@ -142,6 +152,7 @@ export async function execute(item: SearchResultItem): Promise<void> {
     } catch {
       // ignore
     }
+    cachedPorts = null
     clipboard.writeText(pid)
     return
   }

@@ -13,19 +13,20 @@ interface ToolDef {
   name: string
   icon: string
   arg: string
+  wingetId: string
 }
 
 const TOOL_DEFS: ToolDef[] = [
-  { id: 'node', name: 'Node.js', icon: '🟢', arg: '--version' },
-  { id: 'npm', name: 'npm', icon: '📦', arg: '--version' },
-  { id: 'python', name: 'Python', icon: '🐍', arg: '--version' },
-  { id: 'pwsh', name: 'PowerShell 7', icon: '⚡', arg: '--version' },
-  { id: 'git', name: 'Git', icon: '🌿', arg: '--version' },
-  { id: 'dotnet', name: '.NET SDK', icon: '🟣', arg: '--version' },
-  { id: 'go', name: 'Go', icon: '🐹', arg: 'version' },
-  { id: 'rustc', name: 'Rust (rustc)', icon: '🦀', arg: '--version' },
-  { id: 'docker', name: 'Docker CLI', icon: '🐳', arg: '--version' },
-  { id: 'winget', name: 'WinGet', icon: '🪽', arg: '--version' }
+  { id: 'node', name: 'Node.js', icon: '🟢', arg: '--version', wingetId: 'OpenJS.NodeJS.LTS' },
+  { id: 'npm', name: 'npm', icon: '📦', arg: '--version', wingetId: 'OpenJS.NodeJS.LTS' },
+  { id: 'python', name: 'Python', icon: '🐍', arg: '--version', wingetId: 'Python.Python.3.12' },
+  { id: 'go', name: 'Go (Golang)', icon: '🐹', arg: 'version', wingetId: 'GoLang.Go' },
+  { id: 'git', name: 'Git', icon: '🌿', arg: '--version', wingetId: 'Git.Git' },
+  { id: 'rustc', name: 'Rust (rustc)', icon: '🦀', arg: '--version', wingetId: 'Rustlang.Rustup' },
+  { id: 'dotnet', name: '.NET SDK', icon: '🟣', arg: '--version', wingetId: 'Microsoft.DotNet.SDK.8' },
+  { id: 'pwsh', name: 'PowerShell 7', icon: '⚡', arg: '--version', wingetId: 'Microsoft.PowerShell' },
+  { id: 'docker', name: 'Docker CLI', icon: '🐳', arg: '--version', wingetId: 'Docker.DockerDesktop' },
+  { id: 'winget', name: 'WinGet', icon: '🪽', arg: '--version', wingetId: 'Microsoft.AppInstaller' }
 ]
 
 interface RuntimeInfo {
@@ -34,6 +35,8 @@ interface RuntimeInfo {
   icon: string
   version: string
   path: string
+  wingetId: string
+  installed: boolean
 }
 
 let cachedRuntimes: RuntimeInfo[] | null = null
@@ -48,28 +51,42 @@ async function getRuntimes(force = false): Promise<RuntimeInfo[]> {
       const script = `
         [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
         $ErrorActionPreference = 'SilentlyContinue'
+        $mPath = [Environment]::GetEnvironmentVariable('Path', 'Machine')
+        $uPath = [Environment]::GetEnvironmentVariable('Path', 'User')
+        $env:Path = "$mPath;$uPath;$env:Path"
         $tools = @(
-          @{ id='node'; arg='--version' },
-          @{ id='npm'; arg='--version' },
-          @{ id='python'; arg='--version' },
-          @{ id='pwsh'; arg='--version' },
-          @{ id='git'; arg='--version' },
-          @{ id='dotnet'; arg='--version' },
-          @{ id='go'; arg='version' },
-          @{ id='rustc'; arg='--version' },
-          @{ id='docker'; arg='--version' },
-          @{ id='winget'; arg='--version' }
+          @{ id='node'; arg='--version'; fb=@() },
+          @{ id='npm'; arg='--version'; fb=@() },
+          @{ id='python'; arg='--version'; fb=@() },
+          @{ id='go'; arg='version'; fb=@('C:\\Program Files\\Go\\bin\\go.exe', 'C:\\Go\\bin\\go.exe', "$env:LOCALAPPDATA\\Programs\\Go\\bin\\go.exe") },
+          @{ id='git'; arg='--version'; fb=@() },
+          @{ id='rustc'; arg='--version'; fb=@() },
+          @{ id='dotnet'; arg='--version'; fb=@() },
+          @{ id='pwsh'; arg='--version'; fb=@() },
+          @{ id='docker'; arg='--version'; fb=@() },
+          @{ id='winget'; arg='--version'; fb=@() }
         )
         $out = @()
         foreach ($t in $tools) {
+          $src = $null
           $cmd = Get-Command $t.id -ErrorAction SilentlyContinue | Select-Object -First 1
           if ($cmd -and $cmd.Source) {
-            $ver = (& $cmd.Source $t.arg 2>&1 | Select-Object -First 1 | Out-String).Trim()
-            if ($ver) {
+            $src = $cmd.Source
+          } else {
+            foreach ($cand in $t.fb) {
+              if (Test-Path -LiteralPath $cand) {
+                $src = $cand
+                break
+              }
+            }
+          }
+          if ($src) {
+            $ver = (& $src $t.arg 2>&1 | Select-Object -First 1 | Out-String).Trim()
+            if ($ver -and $ver -notmatch 'was not found') {
               $out += [PSCustomObject]@{
                 id = $t.id
                 version = $ver
-                path = $cmd.Source
+                path = $src
               }
             }
           }
@@ -82,22 +99,30 @@ async function getRuntimes(force = false): Promise<RuntimeInfo[]> {
         { timeout: 5000, windowsHide: true }
       )
       const trimmed = stdout.trim()
-      const list: RuntimeInfo[] = []
+      const foundMap = new Map<string, { version: string; path: string }>()
       if (trimmed) {
         const parsed = JSON.parse(trimmed)
         const arr = Array.isArray(parsed) ? parsed : [parsed]
         for (const r of arr) {
           if (!r?.id || !r?.path) continue
-          const def = TOOL_DEFS.find((t) => t.id === r.id)
-          list.push({
-            id: String(r.id),
-            name: def?.name ?? String(r.id),
-            icon: def?.icon ?? '🛠️',
+          foundMap.set(String(r.id), {
             version: String(r.version || 'Installed'),
             path: String(r.path)
           })
         }
       }
+      const list: RuntimeInfo[] = TOOL_DEFS.map((def) => {
+        const found = foundMap.get(def.id)
+        return {
+          id: def.id,
+          name: def.name,
+          icon: def.icon,
+          wingetId: def.wingetId,
+          installed: Boolean(found),
+          version: found ? found.version : 'Not Installed',
+          path: found ? found.path : ''
+        }
+      })
       cachedRuntimes = list
       return list
     } catch {
@@ -129,24 +154,41 @@ function renderRuntimeDrilldown(rtId: string, runtimes: RuntimeInfo[]): SearchRe
       sublabel: 'Return to /pkg overview',
       value: '',
       completion: '/pkg '
-    },
-    {
-      label: `📋 Copy Version: ${rt.version}`,
-      sublabel: `${rt.name} version string · ↵ Copy`,
-      value: rt.version
-    },
-    {
-      label: `📋 Copy Executable Path: ${rt.path}`,
-      sublabel: `↵ Copy full binary path to clipboard`,
-      value: rt.path
     }
   ]
 
-  if (existsSync(rt.path)) {
+  if (rt.installed) {
+    items.push(
+      {
+        label: `📋 Copy Version: ${rt.version}`,
+        sublabel: `${rt.name} version string · ↵ Copy`,
+        value: rt.version
+      },
+      {
+        label: `📋 Copy Executable Path: ${rt.path}`,
+        sublabel: `↵ Copy full binary path to clipboard`,
+        value: rt.path
+      }
+    )
+
+    if (existsSync(rt.path)) {
+      items.push({
+        label: `📂 Reveal ${rt.id} Binary in File Explorer`,
+        sublabel: `${rt.path} · ↵ Open folder in Explorer`,
+        value: `__explorer::${rt.path}`
+      })
+    }
+
     items.push({
-      label: `📂 Reveal ${rt.id} Binary in File Explorer`,
-      sublabel: `${rt.path} · ↵ Open folder in Explorer`,
-      value: `__explorer::${rt.path}`
+      label: `⬆️ Upgrade ${rt.name} via WinGet (${rt.wingetId})`,
+      sublabel: `Run "winget upgrade --id ${rt.wingetId}" in SudoLaunch Terminal`,
+      value: `__term::winget upgrade --id ${rt.wingetId}`
+    })
+  } else {
+    items.push({
+      label: `📥 Install ${rt.name} via WinGet (${rt.wingetId})`,
+      sublabel: `Run "winget install --id ${rt.wingetId} -e" in SudoLaunch Terminal (Ctrl+↵ Elevated)`,
+      value: `__term::winget install --id ${rt.wingetId} -e`
     })
   }
 
@@ -174,7 +216,12 @@ export async function search(query: string): Promise<SearchResultItem[]> {
   const items: SearchResultItem[] = []
 
   // WinGet top-level actions when query is empty or starts with upgrade/update/list
-  if (!raw || 'upgrade update winget'.includes(qLower)) {
+  if (!raw || 'upgrade update winget pin system'.includes(qLower)) {
+    items.push({
+      label: '🧰 Open WinGet Package Manager (System Management)',
+      sublabel: 'Interactive GUI for available updates, installed packages, pins, and search (/system)',
+      value: '__open_system_winget'
+    })
     items.push({
       label: '⬆️ Check Available WinGet Package Updates',
       sublabel: 'Run "winget upgrade" in SudoLaunch Terminal to see outdated packages',
@@ -198,13 +245,23 @@ export async function search(query: string): Promise<SearchResultItem[]> {
     : runtimes
 
   for (const rt of matchedRuntimes) {
-    items.push({
-      label: `${rt.icon} ${rt.name}: ${rt.version}`,
-      sublabel: `${rt.path} · ↵ Copy Path · Tab for Details & Explorer`,
-      value: rt.path,
-      completion: `/pkg @${rt.id}`,
-      executeOnEnter: true
-    })
+    if (rt.installed) {
+      items.push({
+        label: `${rt.icon} ${rt.name}: ${rt.version}`,
+        sublabel: `${rt.path} · ↵ Copy Path · Tab for Details & Explorer`,
+        value: rt.path,
+        completion: `/pkg @${rt.id}`,
+        executeOnEnter: true
+      })
+    } else {
+      items.push({
+        label: `${rt.icon} ${rt.name}: Not Installed`,
+        sublabel: `↵ Install ${rt.name} via WinGet (${rt.wingetId}) · Tab for Options`,
+        value: `__term::winget install --id ${rt.wingetId} -e`,
+        completion: `/pkg @${rt.id}`,
+        executeOnEnter: true
+      })
+    }
   }
 
   // If the user typed a package query, offer direct WinGet search / install / upgrade actions

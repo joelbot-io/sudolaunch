@@ -33,7 +33,7 @@ function walk(dir: string, out: AppEntry[]): void {
   }
 }
 
-const CACHE_TTL_MS = 10 * 60 * 1000
+const CACHE_TTL_MS = 20 * 60 * 1000
 let cachedShortcuts: AppEntry[] | null = null
 let lastCacheTime = 0
 

@@ -13,6 +13,7 @@ import {
   SEED_CONTACTS,
   SEED_PEERS,
   CONFIG_PATHS,
+  invalidateConfigCache,
   readHistory,
   readSettings,
   writeHistory,
@@ -27,7 +28,7 @@ import {
 import { dockManager } from '../dock/DockManager'
 import { resetBarPosition } from '../barWindow'
 import { resetTermPosition } from '../terminalWindow'
-import { ensureCommandsDir } from '../customCommands'
+import { ensureCommandsDir, invalidateCustomCommandsCache } from '../customCommands'
 import { ensureGifDir } from './gif'
 import { ensureLookupDir } from './lookup'
 import { getAppIconPath } from '../icon'
@@ -225,6 +226,7 @@ async function handleReset(): Promise<void> {
   writeTeamLinks([])
   writePeers(SEED_PEERS)
   writeHistory([])
+  invalidateCustomCommandsCache()
 
   // 3. Reset dock and terminal coordinates
   resetBarPosition()
@@ -290,6 +292,8 @@ async function handleRestore(): Promise<void> {
     Expand-Archive -Path $archivePath -DestinationPath $profileDir -Force
   `
   await runPowerShell(psScript)
+  invalidateConfigCache()
+  invalidateCustomCommandsCache()
   notify({
     title: 'Profile Restored',
     body: `Restored from ${latest.name}. Pre-restore snapshot created. Click to view backups.`,
@@ -627,6 +631,9 @@ export async function switchProfile(profileId: string): Promise<{ success: boole
     throw new Error(`Failed to copy profile contents: ${err}`)
   }
 
+  invalidateConfigCache()
+  invalidateCustomCommandsCache()
+
   // 4. Update activeProfile in settings.json
   const updatedSettings = readSettings()
   updatedSettings.activeProfile = profileId
@@ -758,6 +765,8 @@ export async function restoreSpecificBackup(filename: string): Promise<void> {
     Expand-Archive -Path $archivePath -DestinationPath $profileDir -Force
   `
   await runPowerShell(psScript)
+  invalidateConfigCache()
+  invalidateCustomCommandsCache()
 
   dockManager.broadcast('config-changed')
 
@@ -773,5 +782,3 @@ export async function restoreSpecificBackup(filename: string): Promise<void> {
     ]
   })
 }
-
-
