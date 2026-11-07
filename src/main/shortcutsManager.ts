@@ -305,6 +305,17 @@ const BUILTIN_OTHER_ITEMS: ShortcutOverlayItem[] = [
     isBuiltIn: true
   },
   {
+    id: 'docker-compose-build',
+    label: 'Compose Rebuild & Up (docker compose up -d --build)',
+    description: 'Force image rebuild and recreate containers for the active Compose stack',
+    tab: 'docker',
+    icon: '🔨',
+    keys: 'Alt+D B',
+    actionType: 'terminal',
+    actionPayload: 'docker compose up -d --build',
+    isBuiltIn: true
+  },
+  {
     id: 'docker-compose-down',
     label: 'Compose Down (docker compose down)',
     description: 'Stop and remove containers and networks for the active Compose stack',
@@ -313,6 +324,39 @@ const BUILTIN_OTHER_ITEMS: ShortcutOverlayItem[] = [
     keys: 'Alt+D N',
     actionType: 'terminal',
     actionPayload: 'docker compose down',
+    isBuiltIn: true
+  },
+  {
+    id: 'docker-compose-down-vol',
+    label: 'Compose Down + Volumes (docker compose down -v)',
+    description: 'Tear down the active Compose stack including named and anonymous volumes',
+    tab: 'docker',
+    icon: '🧨',
+    keys: 'Alt+D V',
+    actionType: 'terminal',
+    actionPayload: 'docker compose down -v',
+    isBuiltIn: true
+  },
+  {
+    id: 'docker-compose-restart',
+    label: 'Compose Restart Services (docker compose restart)',
+    description: 'Restart all service containers in the current Docker Compose stack',
+    tab: 'docker',
+    icon: '🔄',
+    keys: 'Alt+D R',
+    actionType: 'terminal',
+    actionPayload: 'docker compose restart',
+    isBuiltIn: true
+  },
+  {
+    id: 'docker-compose-ps',
+    label: 'Compose Stack Status (docker compose ps)',
+    description: 'Inspect service states and port bindings for the current Compose project',
+    tab: 'docker',
+    icon: '📋',
+    keys: 'Alt+D C',
+    actionType: 'terminal',
+    actionPayload: 'docker compose ps',
     isBuiltIn: true
   },
   {
@@ -327,6 +371,17 @@ const BUILTIN_OTHER_ITEMS: ShortcutOverlayItem[] = [
     isBuiltIn: true
   },
   {
+    id: 'docker-compose-pull',
+    label: 'Compose Pull Latest Images (docker compose pull)',
+    description: 'Pull updated upstream service images defined in docker-compose.yml',
+    tab: 'docker',
+    icon: '⬇️',
+    keys: 'Alt+D G',
+    actionType: 'terminal',
+    actionPayload: 'docker compose pull',
+    isBuiltIn: true
+  },
+  {
     id: 'docker-images',
     label: 'List Local Images (docker images)',
     description: 'Display locally cached Docker images, tags, IDs, and disk sizes',
@@ -338,6 +393,50 @@ const BUILTIN_OTHER_ITEMS: ShortcutOverlayItem[] = [
     isBuiltIn: true
   },
   {
+    id: 'docker-volumes',
+    label: 'List Docker Volumes (docker volume ls)',
+    description: 'Inspect persistent Docker volumes across local projects',
+    tab: 'docker',
+    icon: '🗄️',
+    keys: 'Alt+D M',
+    actionType: 'terminal',
+    actionPayload: 'docker volume ls',
+    isBuiltIn: true
+  },
+  {
+    id: 'docker-networks',
+    label: 'List Docker Networks (docker network ls)',
+    description: 'Show bridge, host, and custom Compose overlay networks',
+    tab: 'docker',
+    icon: '🌐',
+    keys: 'Alt+D W',
+    actionType: 'terminal',
+    actionPayload: 'docker network ls',
+    isBuiltIn: true
+  },
+  {
+    id: 'docker-events',
+    label: 'Stream Daemon Events (docker events)',
+    description: 'Watch real-time container start, die, healthcheck, and network events',
+    tab: 'docker',
+    icon: '📡',
+    keys: 'Alt+D E',
+    actionType: 'terminal',
+    actionPayload: 'docker events',
+    isBuiltIn: true
+  },
+  {
+    id: 'docker-stop-all',
+    label: 'Stop All Running Containers',
+    description: 'Gracefully stop every currently running Docker container on the host',
+    tab: 'docker',
+    icon: '🛑',
+    keys: 'Alt+D Q',
+    actionType: 'terminal',
+    actionPayload: 'docker ps -q | ForEach-Object { docker stop $_ }',
+    isBuiltIn: true
+  },
+  {
     id: 'docker-df',
     label: 'Inspect Docker Disk Usage (docker system df)',
     description: 'Show space used by images, containers, local volumes, and build cache',
@@ -346,6 +445,17 @@ const BUILTIN_OTHER_ITEMS: ShortcutOverlayItem[] = [
     keys: 'Alt+D F',
     actionType: 'terminal',
     actionPayload: 'docker system df -v',
+    isBuiltIn: true
+  },
+  {
+    id: 'docker-builder-prune',
+    label: 'Prune BuildKit Cache (docker builder prune -f)',
+    description: 'Clear dangling Docker BuildKit layer cache to reclaim disk space',
+    tab: 'docker',
+    icon: '🧱',
+    keys: 'Alt+D K',
+    actionType: 'terminal',
+    actionPayload: 'docker builder prune -f',
     isBuiltIn: true
   },
   {
@@ -897,7 +1007,7 @@ export function getShortcutsOverlayData(): ShortcutsOverlayData {
     powerToysInstalled,
     stayOpen: settings.shortcutsStayOpen !== false,
     grayscale: Boolean(settings.shortcutsGrayscale),
-    windowSize: settings.shortcutsWindowSize ?? { width: 740, height: 460 }
+    windowSize: settings.shortcutsWindowSize ?? { width: 1040, height: 720 }
   }
 }
 
@@ -1320,7 +1430,7 @@ export function restoreDefaultShortcuts(): ShortcutsOverlayData {
 
 export async function runDockerQuickContainerAction(
   containerNameOrId: string,
-  action: 'start' | 'stop' | 'restart' | 'shell' | 'logs'
+  action: 'start' | 'stop' | 'restart' | 'shell' | 'logs' | 'inspect' | 'rm'
 ): Promise<{ ok: boolean; message: string; data: ShortcutsOverlayData }> {
   const safeTarget = containerNameOrId.replace(/[^a-zA-Z0-9_.-]/g, '')
   if (!safeTarget) {
@@ -1347,6 +1457,18 @@ export async function runDockerQuickContainerAction(
     return {
       ok: true,
       message: `Streaming logs for ${safeTarget} in Terminal`,
+      data: getShortcutsOverlayData()
+    }
+  }
+
+  if (action === 'inspect') {
+    openTerminal()
+    setTimeout(() => {
+      runInTerminal(`docker inspect ${safeTarget}`)
+    }, 90)
+    return {
+      ok: true,
+      message: `Inspecting container ${safeTarget} in Terminal`,
       data: getShortcutsOverlayData()
     }
   }
@@ -1396,7 +1518,7 @@ export function registerShortcutsIpc(): void {
     (
       _event,
       containerNameOrId: string,
-      action: 'start' | 'stop' | 'restart' | 'shell' | 'logs'
+      action: 'start' | 'stop' | 'restart' | 'shell' | 'logs' | 'inspect' | 'rm'
     ) => runDockerQuickContainerAction(containerNameOrId, action)
   )
   ipcMain.handle('shortcuts-set-stay-open', (_event, stayOpen: boolean) => {

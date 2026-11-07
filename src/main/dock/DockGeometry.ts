@@ -14,7 +14,7 @@ export class DockGeometry {
   static readonly SYSTEM_PANEL_SIZE = { width: 1040, height: 720 } as const
   static readonly FOCUS_PANEL_SIZE = { width: 640, height: 380 } as const
   static readonly TERMINAL_PANEL_SIZE = { width: 800, height: 360 } as const
-  static readonly SHORTCUTS_PANEL_SIZE = { width: 740, height: 460 } as const
+  static readonly SHORTCUTS_PANEL_SIZE = { width: 1040, height: 720 } as const
   static readonly NOTIFICATION_PANEL_SIZE = { width: 560, height: 400 } as const
 
   static readonly GAP = 8 as const

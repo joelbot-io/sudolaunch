@@ -301,7 +301,7 @@ declare global {
       restoreDefaultShortcuts?: () => Promise<ShortcutsOverlayData>
       runDockerShortcutContainerAction?: (
         containerNameOrId: string,
-        action: 'start' | 'stop' | 'restart' | 'shell' | 'logs'
+        action: 'start' | 'stop' | 'restart' | 'shell' | 'logs' | 'inspect' | 'rm'
       ) => Promise<{ ok: boolean; message: string; data: ShortcutsOverlayData }>
       setShortcutsStayOpen?: (stayOpen: boolean) => Promise<ShortcutsOverlayData>
       setShortcutsGrayscale?: (grayscale: boolean) => Promise<ShortcutsOverlayData>

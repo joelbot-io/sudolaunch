@@ -460,7 +460,7 @@ export default function ShortcutsOverlay(): JSX.Element {
 
   async function handleDockerContainerAction(
     containerName: string,
-    action: 'start' | 'stop' | 'restart' | 'shell' | 'logs'
+    action: 'start' | 'stop' | 'restart' | 'shell' | 'logs' | 'inspect' | 'rm'
   ): Promise<void> {
     const res = await window.api.runDockerShortcutContainerAction?.(containerName, action)
     if (res) {
@@ -732,6 +732,11 @@ export default function ShortcutsOverlay(): JSX.Element {
                 onClick={() => {
                   setActiveTab(tab.id)
                   setSelectedIndex(0)
+                  if (tab.id.toLowerCase() === 'docker') {
+                    window.api.resizeShortcutsWindow?.(1040, 720).then((res) => {
+                      if (res) setData(res)
+                    })
+                  }
                 }}
                 style={{
                   display: 'inline-flex',
@@ -1373,15 +1378,15 @@ export default function ShortcutsOverlay(): JSX.Element {
             gap: 6
           }}
         >
-          {/* Live Docker Containers Quick-Control Strip when on Docker tab */}
+          {/* Live Docker Containers Control Center when on Docker tab */}
           {activeTab === 'docker' && data?.dockerAvailable && (data.dockerContainers?.length ?? 0) > 0 && (
             <div
               style={{
-                padding: '8px 10px',
+                padding: '10px 12px',
                 borderRadius: 8,
                 background: 'rgba(15, 23, 42, 0.65)',
                 border: '1px solid rgba(56, 189, 248, 0.22)',
-                marginBottom: 4
+                marginBottom: 6
               }}
             >
               <div
@@ -1389,147 +1394,251 @@ export default function ShortcutsOverlay(): JSX.Element {
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'space-between',
-                  marginBottom: 6
+                  marginBottom: 8
                 }}
               >
-                <span style={{ fontSize: 11, fontWeight: 700, color: '#38bdf8' }}>
+                <span style={{ fontSize: 11.5, fontWeight: 700, color: '#38bdf8' }}>
                   🐳 Live Docker Containers ({data.dockerContainers.length})
                 </span>
-                <span style={{ fontSize: 10, color: '#64748b' }}>
-                  Click action to execute immediately
+                <span style={{ fontSize: 10.5, color: '#64748b' }}>
+                  Click any container action to execute immediately
                 </span>
               </div>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
-                {data.dockerContainers.slice(0, 6).map((c) => (
-                  <div
-                    key={c.id}
-                    style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'space-between',
-                      gap: 8,
-                      padding: '5px 8px',
-                      borderRadius: 6,
-                      background: 'rgba(255,255,255,0.03)',
-                      border: '1px solid rgba(255,255,255,0.06)'
-                    }}
-                  >
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 7, minWidth: 0 }}>
-                      <span>{c.running ? '🟢' : '⚪'}</span>
-                      <span
-                        style={{
-                          fontSize: 11.5,
-                          fontWeight: 700,
-                          color: '#f1f5f9',
-                          whiteSpace: 'nowrap',
-                          overflow: 'hidden',
-                          textOverflow: 'ellipsis'
-                        }}
-                      >
-                        {c.name}
-                      </span>
-                      <span
-                        style={{
-                          fontSize: 10.5,
-                          color: '#64748b',
-                          fontFamily: 'monospace',
-                          whiteSpace: 'nowrap',
-                          overflow: 'hidden',
-                          textOverflow: 'ellipsis'
-                        }}
-                      >
-                        {c.image}
-                      </span>
-                    </div>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 4, flexShrink: 0 }}>
-                      {c.running ? (
-                        <>
-                          <button
-                            type="button"
-                            onClick={() => handleDockerContainerAction(c.name, 'shell')}
-                            style={{
-                              padding: '2px 7px',
-                              fontSize: 10,
-                              fontWeight: 600,
-                              borderRadius: 4,
-                              border: '1px solid rgba(16, 185, 129, 0.35)',
-                              background: 'rgba(16, 185, 129, 0.14)',
-                              color: '#34d399',
-                              cursor: 'pointer'
-                            }}
-                            title="Open interactive sh shell in SudoLaunch Terminal"
-                          >
-                            &gt;_ Shell
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => handleDockerContainerAction(c.name, 'logs')}
-                            style={{
-                              padding: '2px 7px',
-                              fontSize: 10,
-                              fontWeight: 600,
-                              borderRadius: 4,
-                              border: '1px solid rgba(56, 189, 248, 0.35)',
-                              background: 'rgba(56, 189, 248, 0.14)',
-                              color: '#38bdf8',
-                              cursor: 'pointer'
-                            }}
-                            title="Tail container logs in SudoLaunch Terminal"
-                          >
-                            📜 Logs
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => handleDockerContainerAction(c.name, 'restart')}
-                            style={{
-                              padding: '2px 7px',
-                              fontSize: 10,
-                              borderRadius: 4,
-                              border: '1px solid rgba(255,255,255,0.14)',
-                              background: 'rgba(255,255,255,0.05)',
-                              color: '#cbd5e1',
-                              cursor: 'pointer'
-                            }}
-                          >
-                            🔄
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => handleDockerContainerAction(c.name, 'stop')}
-                            style={{
-                              padding: '2px 7px',
-                              fontSize: 10,
-                              borderRadius: 4,
-                              border: '1px solid rgba(239, 68, 68, 0.35)',
-                              background: 'rgba(239, 68, 68, 0.14)',
-                              color: '#f87171',
-                              cursor: 'pointer'
-                            }}
-                          >
-                            ⏹ Stop
-                          </button>
-                        </>
-                      ) : (
-                        <button
-                          type="button"
-                          onClick={() => handleDockerContainerAction(c.name, 'start')}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                {data.dockerContainers.map((c) => {
+                  const hostPortMatch = c.ports?.match(/(?:0\.0\.0\.0|127\.0\.0\.1|\[::\]):(\d+)->/)
+                  const hostPort = hostPortMatch ? hostPortMatch[1] : null
+                  return (
+                    <div
+                      key={c.id}
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        gap: 10,
+                        padding: '6px 10px',
+                        borderRadius: 6,
+                        background: 'rgba(255,255,255,0.03)',
+                        border: '1px solid rgba(255,255,255,0.07)'
+                      }}
+                    >
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0, flex: 1 }}>
+                        <span>{c.running ? '🟢' : '⚪'}</span>
+                        <span
                           style={{
-                            padding: '2px 8px',
-                            fontSize: 10,
-                            fontWeight: 600,
-                            borderRadius: 4,
-                            border: '1px solid rgba(16, 185, 129, 0.35)',
-                            background: 'rgba(16, 185, 129, 0.14)',
-                            color: '#34d399',
-                            cursor: 'pointer'
+                            fontSize: 12,
+                            fontWeight: 700,
+                            color: '#f1f5f9',
+                            whiteSpace: 'nowrap',
+                            overflow: 'hidden',
+                            textOverflow: 'ellipsis'
                           }}
                         >
-                          ▶ Start
-                        </button>
-                      )}
+                          {c.name}
+                        </span>
+                        <span
+                          style={{
+                            fontSize: 10.5,
+                            color: '#94a3b8',
+                            fontFamily: 'monospace',
+                            padding: '1px 6px',
+                            borderRadius: 4,
+                            background: 'rgba(255,255,255,0.04)',
+                            whiteSpace: 'nowrap',
+                            overflow: 'hidden',
+                            textOverflow: 'ellipsis'
+                          }}
+                        >
+                          {c.image}
+                        </span>
+                        {c.status && (
+                          <span
+                            style={{
+                              fontSize: 10,
+                              color: c.running ? '#34d399' : '#64748b',
+                              whiteSpace: 'nowrap'
+                            }}
+                          >
+                            {c.status}
+                          </span>
+                        )}
+                        {c.ports && (
+                          <span
+                            style={{
+                              fontSize: 10,
+                              color: '#38bdf8',
+                              fontFamily: 'monospace',
+                              whiteSpace: 'nowrap',
+                              overflow: 'hidden',
+                              textOverflow: 'ellipsis'
+                            }}
+                          >
+                            {c.ports}
+                          </span>
+                        )}
+                      </div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 5, flexShrink: 0 }}>
+                        {c.running && hostPort && (
+                          <button
+                            type="button"
+                            onClick={() => window.api.openExternalUrl?.(`http://localhost:${hostPort}`)}
+                            style={{
+                              padding: '2px 7px',
+                              fontSize: 10,
+                              fontWeight: 600,
+                              borderRadius: 4,
+                              border: '1px solid rgba(96, 165, 250, 0.35)',
+                              background: 'rgba(96, 165, 250, 0.14)',
+                              color: '#93c5fd',
+                              cursor: 'pointer'
+                            }}
+                            title={`Open http://localhost:${hostPort} in browser`}
+                          >
+                            🌐 :{hostPort}
+                          </button>
+                        )}
+                        {c.running ? (
+                          <>
+                            <button
+                              type="button"
+                              onClick={() => handleDockerContainerAction(c.name, 'shell')}
+                              style={{
+                                padding: '2px 7px',
+                                fontSize: 10,
+                                fontWeight: 600,
+                                borderRadius: 4,
+                                border: '1px solid rgba(16, 185, 129, 0.35)',
+                                background: 'rgba(16, 185, 129, 0.14)',
+                                color: '#34d399',
+                                cursor: 'pointer'
+                              }}
+                              title="Open interactive sh shell in SudoLaunch Terminal"
+                            >
+                              &gt;_ Shell
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleDockerContainerAction(c.name, 'logs')}
+                              style={{
+                                padding: '2px 7px',
+                                fontSize: 10,
+                                fontWeight: 600,
+                                borderRadius: 4,
+                                border: '1px solid rgba(56, 189, 248, 0.35)',
+                                background: 'rgba(56, 189, 248, 0.14)',
+                                color: '#38bdf8',
+                                cursor: 'pointer'
+                              }}
+                              title="Tail container logs in SudoLaunch Terminal"
+                            >
+                              📜 Logs
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleDockerContainerAction(c.name, 'inspect')}
+                              style={{
+                                padding: '2px 7px',
+                                fontSize: 10,
+                                borderRadius: 4,
+                                border: '1px solid rgba(255,255,255,0.14)',
+                                background: 'rgba(255,255,255,0.05)',
+                                color: '#cbd5e1',
+                                cursor: 'pointer'
+                              }}
+                              title="Inspect container metadata in SudoLaunch Terminal"
+                            >
+                              🔍 Inspect
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleDockerContainerAction(c.name, 'restart')}
+                              style={{
+                                padding: '2px 7px',
+                                fontSize: 10,
+                                borderRadius: 4,
+                                border: '1px solid rgba(255,255,255,0.14)',
+                                background: 'rgba(255,255,255,0.05)',
+                                color: '#cbd5e1',
+                                cursor: 'pointer'
+                              }}
+                              title="Restart container"
+                            >
+                              🔄 Restart
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleDockerContainerAction(c.name, 'stop')}
+                              style={{
+                                padding: '2px 7px',
+                                fontSize: 10,
+                                borderRadius: 4,
+                                border: '1px solid rgba(239, 68, 68, 0.35)',
+                                background: 'rgba(239, 68, 68, 0.14)',
+                                color: '#f87171',
+                                cursor: 'pointer'
+                              }}
+                              title="Stop container"
+                            >
+                              ⏹ Stop
+                            </button>
+                          </>
+                        ) : (
+                          <>
+                            <button
+                              type="button"
+                              onClick={() => handleDockerContainerAction(c.name, 'start')}
+                              style={{
+                                padding: '2px 8px',
+                                fontSize: 10,
+                                fontWeight: 600,
+                                borderRadius: 4,
+                                border: '1px solid rgba(16, 185, 129, 0.35)',
+                                background: 'rgba(16, 185, 129, 0.14)',
+                                color: '#34d399',
+                                cursor: 'pointer'
+                              }}
+                              title="Start container"
+                            >
+                              ▶ Start
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleDockerContainerAction(c.name, 'logs')}
+                              style={{
+                                padding: '2px 7px',
+                                fontSize: 10,
+                                borderRadius: 4,
+                                border: '1px solid rgba(56, 189, 248, 0.35)',
+                                background: 'rgba(56, 189, 248, 0.14)',
+                                color: '#38bdf8',
+                                cursor: 'pointer'
+                              }}
+                              title="View container logs in SudoLaunch Terminal"
+                            >
+                              📜 Logs
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleDockerContainerAction(c.name, 'rm')}
+                              style={{
+                                padding: '2px 7px',
+                                fontSize: 10,
+                                borderRadius: 4,
+                                border: '1px solid rgba(239, 68, 68, 0.35)',
+                                background: 'rgba(239, 68, 68, 0.14)',
+                                color: '#f87171',
+                                cursor: 'pointer'
+                              }}
+                              title="Remove stopped container (docker rm)"
+                            >
+                              🗑️ Remove
+                            </button>
+                          </>
+                        )}
+                      </div>
                     </div>
-                  </div>
-                ))}
+                  )
+                })}
               </div>
             </div>
           )}
@@ -1752,12 +1861,12 @@ export default function ShortcutsOverlay(): JSX.Element {
           <span
             onMouseDown={(e) => startResizeDrag(e, 'both')}
             onDoubleClick={() => {
-              window.api.resizeShortcutsWindow?.(740, 460).then((res) => {
+              window.api.resizeShortcutsWindow?.(1040, 720).then((res) => {
                 if (res) setData(res)
-                flashToast(true, 'Reset window size to 740×460')
+                flashToast(true, 'Reset window size to 1040×720')
               })
             }}
-            title="Drag corner to resize window · Double-click to reset to 740×460"
+            title="Drag corner to resize window · Double-click to reset to 1040×720"
             style={{
               cursor: 'nwse-resize',
               padding: '1px 5px',
@@ -1803,12 +1912,12 @@ export default function ShortcutsOverlay(): JSX.Element {
       <div
         onMouseDown={(e) => startResizeDrag(e, 'both')}
         onDoubleClick={() => {
-          window.api.resizeShortcutsWindow?.(740, 460).then((res) => {
+          window.api.resizeShortcutsWindow?.(1040, 720).then((res) => {
             if (res) setData(res)
-            flashToast(true, 'Reset window size to 740×460')
+            flashToast(true, 'Reset window size to 1040×720')
           })
         }}
-        title="Drag corner to resize window · Double-click to reset to 740×460"
+        title="Drag corner to resize window · Double-click to reset to 1040×720"
         style={{
           position: 'absolute',
           right: 0,

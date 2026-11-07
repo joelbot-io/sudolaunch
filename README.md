@@ -33,8 +33,8 @@ A global-hotkey command palette, persistent command bar, and drop-down terminal 
 |---|---|
 | `/search <query>` | Universal multi-source search across contacts, snippets, apps, windows, custom commands, and GIFs (excludes internal Teams links) |
 | `/app <query>` | Fuzzy-search Start Menu shortcuts and installed applications, launch (cached in-memory with a 10-minute TTL for fast typing) |
-| `/system [tab]` | Open the `1040×720` System Management Control Center — 6-category workstation suite covering WinGet & Windows Update, Dev Runtimes, PATH Doctor & Persistent Env Vars, Services & Scheduled Tasks, Ports, Hosts & DNS, Disk, SMART & Power/Repair, and Defender, BitLocker & Event Logs (alias: `/sys`) |
-| `/shortcuts [tab]` | Open the `740×460` floating Customizable Shortcuts Overlay — tabbed keyboard shortcut deck for Favorites, PowerToys, Docker, Windows, Dev & Git, and Custom tabs with click-to-execute keystroke simulation and actions (aliases: `/sc`, `/hotkeys`) |
+| `/system [tab]` | Open the System Management Control Center — 6-category workstation suite covering WinGet & Windows Update, Dev Runtimes, PATH Doctor & Persistent Env Vars, Services & Scheduled Tasks, Ports, Hosts & DNS, Disk, SMART & Power/Repair, and Defender, BitLocker & Event Logs (alias: `/sys`) |
+| `/shortcuts [tab]` | Open the floating Customizable Shortcuts Overlay — tabbed keyboard shortcut deck for Favorites, PowerToys, Docker, Windows, Dev & Git, and Custom tabs with click-to-execute keystroke simulation and actions (aliases: `/sc`, `/hotkeys`) |
 | `/pkg [query]` | Inspect developer runtimes (Node, Python, Git, Go, Rust, .NET, Docker) and run quick WinGet package actions (alias: `/winget`) |
 | `/svc [query]` | Browse, filter (`running`/`stopped`), start, stop, and restart Windows Services with automatic UAC elevation |
 | `/proc [query]` | Inspect running processes by RAM/CPU and terminate hung tasks (alias: `/ps`, `Ctrl+Enter` elevated) |
@@ -119,7 +119,7 @@ SudoLaunch provides seamless execution controls right from the palette footer:
 
 ## System Management Control Center (`/system` & `🧰` Dock Module)
 
-Click the `🧰` icon on the Shelf / Orbit Dock or run `/system` (alias: `/sys`) to open the **`1040 × 720` System Management Control Center** — an integrated workstation management suite with 6 top-level categories:
+Click the `🧰` icon on the Shelf / Orbit Dock or run `/system` (alias: `/sys`) to open the **System Management Control Center** — an integrated workstation management suite with 6 top-level categories:
 
 ### 1. 🪽 WinGet & Package Updates
 - **Updates Available (`winget upgrade --include-pinned`)**:
@@ -198,12 +198,12 @@ Click the `🧰` icon on the Shelf / Orbit Dock or run `/system` (alias: `/sys`)
 
 ## Customizable Shortcuts Overlay (`/shortcuts` & `⌨️` Dock Module)
 
-Click the `⌨️` icon on the Shelf / Orbit Dock or run `/shortcuts` (aliases: `/sc`, `/hotkeys`) to toggle the **`740 × 460` Customizable Shortcuts Overlay** — a draggable, always-on-top frosted-glass window styled after the SudoLaunch PowerShell Terminal (`.term-shell` / `.term-header`) that remembers its custom screen coordinates (`shortcutsWindowPosition`):
+Click the `⌨️` icon on the Shelf / Orbit Dock or run `/shortcuts` (aliases: `/sc`, `/hotkeys`) to toggle the **Customizable Shortcuts Overlay** — a draggable, resizable, always-on-top frosted-glass window styled after the SudoLaunch PowerShell Terminal (`.term-shell` / `.term-header`) that remembers its custom screen coordinates (`shortcutsWindowPosition`) and window size (`shortcutsWindowSize`):
 
 - **6 Built-In Tabs + Unlimited Custom Tabs (`+ Tab`)**:
   - **⭐ Favorites (`favorites`)**: Your starred high-frequency shortcuts across all tabs, plus saved `/fav` bookmarks (`links.json`).
   - **🧰 PowerToys (`powertoys`)**: 20+ Microsoft PowerToys shortcuts with visual `<kbd>` keycaps (`Win+Shift+C` Color Picker, `Win+Shift+T` Text Extractor OCR, `Win+Shift+M` Measure Tool, `Win+Shift+/` Shortcut Guide, `Win+Ctrl+T` Always on Top, `Win+Ctrl+Alt+V` Paste as Plain Text, `Win+Shift+Q` Workspaces, `Win+Shift+A` Advanced Paste, `Alt+Space` PowerToys Run, Hosts Editor, FancyZones, Registry Preview, Environment Variables, Awake, Peek, Crop & Lock, Mouse Highlighter, Crosshairs, Find My Mouse).
-  - **🐳 Docker (`docker`)**: 9 Docker CLI/GUI shortcuts (`docker ps -a`, `docker stats`, `docker compose up -d`, `docker compose down`, `docker compose logs -f`, `docker system df`, `docker system prune -f`, Launch Docker Desktop) **plus a live Docker Containers Quick-Action Strip** with one-click `▶ Start`, `⏹ Stop`, `↻ Restart`, and `📜 Logs` buttons per container.
+  - **🐳 Docker (`docker`)**: 19 Docker & Compose CLI/GUI shortcuts (`docker ps -a`, `docker stats`, `docker compose up -d`, `docker compose up -d --build`, `docker compose down`, `docker compose down -v`, `docker compose restart`, `docker compose ps`, `docker compose logs -f`, `docker compose pull`, `docker images`, `docker volume ls`, `docker network ls`, `docker events`, Stop All Running Containers, `docker system df -v`, `docker builder prune -f`, `docker system prune -f`, Launch Docker Desktop) **plus a live Docker Containers Control Center** showing all running & stopped containers with status, image badge, port mappings, one-click `🌐 :<port>` localhost browser open, `>_ Shell`, `📜 Logs`, `🔍 Inspect`, `🔄 Restart`, `⏹ Stop`, `▶ Start`, and `🗑️ Remove` buttons per container.
   - **🪟 Windows (`windows`)**: 16 Windows 10/11 & Virtual Desktop shortcuts (`Win+V` Clipboard History, `Win+Shift+S` Snipping Tool, `Win+.` Emoji Picker, `Win+Ctrl+D` / `Win+Ctrl+←/→` / `Win+Ctrl+F4` Virtual Desktops, `Win+Z` Snap Layouts, `Ctrl+Shift+Esc` Task Manager, `Win+Ctrl+Shift+B` Reset Graphics Driver, `Win+X` Quick Link Menu, `Win+G` Xbox Game Bar, `Win+I` Settings, `Win+E` File Explorer, `Win+L` Lock Workstation).
   - **💻 Dev & Git (`dev`)**: 13 SudoLaunch, VS Code, Terminal, and Browser DevTools shortcuts (`Ctrl+Space` Command Palette, `Ctrl+Alt+T` Drop-Down Terminal, `F9` Git Branch Switcher, `Ctrl+Shift+P` VS Code Command Palette, `` Ctrl+` `` Toggle Integrated Terminal, `Ctrl+Shift+G` Source Control, `Shift+Alt+F` Format Document, `F12` Browser DevTools, plus one-click openers for `/system`, `/system ports`, and `/system envvars`).
   - **⚡ Custom (`custom`)**: Automatically surfaces your custom PowerShell commands (`~/.sudolaunch/commands/*.json`) alongside any user-created shortcuts.
@@ -219,7 +219,7 @@ Click the `⌨️` icon on the Shelf / Orbit Dock or run `/shortcuts` (aliases: 
   - **★ Star / Unstar**: Click `★` on any card to pin or unpin it from the **⭐ Favorites** tab.
   - **`+ Shortcut` & `✎ Edit` Modal with Live `🎹 Record Keys`**: Add custom shortcuts or override any built-in shortcut's key combination, title, tab, or action payload. Click **`🎹 Record Keys`** and press any key combination on your keyboard to capture `Win+Shift+...` / `Ctrl+Alt+...` tokens automatically.
   - **📌 Stay Open vs. ⚡ Auto-Close**: Toggle whether the overlay remains pinned on screen after clicking a shortcut or automatically hides.
-  - **◑ Grayscale / 🎨 Color Toggle & Resizable Window**: Toggle monochrome grayscale mode directly in the header (`shortcutsGrayscale`), and drag the right edge, bottom edge, or `◢` corner grip to resize the overlay (`shortcutsWindowSize`, double-click `◢` to reset to `740 × 460`).
+  - **◑ Grayscale / 🎨 Color Toggle & Resizable Window**: Toggle monochrome grayscale mode directly in the header (`shortcutsGrayscale`), and drag the right edge, bottom edge, or `◢` corner grip to resize the overlay (`shortcutsWindowSize`, double-click `◢` to reset default dimensions).
 
 ## Modular Dock, Layouts & Notifications
 
@@ -278,7 +278,7 @@ Stay in flow state without external browser tabs or distraction-heavy timer apps
   - Full 2D highlighted selector outline (`.is-kbd-selected`) with illuminated accent glow ring and scale pop.
   - Left/Right arrows navigate preset buttons and controls; Up/Down arrows jump between preset controls and custom minute input.
   - Direct Hotkeys: <kbd>1</kbd>–<kbd>6</kbd> for presets, <kbd>Space</kbd> to pause/resume, <kbd>+</kbd> to add 5 minutes, <kbd>R</kbd> to reset, <kbd>/</kbd> for commands, and <kbd>Esc</kbd> to close.
-- **Ergonomic Window Height (380px)**: Compacted window height eliminates dead space, comfortably hugging all timer controls, custom duration fields, and hotkey hints right above the dock.
+- **Compact Popout Window**: Compacted window layout eliminates dead space, comfortably hugging all timer controls, custom duration fields, and hotkey hints right above the dock.
 - **Subdued Transparency**: High-contrast dark backdrop (`rgba(18, 18, 22, 0.94)` with `rgba(0, 0, 0, 0.35)` card) eliminates distracting text bleed-through from underlying desktop windows while retaining frosted-glass border aesthetics.
 - **Session Tracker**: Tracks completed focus sessions throughout the day.
 - **Circular Progress Ring**: High-contrast animated SVG ring tracking elapsed and remaining time.
@@ -339,8 +339,8 @@ Alongside the hotkey popup, a frosted-glass icon dock sits on screen (`[ >_ ] [ 
   - `/` toggles the centered command palette.
   - `⏱️` toggles the Focus & Pomodoro countdown timer panel.
   - `🔀` toggles the active Git repository status & branch switcher (`F9`).
-  - `🧰` toggles the `1040×720` System Management Control Center (`/system`).
-  - `⌨️` toggles the `740×460` Customizable Shortcuts Overlay (`/shortcuts`).
+  - `🧰` toggles the System Management Control Center (`/system`).
+  - `⌨️` toggles the Customizable Shortcuts Overlay (`/shortcuts`).
   - `👤` toggles the Profile Switcher & Backup Archive manager (`/profile`).
   - `⚙️` opens Settings & Configuration (`/settings`).
 - **Expand**: Click the `/` icon or press `Ctrl+Space` (when the bar is enabled) to open the palette. The window smoothly expands and hovers above the docked icon without obscuring the dock buttons or taskbar.
@@ -404,7 +404,7 @@ Configuration files are stored in `%USERPROFILE%\.sudolaunch\`. On first run, Su
 - `sshHosts.json` — Saved SSH connections merged alongside `~/.ssh/config` for `/ssh`
 - `pinned-services.json` — User-pinned favorite Windows Services for `/system` (Services tab)
 - `shortcuts.json` — User-starred favorites, custom tabs, custom shortcuts, and built-in shortcut overrides for `/shortcuts` (`⌨️` Shortcuts Overlay)
-- `settings.json` — App preferences (`hotkey`, `terminalHotkey`, `historyEnabled`, `historyLimit`, `autoStart`, `disableMouseInput`, `defaultCommand`, `disabledApps`, `teamsShortcut`, `favShortcut`, `snippetShortcut`, `searchExcludedCommands`, `hiddenCommands`, `gifFolder`, `lookupFolder`, `barEnabled`, `dockLayout`, `dockHomePosition`, `dockGlowColor`, `dockGlowStyle`, `shelfIcons`, `monitor`, `terminalWidth`, `shortcutsWindowPosition`, `shortcutsStayOpen`)
+- `settings.json` — App preferences (`hotkey`, `terminalHotkey`, `historyEnabled`, `historyLimit`, `autoStart`, `disableMouseInput`, `defaultCommand`, `disabledApps`, `teamsShortcut`, `favShortcut`, `snippetShortcut`, `searchExcludedCommands`, `hiddenCommands`, `gifFolder`, `lookupFolder`, `barEnabled`, `dockLayout`, `dockHomePosition`, `dockGlowColor`, `dockGlowStyle`, `shelfIcons`, `monitor`, `terminalWidth`, `shortcutsWindowPosition`, `shortcutsWindowSize`, `shortcutsStayOpen`, `shortcutsGrayscale`)
 - `history.json` — App-managed execution history of recent commands
 - `winget-snapshots\` — Folder storing exported WinGet package + pin snapshots created in `/system`
 - `commands\` — Folder containing custom command `.json` files (supports subfolders for category-based organization)
