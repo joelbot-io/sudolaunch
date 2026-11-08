@@ -12,6 +12,9 @@ interface ContainerInfo {
 }
 
 let isDockerAvailableCache: boolean | null = null
+const DOCKER_CMD_CACHE_TTL_MS = 5000
+let cachedContainersResult: { containers: ContainerInfo[]; error?: string } | null = null
+let cachedContainersAt = 0
 
 function checkDocker(): boolean {
   if (isDockerAvailableCache !== null) return isDockerAvailableCache
@@ -25,6 +28,10 @@ function checkDocker(): boolean {
 }
 
 function getContainers(): { containers: ContainerInfo[]; error?: string } {
+  const now = Date.now()
+  if (cachedContainersResult && now - cachedContainersAt < DOCKER_CMD_CACHE_TTL_MS) {
+    return cachedContainersResult
+  }
   if (!checkDocker()) {
     return { containers: [], error: 'Docker CLI not found in PATH. Ensure Docker Desktop is installed and running.' }
   }
@@ -53,7 +60,9 @@ function getContainers(): { containers: ContainerInfo[]; error?: string } {
         })
       }
     }
-    return { containers: list }
+    cachedContainersResult = { containers: list }
+    cachedContainersAt = now
+    return cachedContainersResult
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : String(err)
     if (msg.includes('daemon is not running') || msg.includes('docker Desktop') || msg.includes('connect')) {

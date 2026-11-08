@@ -66,6 +66,7 @@ import { getDockDisplay } from './display'
 import { dockManager } from './dock/DockManager'
 import { registerFocusTimerIpc } from './focusTimer'
 import { registerGitStatusIpc } from './gitStatus'
+import { stopAllGitWatchers } from './gitWatcher'
 import { registerWingetIpc } from './wingetManager'
 import { registerSystemManagerIpc } from './systemManager'
 import {
@@ -110,9 +111,14 @@ function createBaseWindow(bounds: Rectangle): BrowserWindow {
     backgroundColor: '#00000000',
     icon: appIcon,
     webPreferences: {
-      preload: join(__dirname, '../preload/index.js')
+      preload: join(__dirname, '../preload/index.js'),
+      contextIsolation: true,
+      nodeIntegration: false,
+      sandbox: false
     }
   })
+  win.webContents.setWindowOpenHandler(() => ({ action: 'deny' }))
+  win.webContents.on('will-navigate', (e) => e.preventDefault())
   // The plain alwaysOnTop:true constructor option puts windows in the regular "floating"
   // level, which Windows' own taskbar/Start menu still renders above — bumping to the
   // "screen-saver" level is what actually clears that band.
@@ -353,35 +359,51 @@ function revealPaletteWindow(targetMode?: string): void {
 function getPaletteSizeForMode(targetMode: string): { width: number; height: number } {
   if (targetMode === 'focus') return DockGeometry.FOCUS_PANEL_SIZE
   if (targetMode === 'system') return DockGeometry.SYSTEM_PANEL_SIZE
-  if (targetMode === 'git' || targetMode === 'profile' || targetMode === 'settings') {
-    return DockGeometry.MODULE_PANEL_SIZE
+    if (targetMode === 'git') return DockGeometry.GIT_PANEL_SIZE
+    if (targetMode === 'profile' || targetMode === 'settings') {
+      return DockGeometry.MODULE_PANEL_SIZE
+    }
+    return DockGeometry.BAR_ACTIVE_SIZE
   }
-  return DockGeometry.BAR_ACTIVE_SIZE
-}
 
-export function toggleShelfPalette(mode?: string): void {
-  if (!mainWindow) return
-  const targetMode = mode || 'bar'
-  const targetSize = getPaletteSizeForMode(targetMode)
-  const settings = readSettings()
-  const dockWin = dockManager.getBarWindow()
-  const dockBounds =
-    dockWin && !dockWin.isDestroyed() && dockWin.isVisible()
-      ? dockWin.getBounds()
-      : dockManager.getLastBarBounds()
+  export function toggleShelfPalette(mode?: string): void {
+    if (!mainWindow) return
+    const targetMode = mode || 'bar'
+    const targetSize = getPaletteSizeForMode(targetMode)
+    const settings = readSettings()
+    const dockWin = dockManager.getBarWindow()
+    const dockBounds =
+      dockWin && !dockWin.isDestroyed() && dockWin.isVisible()
+        ? dockWin.getBounds()
+        : dockManager.getLastBarBounds()
 
-  const display = dockBounds
-    ? screen.getDisplayNearestPoint({
+    const display = dockBounds
+      ? screen.getDisplayNearestPoint({
         x: dockBounds.x + dockBounds.width / 2,
         y: dockBounds.y + dockBounds.height / 2
       })
-    : getDockDisplay(settings.monitor)
+      : getDockDisplay(settings.monitor)
 
-  if (paletteOpen) {
-    if (activeShelfMode === targetMode) {
-      closePaletteWindow(mainWindow)
+    if (paletteOpen) {
+      if (activeShelfMode === targetMode) {
+        closePaletteWindow(mainWindow)
+        return
+      }
+      activeShelfMode = targetMode
+      mainWindow.setBounds(
+        DockGeometry.calculateShelfPaletteBounds(
+          display.workArea,
+          dockBounds,
+          settings.shelfIcons?.length,
+          targetSize.height,
+          targetSize.width
+        )
+      )
+      dockManager.sendToBar('shelf-palette-active', true, targetMode)
+      revealPaletteWindow(targetMode)
       return
     }
+
     activeShelfMode = targetMode
     mainWindow.setBounds(
       DockGeometry.calculateShelfPaletteBounds(
@@ -394,395 +416,381 @@ export function toggleShelfPalette(mode?: string): void {
     )
     dockManager.sendToBar('shelf-palette-active', true, targetMode)
     revealPaletteWindow(targetMode)
-    return
   }
 
-  activeShelfMode = targetMode
-  mainWindow.setBounds(
-    DockGeometry.calculateShelfPaletteBounds(
-      display.workArea,
-      dockBounds,
-      settings.shelfIcons?.length,
-      targetSize.height,
-      targetSize.width
-    )
-  )
-  dockManager.sendToBar('shelf-palette-active', true, targetMode)
-  revealPaletteWindow(targetMode)
-}
+  ipcMain.on('palette-set-module', (_event, mode?: string) => {
+    if (!mainWindow || mainWindow.isDestroyed() || !paletteOpen) return
+    const targetMode = mode || 'bar'
+    if (activeShelfMode === targetMode) return
+    activeShelfMode = targetMode
+    const targetSize = getPaletteSizeForMode(targetMode)
+    const settings = readSettings()
+    const dockWin = dockManager.getBarWindow()
+    const dockBounds =
+      dockWin && !dockWin.isDestroyed() && dockWin.isVisible()
+        ? dockWin.getBounds()
+        : dockManager.getLastBarBounds()
 
-ipcMain.on('palette-set-module', (_event, mode?: string) => {
-  if (!mainWindow || mainWindow.isDestroyed() || !paletteOpen) return
-  const targetMode = mode || 'bar'
-  if (activeShelfMode === targetMode) return
-  activeShelfMode = targetMode
-  const targetSize = getPaletteSizeForMode(targetMode)
-  const settings = readSettings()
-  const dockWin = dockManager.getBarWindow()
-  const dockBounds =
-    dockWin && !dockWin.isDestroyed() && dockWin.isVisible()
-      ? dockWin.getBounds()
-      : dockManager.getLastBarBounds()
-
-  const display = dockBounds
-    ? screen.getDisplayNearestPoint({
+    const display = dockBounds
+      ? screen.getDisplayNearestPoint({
         x: dockBounds.x + dockBounds.width / 2,
         y: dockBounds.y + dockBounds.height / 2
       })
-    : getDockDisplay(settings.monitor)
+      : getDockDisplay(settings.monitor)
 
-  mainWindow.setBounds(
-    DockGeometry.calculateShelfPaletteBounds(
-      display.workArea,
-      dockBounds,
-      settings.shelfIcons?.length,
-      targetSize.height,
-      targetSize.width
+    mainWindow.setBounds(
+      DockGeometry.calculateShelfPaletteBounds(
+        display.workArea,
+        dockBounds,
+        settings.shelfIcons?.length,
+        targetSize.height,
+        targetSize.width
+      )
     )
-  )
-  dockManager.sendToBar('shelf-palette-active', true, targetMode)
-})
+    dockManager.sendToBar('shelf-palette-active', true, targetMode)
+  })
 
-// The hotkey's job is to get a query input in front of the user as fast as possible — when
-// the persistent bar is around, that means activating *it* rather than spawning a second,
-// separate window. The standalone popup only comes into play as a fallback for when the
-// bar's been turned off (via "/view").
-function togglePalette(): void {
-  const settings = readSettings()
-  if ((settings.dockLayout === 'shelf' || settings.dockLayout === 'circle') && settings.barEnabled) {
-    toggleShelfPalette('bar')
-    return
-  }
-  if (toggleBarActivation()) return
-  if (!mainWindow) return
-  if (paletteOpen) {
-    closePaletteWindow(mainWindow)
-    return
-  }
-  activeShelfMode = 'bar'
-  centerOnActiveDisplay(mainWindow)
-  revealPaletteWindow('bar')
-}
-
-function createTray(): void {
-  tray = new Tray(appIcon.resize({ width: 32, height: 32 }))
-  tray.setToolTip('SudoLaunch')
-  tray.setContextMenu(
-    Menu.buildFromTemplate([
-      { label: 'Show', click: () => togglePalette() },
-      { label: 'Open config folder', click: () => shell.openPath(CONFIG_DIR) },
-      { type: 'separator' },
-      { label: 'Quit', click: () => app.quit() }
-    ])
-  )
-  tray.on('click', () => togglePalette())
-}
-
-// Both the palette and terminal hotkeys are user-configurable (Settings → Hotkey /
-// Terminal hotkey) and follow the same register/re-register/report-failure shape, just
-// against different accelerator strings, actions, and error channels — hence one factory
-// instead of two near-identical copies.
-function createHotkeyRegistrar(
-  errorChannel: string,
-  action: () => void
-): { register: (hotkey: string) => void; current: () => string | null } {
-  let current: string | null = null
-  function register(hotkey: string): void {
-    if (hotkey === current) return
-
-    // globalShortcut.register throws synchronously for a malformed accelerator string
-    // (e.g. a typo'd hand-edit to settings.json, or one made of modifiers alone with no
-    // real key), and returns false if the accelerator is well-formed but already taken by
-    // another app — handle both the same way.
-    let ok = false
-    try {
-      ok = globalShortcut.register(hotkey, action)
-    } catch (err) {
-      console.error(`Invalid accelerator: ${hotkey}`, err)
-    }
-
-    if (!ok) {
-      // Keep whatever hotkey was already working rather than leaving the user with none.
-      console.error(`Failed to register global hotkey: ${hotkey}`)
-      mainWindow?.webContents.send(errorChannel, hotkey)
-      sendToBar(errorChannel, hotkey)
+  // The hotkey's job is to get a query input in front of the user as fast as possible — when
+  // the persistent bar is around, that means activating *it* rather than spawning a second,
+  // separate window. The standalone popup only comes into play as a fallback for when the
+  // bar's been turned off (via "/view").
+  function togglePalette(): void {
+    const settings = readSettings()
+    if ((settings.dockLayout === 'shelf' || settings.dockLayout === 'circle') && settings.barEnabled) {
+      toggleShelfPalette('bar')
       return
     }
-
-    if (current) globalShortcut.unregister(current)
-    current = hotkey
-  }
-  return { register, current: () => current }
-}
-
-const paletteHotkey = createHotkeyRegistrar('hotkey-error', togglePalette)
-const terminalHotkey = createHotkeyRegistrar('terminal-hotkey-error', () => toggleTerminal())
-
-// Additional fixed (not user-configurable, not shown in tooltips) ways to pop the terminal
-// open or minimize, all interchangeable with the configurable terminalHotkey above.
-//
-// "Control+Super+/": Ctrl+Win was the combo actually asked for, before landing on
-// Ctrl+Alt+T as the registerable default — Electron's globalShortcut can't bind an
-// accelerator made of modifiers alone, hence a trailing key. Control+Super+Space failed to
-// register (Windows reserves Win+Space for input-language switching, apparently regardless
-// of extra modifiers), so it uses "/", which isn't OS-reserved.
-//
-// "F1": deliberately takes over the conventional help key. Because globalShortcut is
-// system-wide, this swallows F1 in *every* application, not just this one — no other app
-// will see it to open its help. That's the intent, but it's the reason F1 is worth calling
-// out separately from the modifier combos above.
-const FIXED_TERMINAL_HOTKEYS = ['Control+Super+/', 'F1']
-
-function registerFixedTerminalHotkeys(): void {
-  for (const hotkey of FIXED_TERMINAL_HOTKEYS) {
-    try {
-      if (!globalShortcut.register(hotkey, () => toggleTerminal())) {
-        console.error(`Failed to register fixed terminal hotkey: ${hotkey}`)
-      }
-    } catch (err) {
-      console.error(`Invalid fixed terminal hotkey accelerator: ${hotkey}`, err)
+    if (toggleBarActivation()) return
+    if (!mainWindow) return
+    if (paletteOpen) {
+      closePaletteWindow(mainWindow)
+      return
     }
+    activeShelfMode = 'bar'
+    centerOnActiveDisplay(mainWindow)
+    revealPaletteWindow('bar')
   }
-}
 
-function applyAutoStart(autoStart: boolean): void {
-  // Only touch the Windows startup registration for packaged builds — in dev, process.execPath
-  // points at the Electron binary itself, which would register a throwaway dev build to auto-launch.
-  if (!app.isPackaged) return
-  app.setLoginItemSettings({
-    openAtLogin: autoStart,
-    path: process.execPath
-  })
-}
+  function createTray(): void {
+    tray = new Tray(appIcon.resize({ width: 32, height: 32 }))
+    tray.setToolTip('SudoLaunch')
+    tray.setContextMenu(
+      Menu.buildFromTemplate([
+        { label: 'Show', click: () => togglePalette() },
+        { label: 'Open config folder', click: () => shell.openPath(CONFIG_DIR) },
+        { type: 'separator' },
+        { label: 'Quit', click: () => app.quit() }
+      ])
+    )
+    tray.on('click', () => togglePalette())
+  }
 
-function registerIpcHandlers(): void {
-  ipcMain.handle('search', (_event, command: CommandName, query: string) => search(command, query))
-  ipcMain.handle('run-calc', (_event, expression: string) => evaluateExpression(expression))
-  ipcMain.handle(
-    'execute-command',
-    async (event, command: CommandName, item: SearchResultItem, query: string, elevated?: boolean): Promise<string | null> => {
+  // Both the palette and terminal hotkeys are user-configurable (Settings → Hotkey /
+  // Terminal hotkey) and follow the same register/re-register/report-failure shape, just
+  // against different accelerator strings, actions, and error channels — hence one factory
+  // instead of two near-identical copies.
+  function createHotkeyRegistrar(
+    errorChannel: string,
+    action: () => void
+  ): { register: (hotkey: string) => void; current: () => string | null } {
+    let current: string | null = null
+    function register(hotkey: string): void {
+      if (hotkey === current) return
+
+      // globalShortcut.register throws synchronously for a malformed accelerator string
+      // (e.g. a typo'd hand-edit to settings.json, or one made of modifiers alone with no
+      // real key), and returns false if the accelerator is well-formed but already taken by
+      // another app — handle both the same way.
+      let ok = false
       try {
-        await execute(command, item, query, elevated)
-        // Only the popup hides itself on success — the bar window handles "clear and
-        // return to idle" itself (see CommandPalette's bar-mode handleExecuteResult),
-        // since it's meant to stay visible.
-        const win = BrowserWindow.fromWebContents(event.sender)
-        // Must go through closePaletteWindow (opacity + setIgnoreMouseEvents), not a raw
-        // win.hide() — the shelf palette window is now always kept mapped (see
-        // closePaletteWindow's comment for why: hide()/showInactive() cycling caused
-        // Windows' DWM compositor to flash stale frames during panel switches). A raw
-        // hide() here genuinely unmapped the window while paletteOpen stayed true (since
-        // closePaletteWindow's bookkeeping never ran), so the next click's doShow() call
-        // set opacity/mouse-passthrough on a window Windows still considered hidden —
-        // opacity changes don't remap a hidden window, only show()/showInactive() do —
-        // leaving it stuck invisible until the app restarted. Reproduced by running a
-        // "term"-type history entry, which resolves successfully and hits this path.
-        if (win && win === mainWindow) {
-          closePaletteWindow(win)
-        } else if (win && !isBarWindow(win)) {
-          win.hide()
-        }
-        return null
+        ok = globalShortcut.register(hotkey, action)
       } catch (err) {
-        // Surface the failure to the renderer instead of leaving an unhandled rejection —
-        // the window stays open (rather than hiding, as on success) so the user can see it.
-        return err instanceof Error ? err.message : String(err)
+        console.error(`Invalid accelerator: ${hotkey}`, err)
       }
+
+      if (!ok) {
+        // Keep whatever hotkey was already working rather than leaving the user with none.
+        console.error(`Failed to register global hotkey: ${hotkey}`)
+        mainWindow?.webContents.send(errorChannel, hotkey)
+        sendToBar(errorChannel, hotkey)
+        return
+      }
+
+      if (current) globalShortcut.unregister(current)
+      current = hotkey
     }
-  )
-  ipcMain.handle('get-history', () => getHistory())
-  ipcMain.handle('delete-history-entry', (_event, timestamp: string) => deleteHistoryEntry(timestamp))
-  ipcMain.handle('clear-history', () => {
-    clearHistory()
-    return []
-  })
-  ipcMain.handle('dock-get-is-home', () => !dockManager.getIsSummonedAway())
-  ipcMain.on('show-dock-context-menu', (event) => {
-    const win = BrowserWindow.fromWebContents(event.sender)
-    const settings = readSettings()
-    const menu = Menu.buildFromTemplate([
-      {
-        label: 'Open Command Palette',
-        click: () => revealPaletteWindow()
-      },
-      {
-        label: 'Open Terminal',
-        click: () => toggleTerminal()
-      },
-      {
-        label: 'Open Shortcuts Overlay',
-        click: () => toggleShortcutsWindow()
-      },
-      {
-        label: 'Settings',
-        click: () => revealPaletteWindow('settings')
-      },
-      { type: 'separator' },
-      {
-        label: 'Reset Dock Position',
-        click: () => dockManager.resetPositions()
-      },
-      {
-        label: 'Auto-Return Home',
-        type: 'checkbox',
-        checked: settings.autoReturnHome !== false,
-        click: (item) => {
-          saveConfigEntry('settings', { autoReturnHome: item.checked }, 0)
+    return { register, current: () => current }
+  }
+
+  const paletteHotkey = createHotkeyRegistrar('hotkey-error', togglePalette)
+  const terminalHotkey = createHotkeyRegistrar('terminal-hotkey-error', () => toggleTerminal())
+
+  // Additional fixed (not user-configurable, not shown in tooltips) ways to pop the terminal
+  // open or minimize, all interchangeable with the configurable terminalHotkey above.
+  //
+  // "Control+Super+/": Ctrl+Win was the combo actually asked for, before landing on
+  // Ctrl+Alt+T as the registerable default — Electron's globalShortcut can't bind an
+  // accelerator made of modifiers alone, hence a trailing key. Control+Super+Space failed to
+  // register (Windows reserves Win+Space for input-language switching, apparently regardless
+  // of extra modifiers), so it uses "/", which isn't OS-reserved.
+  //
+  // "F1": deliberately takes over the conventional help key. Because globalShortcut is
+  // system-wide, this swallows F1 in *every* application, not just this one — no other app
+  // will see it to open its help. That's the intent, but it's the reason F1 is worth calling
+  // out separately from the modifier combos above.
+  const FIXED_TERMINAL_HOTKEYS = ['Control+Super+/', 'F1']
+
+  function registerFixedTerminalHotkeys(): void {
+    for (const hotkey of FIXED_TERMINAL_HOTKEYS) {
+      try {
+        if (!globalShortcut.register(hotkey, () => toggleTerminal())) {
+          console.error(`Failed to register fixed terminal hotkey: ${hotkey}`)
         }
-      },
-      { type: 'separator' },
-      {
-        label: 'Exit SudoLaunch',
-        click: () => app.quit()
+      } catch (err) {
+        console.error(`Invalid fixed terminal hotkey accelerator: ${hotkey}`, err)
       }
-    ])
-    if (win) menu.popup({ window: win })
-  })
-  // Sourced from the values actually registered (not a copy in the renderer) so the
-  // tooltips can't drift from the real bindings — both are user-configurable (Settings).
-  ipcMain.handle('get-hotkeys', () => ({
-    palette: paletteHotkey.current() ?? readSettings().hotkey,
-    terminal: terminalHotkey.current() ?? readSettings().terminalHotkey
-  }))
-  ipcMain.handle('get-settings', () => readSettings())
-  ipcMain.on('renderer-error', (_event, message: string) => {
-    console.error(`[renderer-error] ${message}`)
-  })
-  ipcMain.on('hide-palette', () => {
-    if (mainWindow) closePaletteWindow(mainWindow)
-  })
-  ipcMain.on('open-config-folder', () => shell.openPath(CONFIG_DIR))
-  ipcMain.handle('config-get-entries', (_event, type: ConfigType) => getConfigEntries(type))
-  ipcMain.handle('config-save-entry', (_event, type: ConfigType, entry: ConfigEntry, index: number | null) =>
-    saveConfigEntry(type, entry, index)
-  )
-  ipcMain.handle('config-delete-entry', (_event, type: ConfigType, index: number) => deleteConfigEntry(type, index))
-  ipcMain.handle('list-apps', () => listApps())
-  ipcMain.handle('list-custom-commands', () => loadCustomCommands())
-  ipcMain.handle('get-command-layout', () => readCommandLayout())
-  ipcMain.handle('save-command-layout', (_event, layout: CommandLayout) => writeCommandLayout(layout))
-  ipcMain.on('open-command-layout-file', () => shell.openPath(COMMAND_LAYOUT_PATH))
-  registerTerminalIpc()
-  registerNotificationIpc()
-  registerShortcutsIpc()
-  registerBarIpc()
-  registerFocusTimerIpc()
-  registerGitStatusIpc()
-  registerWingetIpc()
-  registerSystemManagerIpc()
-  ipcMain.handle('profile-execute', (_event, action: string) => executeProfileAction(action))
-  ipcMain.handle('profile-list', () => listProfiles())
-  ipcMain.handle('profile-switch', (_event, id: string) => switchProfile(id))
-  ipcMain.handle('profile-create', (_event, name: string, cloneCurrent?: boolean) => createProfile(name, cloneCurrent))
-  ipcMain.handle('profile-delete', (_event, id: string) => deleteProfile(id))
-  ipcMain.handle('profile-archives-list', () => listBackupArchives())
-  ipcMain.handle('profile-archive-restore', (_event, filename: string) => restoreSpecificBackup(filename))
-}
-
-app.whenReady().then(() => {
-  // Always dark, regardless of the Windows system theme setting.
-  nativeTheme.themeSource = 'dark'
-  ensureConfigDir()
-  ensureCommandsDir()
-  ensureCommandLayout()
-  ensureGifDir()
-  ensureLookupDir()
-  registerIpcHandlers()
-  mainWindow = createWindow()
-  dockManager.registerShelfPaletteToggle((mode?: string) => toggleShelfPalette(mode))
-  createBarWindow(appIcon)
-  createTerminalWindow(appIcon)
-  createNotificationWindow(appIcon)
-  createShortcutsWindow(appIcon)
-  createTray()
-  const initialSettings = readSettings()
-  paletteHotkey.register(initialSettings.hotkey)
-  terminalHotkey.register(initialSettings.terminalHotkey)
-  registerFixedTerminalHotkeys()
-  globalShortcut.register('F9', () => toggleShelfPalette('git'))
-  globalShortcut.register('F10', () => toggleShelfPalette('bar'))
-  applyAutoStart(initialSettings.autoStart)
-  setBarVisible(initialSettings.barEnabled)
-  initSwap()
-
-  screen.on('display-metrics-changed', () => repositionBarForDisplayChange())
-
-  watchConfig(() => {
-    mainWindow?.webContents.send('config-changed')
-    dockManager.broadcast('config-changed')
-  })
-
-  let lastBarEnabled = initialSettings.barEnabled
-  let lastDockLayout = initialSettings.dockLayout ?? 'shelf'
-  let lastHomePos = initialSettings.dockHomePosition ?? 'middle'
-  let lastCustomCoords = JSON.stringify(initialSettings.dockHomeCustomCoordinates ?? { x: 50, y: 80 })
-
-  watchSettings((settings) => {
-    paletteHotkey.register(settings.hotkey)
-    terminalHotkey.register(settings.terminalHotkey)
-    applyAutoStart(settings.autoStart)
-    if (settings.barEnabled !== lastBarEnabled) {
-      lastBarEnabled = settings.barEnabled
-      setBarVisible(settings.barEnabled)
     }
-    if (settings.swapEnabled !== false) {
-      startSwapServer(settings.swapPort).catch((err) => console.error('[SwapServer] Failed to start:', err))
-    }
+  }
 
-    const currentLayout = settings.dockLayout ?? 'shelf'
-    const currentHomePos = settings.dockHomePosition ?? 'middle'
-    const currentCustomCoords = JSON.stringify(settings.dockHomeCustomCoordinates ?? { x: 50, y: 80 })
+  function applyAutoStart(autoStart: boolean): void {
+    // Only touch the Windows startup registration for packaged builds — in dev, process.execPath
+    // points at the Electron binary itself, which would register a throwaway dev build to auto-launch.
+    if (!app.isPackaged) return
+    app.setLoginItemSettings({
+      openAtLogin: autoStart,
+      path: process.execPath
+    })
+  }
 
-    const layoutChanged = currentLayout !== lastDockLayout
-    const homePosChanged = currentHomePos !== lastHomePos || currentCustomCoords !== lastCustomCoords
+  function registerIpcHandlers(): void {
+    ipcMain.handle('search', (_event, command: CommandName, query: string) => search(command, query))
+    ipcMain.handle('run-calc', (_event, expression: string) => evaluateExpression(expression))
+    ipcMain.handle(
+      'execute-command',
+      async (event, command: CommandName, item: SearchResultItem, query: string, elevated?: boolean): Promise<string | null> => {
+        try {
+          await execute(command, item, query, elevated)
+          // Only the popup hides itself on success — the bar window handles "clear and
+          // return to idle" itself (see CommandPalette's bar-mode handleExecuteResult),
+          // since it's meant to stay visible.
+          const win = BrowserWindow.fromWebContents(event.sender)
+          // Must go through closePaletteWindow (opacity + setIgnoreMouseEvents), not a raw
+          // win.hide() — the shelf palette window is now always kept mapped (see
+          // closePaletteWindow's comment for why: hide()/showInactive() cycling caused
+          // Windows' DWM compositor to flash stale frames during panel switches). A raw
+          // hide() here genuinely unmapped the window while paletteOpen stayed true (since
+          // closePaletteWindow's bookkeeping never ran), so the next click's doShow() call
+          // set opacity/mouse-passthrough on a window Windows still considered hidden —
+          // opacity changes don't remap a hidden window, only show()/showInactive() do —
+          // leaving it stuck invisible until the app restarted. Reproduced by running a
+          // "term"-type history entry, which resolves successfully and hits this path.
+          if (win && win === mainWindow) {
+            closePaletteWindow(win)
+          } else if (win && !isBarWindow(win)) {
+            win.hide()
+          }
+          return null
+        } catch (err) {
+          // Surface the failure to the renderer instead of leaving an unhandled rejection —
+          // the window stays open (rather than hiding, as on success) so the user can see it.
+          return err instanceof Error ? err.message : String(err)
+        }
+      }
+    )
+    ipcMain.handle('get-history', () => getHistory())
+    ipcMain.handle('delete-history-entry', (_event, timestamp: string) => deleteHistoryEntry(timestamp))
+    ipcMain.handle('clear-history', () => {
+      clearHistory()
+      return []
+    })
+    ipcMain.handle('dock-get-is-home', () => !dockManager.getIsSummonedAway())
+    ipcMain.on('show-dock-context-menu', (event) => {
+      const win = BrowserWindow.fromWebContents(event.sender)
+      const settings = readSettings()
+      const menu = Menu.buildFromTemplate([
+        {
+          label: 'Open Command Palette',
+          click: () => revealPaletteWindow()
+        },
+        {
+          label: 'Open Terminal',
+          click: () => toggleTerminal()
+        },
+        {
+          label: 'Open Shortcuts Overlay',
+          click: () => toggleShortcutsWindow()
+        },
+        {
+          label: 'Settings',
+          click: () => revealPaletteWindow('settings')
+        },
+        { type: 'separator' },
+        {
+          label: 'Reset Dock Position',
+          click: () => dockManager.resetPositions()
+        },
+        {
+          label: 'Auto-Return Home',
+          type: 'checkbox',
+          checked: settings.autoReturnHome !== false,
+          click: (item) => {
+            saveConfigEntry('settings', { autoReturnHome: item.checked }, 0)
+          }
+        },
+        { type: 'separator' },
+        {
+          label: 'Exit SudoLaunch',
+          click: () => app.quit()
+        }
+      ])
+      if (win) menu.popup({ window: win })
+    })
+    // Sourced from the values actually registered (not a copy in the renderer) so the
+    // tooltips can't drift from the real bindings — both are user-configurable (Settings).
+    ipcMain.handle('get-hotkeys', () => ({
+      palette: paletteHotkey.current() ?? readSettings().hotkey,
+      terminal: terminalHotkey.current() ?? readSettings().terminalHotkey
+    }))
+    ipcMain.handle('get-settings', () => readSettings())
+    ipcMain.on('renderer-error', (_event, message: string) => {
+      console.error(`[renderer-error] ${message}`)
+    })
+    ipcMain.on('hide-palette', () => {
+      if (mainWindow) closePaletteWindow(mainWindow)
+    })
+    ipcMain.on('open-config-folder', () => shell.openPath(CONFIG_DIR))
+    ipcMain.handle('config-get-entries', (_event, type: ConfigType) => getConfigEntries(type))
+    ipcMain.handle('config-save-entry', (_event, type: ConfigType, entry: ConfigEntry, index: number | null) =>
+      saveConfigEntry(type, entry, index)
+    )
+    ipcMain.handle('config-delete-entry', (_event, type: ConfigType, index: number) => deleteConfigEntry(type, index))
+    ipcMain.handle('list-apps', () => listApps())
+    ipcMain.handle('list-custom-commands', () => loadCustomCommands())
+    ipcMain.handle('get-command-layout', () => readCommandLayout())
+    ipcMain.handle('save-command-layout', (_event, layout: CommandLayout) => writeCommandLayout(layout))
+    ipcMain.on('open-command-layout-file', () => shell.openPath(COMMAND_LAYOUT_PATH))
+    registerTerminalIpc()
+    registerNotificationIpc()
+    registerShortcutsIpc()
+    registerBarIpc()
+    registerFocusTimerIpc()
+    registerGitStatusIpc()
+    registerWingetIpc()
+    registerSystemManagerIpc()
+    ipcMain.handle('profile-execute', (_event, action: string) => executeProfileAction(action))
+    ipcMain.handle('profile-list', () => listProfiles())
+    ipcMain.handle('profile-switch', (_event, id: string) => switchProfile(id))
+    ipcMain.handle('profile-create', (_event, name: string, cloneCurrent?: boolean) => createProfile(name, cloneCurrent))
+    ipcMain.handle('profile-delete', (_event, id: string) => deleteProfile(id))
+    ipcMain.handle('profile-archives-list', () => listBackupArchives())
+    ipcMain.handle('profile-archive-restore', (_event, filename: string) => restoreSpecificBackup(filename))
+  }
 
-    lastDockLayout = currentLayout
-    lastHomePos = currentHomePos
-    lastCustomCoords = currentCustomCoords
+  app.whenReady().then(() => {
+    // Always dark, regardless of the Windows system theme setting.
+    nativeTheme.themeSource = 'dark'
+    ensureConfigDir()
+    ensureCommandsDir()
+    ensureCommandLayout()
+    ensureGifDir()
+    ensureLookupDir()
+    registerIpcHandlers()
+    mainWindow = createWindow()
+    dockManager.registerShelfPaletteToggle((mode?: string) => toggleShelfPalette(mode))
+    createBarWindow(appIcon)
+    createTerminalWindow(appIcon)
+    createNotificationWindow(appIcon)
+    createShortcutsWindow(appIcon)
+    createTray()
+    const initialSettings = readSettings()
+    paletteHotkey.register(initialSettings.hotkey)
+    terminalHotkey.register(initialSettings.terminalHotkey)
+    registerFixedTerminalHotkeys()
+    globalShortcut.register('F9', () => toggleShelfPalette('git'))
+    globalShortcut.register('F10', () => toggleShelfPalette('bar'))
+    applyAutoStart(initialSettings.autoStart)
+    setBarVisible(initialSettings.barEnabled)
+    initSwap()
 
-    if (layoutChanged) {
-      dockManager.setLayout(currentLayout, false)
-    } else if (homePosChanged) {
-      dockManager.resetPositions()
-    } else {
-      repositionBarForShelfIcons()
-      repositionBarForDisplayChange()
-      repositionTerminal()
-      repositionShortcuts()
-    }
+    screen.on('display-metrics-changed', () => repositionBarForDisplayChange())
 
-    mainWindow?.webContents.send('config-changed')
-    dockManager.broadcast('config-changed')
+    watchConfig(() => {
+      mainWindow?.webContents.send('config-changed')
+      dockManager.broadcast('config-changed')
+    })
+
+    let lastBarEnabled = initialSettings.barEnabled
+    let lastDockLayout = initialSettings.dockLayout ?? 'shelf'
+    let lastHomePos = initialSettings.dockHomePosition ?? 'middle'
+    let lastCustomCoords = JSON.stringify(initialSettings.dockHomeCustomCoordinates ?? { x: 50, y: 80 })
+
+    watchSettings((settings) => {
+      paletteHotkey.register(settings.hotkey)
+      terminalHotkey.register(settings.terminalHotkey)
+      applyAutoStart(settings.autoStart)
+      if (settings.barEnabled !== lastBarEnabled) {
+        lastBarEnabled = settings.barEnabled
+        setBarVisible(settings.barEnabled)
+      }
+      if (settings.swapEnabled !== false) {
+        startSwapServer(settings.swapPort).catch((err) => console.error('[SwapServer] Failed to start:', err))
+      }
+
+      const currentLayout = settings.dockLayout ?? 'shelf'
+      const currentHomePos = settings.dockHomePosition ?? 'middle'
+      const currentCustomCoords = JSON.stringify(settings.dockHomeCustomCoordinates ?? { x: 50, y: 80 })
+
+      const layoutChanged = currentLayout !== lastDockLayout
+      const homePosChanged = currentHomePos !== lastHomePos || currentCustomCoords !== lastCustomCoords
+
+      lastDockLayout = currentLayout
+      lastHomePos = currentHomePos
+      lastCustomCoords = currentCustomCoords
+
+      if (layoutChanged) {
+        dockManager.setLayout(currentLayout, false)
+      } else if (homePosChanged) {
+        dockManager.resetPositions()
+      } else {
+        repositionBarForShelfIcons()
+        repositionBarForDisplayChange()
+        repositionTerminal()
+        repositionShortcuts()
+      }
+
+      mainWindow?.webContents.send('config-changed')
+      dockManager.broadcast('config-changed')
+    })
+
+    watchCustomCommands(() => {
+      mainWindow?.webContents.send('custom-commands-changed')
+      sendToBar('custom-commands-changed')
+    })
+
+    watchCommandLayout(() => {
+      mainWindow?.webContents.send('command-layout-changed')
+      sendToBar('command-layout-changed')
+    })
+
+    app.on('activate', () => {
+      if (BrowserWindow.getAllWindows().length === 0) {
+        mainWindow = createWindow()
+        createBarWindow(appIcon)
+        createTerminalWindow(appIcon)
+        createNotificationWindow(appIcon)
+        createShortcutsWindow(appIcon)
+        setBarVisible(readSettings().barEnabled)
+      }
+    })
   })
 
-  watchCustomCommands(() => {
-    mainWindow?.webContents.send('custom-commands-changed')
-    sendToBar('custom-commands-changed')
+  app.on('window-all-closed', () => {
+    // Keep running in the tray; the palette window hides rather than closes.
   })
 
-  watchCommandLayout(() => {
-    mainWindow?.webContents.send('command-layout-changed')
-    sendToBar('command-layout-changed')
+  app.on('will-quit', () => {
+    globalShortcut.unregisterAll()
+    killPty()
+    shutdownSwap()
+    stopAllGitWatchers().catch(() => { })
   })
-
-  app.on('activate', () => {
-    if (BrowserWindow.getAllWindows().length === 0) {
-      mainWindow = createWindow()
-      createBarWindow(appIcon)
-      createTerminalWindow(appIcon)
-      createNotificationWindow(appIcon)
-      createShortcutsWindow(appIcon)
-      setBarVisible(readSettings().barEnabled)
-    }
-  })
-})
-
-app.on('window-all-closed', () => {
-  // Keep running in the tray; the palette window hides rather than closes.
-})
-
-app.on('will-quit', () => {
-  globalShortcut.unregisterAll()
-  killPty()
-  shutdownSwap()
-})

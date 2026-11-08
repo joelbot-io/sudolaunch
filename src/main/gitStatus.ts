@@ -2,9 +2,21 @@ import { execFile } from 'child_process'
 import { dialog, ipcMain } from 'electron'
 import { existsSync, readFileSync } from 'fs'
 import { resolve, basename, join } from 'path'
-import type { GitRepoStatus, KnownRepoItem } from '../shared/types'
+import type { GitRepoStatus, GitWatcherConfigInput, KnownRepoItem } from '../shared/types'
 import { readSettings, writeSettings, CONFIG_DIR } from './config'
 import { dockManager } from './dock/DockManager'
+import {
+  clearGitWatcherLogs,
+  deleteGitWatcher,
+  detectRepoWatcherPresets,
+  getGitWatchers,
+  openGitWatcherInTerminal,
+  saveGitWatcher,
+  startGitWatcher,
+  stopAllGitWatchers,
+  stopGitWatcher,
+  triggerGitWatcherReload
+} from './gitWatcher'
 
 let cachedGitPath: string | null = null
 
@@ -226,6 +238,17 @@ export async function getKnownGitRepos(): Promise<KnownRepoItem[]> {
   })
 }
 
+export async function selectWatcherProjectFolder(): Promise<string | null> {
+  const result = await dialog.showOpenDialog({
+    title: 'Select Project / Repository Folder to Watch',
+    properties: ['openDirectory']
+  })
+  if (result.canceled || result.filePaths.length === 0) {
+    return null
+  }
+  return resolve(result.filePaths[0])
+}
+
 export function registerGitStatusIpc(): void {
   ipcMain.handle('git-status-get', () => getGitRepoStatus())
   ipcMain.handle('git-branches-get', () => getGitBranches())
@@ -233,5 +256,20 @@ export function registerGitStatusIpc(): void {
   ipcMain.handle('git-select-repo-folder', () => selectGitRepoFolder())
   ipcMain.handle('git-set-active-repo', (_event, repoPath: string) => setActiveGitRepo(repoPath))
   ipcMain.handle('git-get-known-repos', () => getKnownGitRepos())
+
+  // Hot-Reload Filesystem Watchers
+  ipcMain.handle('git-watchers-get', () => getGitWatchers())
+  ipcMain.handle('git-watcher-presets', (_event, repoPath?: string) =>
+    detectRepoWatcherPresets(repoPath || resolveRepoCwd())
+  )
+  ipcMain.handle('git-watcher-save', (_event, input: GitWatcherConfigInput) => saveGitWatcher(input))
+  ipcMain.handle('git-watcher-delete', (_event, id: string) => deleteGitWatcher(id))
+  ipcMain.handle('git-watcher-start', (_event, id: string) => startGitWatcher(id))
+  ipcMain.handle('git-watcher-stop', (_event, id: string) => stopGitWatcher(id))
+  ipcMain.handle('git-watcher-stop-all', () => stopAllGitWatchers())
+  ipcMain.handle('git-watcher-trigger', (_event, id: string) => triggerGitWatcherReload(id))
+  ipcMain.handle('git-watcher-clear-logs', (_event, id: string) => clearGitWatcherLogs(id))
+  ipcMain.handle('git-watcher-open-terminal', (_event, id: string) => openGitWatcherInTerminal(id))
+  ipcMain.handle('git-watcher-select-folder', () => selectWatcherProjectFolder())
 }
 

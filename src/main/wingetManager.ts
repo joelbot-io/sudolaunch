@@ -2,7 +2,7 @@ import { execFile, spawn, type ChildProcess } from 'child_process'
 import { promisify } from 'util'
 import { existsSync, mkdirSync, readdirSync, readFileSync, statSync, unlinkSync, writeFileSync } from 'fs'
 import { homedir } from 'os'
-import { join } from 'path'
+import { basename, join } from 'path'
 import { BrowserWindow, ipcMain, shell } from 'electron'
 import type {
   WingetPackageItem,
@@ -403,9 +403,9 @@ function syncCachesPinnedFlag(pins: WingetPinItem[]): void {
 
 async function runElevatedWingetWait(wingetArgs: string[]): Promise<{ success: boolean; message: string }> {
   const quotedArgs = wingetArgs
-    .map((a) => (a.includes(' ') || a.includes('*') ? `"${a.replace(/"/g, '\\"')}"` : a))
+    .map((a) => `'${String(a).replace(/'/g, "''")}'`)
     .join(' ')
-  const innerCmd = `winget ${quotedArgs}`
+  const innerCmd = `& winget ${quotedArgs}`
   const encodedInner = Buffer.from(innerCmd, 'utf16le').toString('base64')
   const psScript = `
     $p = Start-Process powershell.exe -Verb RunAs -Wait -PassThru -ArgumentList @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-EncodedCommand', '${encodedInner}')
@@ -416,7 +416,7 @@ async function runElevatedWingetWait(wingetArgs: string[]): Promise<{ success: b
       timeout: 300000,
       windowsHide: true
     })
-    return { success: true, message: `Completed elevated command: winget ${quotedArgs}` }
+    return { success: true, message: `Completed elevated command: winget ${wingetArgs.join(' ')}` }
   } catch (err) {
     return {
       success: false,
@@ -1151,12 +1151,22 @@ export async function createWingetSnapshot(
   }
 }
 
+function sanitizeSnapshotFilename(filename: string): string | null {
+  const clean = basename((filename || '').trim())
+  if (!clean || !/^[a-zA-Z0-9._-]+\.json$/i.test(clean)) return null
+  return clean
+}
+
 export async function restoreWingetSnapshot(
   filename: string,
   mode: 'pins-only' | 'full-import'
 ): Promise<{ success: boolean; message: string }> {
   try {
-    const fullPath = join(getSnapshotsDir(), filename)
+    const safeFilename = sanitizeSnapshotFilename(filename)
+    if (!safeFilename) {
+      return { success: false, message: 'Invalid snapshot filename' }
+    }
+    const fullPath = join(getSnapshotsDir(), safeFilename)
     if (!existsSync(fullPath)) {
       return { success: false, message: 'Snapshot file not found' }
     }
@@ -1183,7 +1193,7 @@ export async function restoreWingetSnapshot(
     if (mode === 'pins-only') {
       return {
         success: true,
-        message: `Restored ${restoredPins}/${savedPins.length} package pins from ${filename}`
+        message: `Restored ${restoredPins}/${savedPins.length} package pins from ${safeFilename}`
       }
     }
 
@@ -1202,9 +1212,12 @@ export async function restoreWingetSnapshot(
 
 export function deleteWingetSnapshot(filename: string): WingetSnapshotItem[] {
   try {
-    const fullPath = join(getSnapshotsDir(), filename)
-    if (existsSync(fullPath)) {
-      unlinkSync(fullPath)
+    const safeFilename = sanitizeSnapshotFilename(filename)
+    if (safeFilename) {
+      const fullPath = join(getSnapshotsDir(), safeFilename)
+      if (existsSync(fullPath)) {
+        unlinkSync(fullPath)
+      }
     }
   } catch {
     // ignore

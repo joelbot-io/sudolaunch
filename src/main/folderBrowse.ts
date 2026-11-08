@@ -46,44 +46,67 @@ export function resolveFolderRoot(folder: string): string | null {
   return resolveWithin(resolve(CONFIG_DIR), folder)
 }
 
+const FOLDER_CACHE_TTL_MS = 4000
+const cachedDirEntries = new Map<string, { at: number; children: Entry[] | null }>()
+
 export function browseFolder(root: string, query: string, extensions: string[]): SearchResultItem[] {
   const { dirPart, filterPart } = splitQuery(normalizeQuery(query))
   const absDir = resolveWithin(root, dirPart)
-  let dirStat
-  try {
-    dirStat = absDir ? statSync(absDir) : null
-  } catch {
-    dirStat = null
-  }
-  if (!absDir || !dirStat?.isDirectory()) {
+  if (!absDir) {
     return [{ label: 'Invalid path', value: '', disabled: true }]
   }
 
-  let names: string[] = []
-  try {
-    names = readdirSync(absDir)
-  } catch {
-    names = []
+  const cacheKey = `${absDir}::${dirPart}::${extensions.join(',')}`
+  const now = Date.now()
+  const cached = cachedDirEntries.get(cacheKey)
+  let children: Entry[] | null = null
+
+  if (cached && now - cached.at < FOLDER_CACHE_TTL_MS) {
+    children = cached.children
+  } else {
+    let dirStat
+    try {
+      dirStat = statSync(absDir)
+    } catch {
+      dirStat = null
+    }
+    if (!dirStat?.isDirectory()) {
+      cachedDirEntries.set(cacheKey, { at: now, children: null })
+      return [{ label: 'Invalid path', value: '', disabled: true }]
+    }
+
+    let names: string[] = []
+    try {
+      names = readdirSync(absDir)
+    } catch {
+      names = []
+    }
+
+    const built: Entry[] = []
+    for (const name of names) {
+      const fullPath = join(absDir, name)
+      let stat
+      try {
+        stat = statSync(fullPath)
+      } catch {
+        continue
+      }
+      if (stat.isDirectory()) {
+        built.push({ name, relPath: dirPart ? `${dirPart}/${name}` : name, isDirectory: true })
+      } else if (extensions.includes(extname(name).toLowerCase())) {
+        built.push({ name, relPath: dirPart ? `${dirPart}/${name}` : name, isDirectory: false })
+      }
+    }
+    built.sort((a, b) =>
+      a.isDirectory === b.isDirectory ? a.name.localeCompare(b.name) : a.isDirectory ? -1 : 1
+    )
+    children = built
+    cachedDirEntries.set(cacheKey, { at: now, children })
   }
 
-  const children: Entry[] = []
-  for (const name of names) {
-    const fullPath = join(absDir, name)
-    let stat
-    try {
-      stat = statSync(fullPath)
-    } catch {
-      continue
-    }
-    if (stat.isDirectory()) {
-      children.push({ name, relPath: dirPart ? `${dirPart}/${name}` : name, isDirectory: true })
-    } else if (extensions.includes(extname(name).toLowerCase())) {
-      children.push({ name, relPath: dirPart ? `${dirPart}/${name}` : name, isDirectory: false })
-    }
+  if (!children) {
+    return [{ label: 'Invalid path', value: '', disabled: true }]
   }
-  children.sort((a, b) =>
-    a.isDirectory === b.isDirectory ? a.name.localeCompare(b.name) : a.isDirectory ? -1 : 1
-  )
 
   const matches = filterPart
     ? new Fuse(children, { keys: ['name'], threshold: 0.35 }).search(filterPart).map((r) => r.item)

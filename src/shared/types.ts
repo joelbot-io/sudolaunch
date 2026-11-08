@@ -459,7 +459,18 @@ export interface WindowsUpdateStatus {
   pendingUpdates: WindowsPendingUpdateItem[]
   pendingScanned: boolean
   lastCheckedAt: string
+  scanNote?: string
 }
+
+export type WindowsUpdateActionType =
+  | 'open-settings'
+  | 'open-history'
+  | 'trigger-scan'
+  | 'download-updates'
+  | 'install-updates'
+  | 'install-in-terminal'
+  | 'schedule-reboot-60s'
+  | 'cancel-reboot'
 
 export interface SystemEnvVarItem {
   name: string
@@ -591,6 +602,56 @@ export interface KnownRepoItem {
   path: string
   branch?: string
   isCurrent?: boolean
+}
+
+export type GitWatcherMode = 'run-on-change' | 'restart-process'
+export type GitWatcherStatus = 'stopped' | 'watching' | 'running' | 'error'
+
+export interface GitProjectPreset {
+  id: string
+  label: string
+  command: string
+  mode: GitWatcherMode
+  extensions: string
+  icon: string
+  description: string
+}
+
+export interface GitWatcherConfigInput {
+  id?: string
+  name: string
+  repoPath: string
+  subPath?: string
+  command: string
+  mode: GitWatcherMode
+  extensions?: string
+  ignorePatterns?: string
+  debounceMs?: number
+  notifyOnError?: boolean
+  startImmediately?: boolean
+}
+
+export interface GitWatcherItem {
+  id: string
+  name: string
+  repoPath: string
+  repoName: string
+  subPath?: string
+  command: string
+  mode: GitWatcherMode
+  extensions: string
+  ignorePatterns: string
+  debounceMs: number
+  notifyOnError: boolean
+  enabled: boolean
+  status: GitWatcherStatus
+  pid?: number
+  reloadCount: number
+  lastTriggeredAt?: number
+  lastChangedFile?: string
+  lastExitCode?: number | null
+  lastDurationMs?: number
+  logLines: string[]
 }
 
 // The currently registered global accelerators, as Electron accelerator strings (e.g.

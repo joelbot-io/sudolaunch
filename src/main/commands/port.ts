@@ -146,14 +146,16 @@ export function search(query: string): SearchResultItem[] {
 export async function execute(item: SearchResultItem): Promise<void> {
   if (item.value.startsWith('__kill__::')) {
     const parts = item.value.split('::')
-    const pid = parts[1]
-    try {
-      execSync(`taskkill /F /PID ${pid}`, { windowsHide: true })
-    } catch {
-      // ignore
+    const pidNum = parseInt(parts[1], 10)
+    if (!isNaN(pidNum) && pidNum > 0) {
+      try {
+        execSync(`taskkill /F /PID ${pidNum}`, { windowsHide: true })
+      } catch {
+        // ignore
+      }
+      cachedPorts = null
+      clipboard.writeText(String(pidNum))
     }
-    cachedPorts = null
-    clipboard.writeText(pid)
     return
   }
 

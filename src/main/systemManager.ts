@@ -14,6 +14,7 @@ import type {
   SystemProcessItem,
   CleanupTargetItem,
   WindowsUpdateStatus,
+  WindowsUpdateActionType,
   WindowsPendingUpdateItem,
   WindowsHotfixItem,
   SystemEnvVarItem,
@@ -586,12 +587,12 @@ export async function runSystemServiceAction(params: {
     }
   }
 
-  // Run with UAC elevation and wait
+  // Run with UAC elevation and wait using UTF-16LE -EncodedCommand
   try {
-    const escaped = psCmd.replace(/'/g, "''")
+    const encoded = Buffer.from(psCmd, 'utf16le').toString('base64')
     const elevateWait = `
-      $p = Start-Process -FilePath 'powershell.exe' -ArgumentList '-NoProfile','-NonInteractive','-Command','${escaped}' -Verb RunAs -Wait -PassThru -WindowStyle Hidden
-      exit $p.ExitCode
+      $p = Start-Process -FilePath 'powershell.exe' -ArgumentList @('-NoProfile','-NonInteractive','-ExecutionPolicy','Bypass','-EncodedCommand','${encoded}') -Verb RunAs -Wait -PassThru -WindowStyle Hidden
+      if ($p -and $p.ExitCode -eq 0) { exit 0 } else { exit 1 }
     `
     await execFileAsync(
       'powershell.exe',
@@ -1014,6 +1015,29 @@ let cachedWindowsUpdateStatus: WindowsUpdateStatus | null = null
 let cachedPendingUpdates: WindowsPendingUpdateItem[] = []
 let hasScannedPendingOnce = false
 
+async function runElevatedWait(
+  psScript: string,
+  timeoutMs = 180000
+): Promise<{ success: boolean; message: string }> {
+  const encodedInner = Buffer.from(psScript, 'utf16le').toString('base64')
+  const launcher = `
+    $p = Start-Process -FilePath 'powershell.exe' -ArgumentList @('-NoProfile','-NonInteractive','-ExecutionPolicy','Bypass','-EncodedCommand','${encodedInner}') -Verb RunAs -Wait -PassThru -WindowStyle Hidden
+    if ($p -and $p.ExitCode -eq 0) { exit 0 } else { exit 1 }
+  `
+  try {
+    await execFileAsync('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', launcher], {
+      timeout: timeoutMs,
+      windowsHide: true
+    })
+    return { success: true, message: 'Completed elevated operation' }
+  } catch (err) {
+    return {
+      success: false,
+      message: err instanceof Error ? err.message : 'Elevated operation failed or canceled'
+    }
+  }
+}
+
 export async function getWindowsUpdateStatus(options?: {
   force?: boolean
   scanPending?: boolean
@@ -1073,28 +1097,81 @@ export async function getWindowsUpdateStatus(options?: {
       }
 
       $pending = @()
+      $scanNote = ''
       $didScan = $${scanPending ? 'true' : 'false'}
-      if ($didScan) {
-        try {
-          $session = New-Object -ComObject Microsoft.Update.Session
-          $searcher = $session.CreateUpdateSearcher()
-          $searcher.Online = $${online ? 'true' : 'false'}
-          $res = $searcher.Search("IsInstalled=0 and IsHidden=0")
-          foreach ($u in $res.Updates) {
-            $kbs = @($u.KBArticleIDs | ForEach-Object { "KB$_" })
-            $sizeMb = if ($u.MaxDownloadSize) { [math]::Round(($u.MaxDownloadSize / 1MB), 1) } else { 0 }
-            $pending += [PSCustomObject]@{
-              title = [string]$u.Title
-              kbs = ($kbs -join ', ')
-              isDownloaded = [bool]$u.IsDownloaded
-              rebootRequired = [bool]$u.RebootRequired
-              severity = if ($u.MsrcSeverity) { [string]$u.MsrcSeverity } else { 'Optional / Driver' }
-              sizeMb = [double]$sizeMb
+      try {
+        $session = New-Object -ComObject Microsoft.Update.Session
+        $searcher = $session.CreateUpdateSearcher()
+
+        if ($hotfixes.Count -lt 12) {
+          try {
+            $seenIds = @{}
+            foreach ($h in $hotfixes) { $seenIds[$h.hotFixId] = $true }
+            $histCount = $searcher.GetTotalHistoryCount()
+            if ($histCount -gt 0) {
+              $take = [math]::Min($histCount, 25)
+              $histEntries = $searcher.QueryHistory(0, $take)
+              foreach ($he in $histEntries) {
+                if ($hotfixes.Count -ge 12) { break }
+                if ($he.ResultCode -ne 2 -and $he.ResultCode -ne 3) { continue }
+                $titleStr = [string]$he.Title
+                if (-not $titleStr) { continue }
+                $kbMatch = [regex]::Match($titleStr, 'KB\d{5,8}')
+                $hfId = if ($kbMatch.Success) { $kbMatch.Value } else { 'WUA-Update' }
+                $dedupKey = "$hfId-$titleStr"
+                if ($seenIds[$hfId] -or $seenIds[$dedupKey]) { continue }
+                $seenIds[$dedupKey] = $true
+                $dateStr = if ($he.Date) { $he.Date.ToString('yyyy-MM-dd') } else { 'Installed' }
+                $hotfixes += [PSCustomObject]@{
+                  hotFixId = $hfId
+                  description = $titleStr
+                  installedOn = $dateStr
+                }
+              }
+            }
+          } catch {
+            # Ignore history supplement errors
+          }
+        }
+
+        if ($didScan) {
+          if ($wua -and $wua.Status -ne 'Running') {
+            Start-Service -Name wuauserv -ErrorAction SilentlyContinue
+            $wua = Get-Service -Name wuauserv -ErrorAction SilentlyContinue
+            $wuaStatus = if ($wua) { $wua.Status.ToString() } else { $wuaStatus }
+          }
+          $wantOnline = $${online ? 'true' : 'false'}
+          $res = $null
+          try {
+            $searcher.Online = $wantOnline
+            $res = $searcher.Search("IsInstalled=0 and IsHidden=0")
+          } catch {
+            $errMsg = $_.Exception.Message
+            if ($wantOnline) {
+              $scanNote = "Online scan fell back to local cache ($errMsg)"
+              $searcher.Online = $false
+              $res = $searcher.Search("IsInstalled=0 and IsHidden=0")
+            } else {
+              $scanNote = "Windows Update Agent scan note: $errMsg"
             }
           }
-        } catch {
-          # Ignore COM errors if Windows Update is busy
+          if ($res -and $res.Updates) {
+            foreach ($u in $res.Updates) {
+              $kbs = @($u.KBArticleIDs | ForEach-Object { "KB$_" })
+              $sizeMb = if ($u.MaxDownloadSize) { [math]::Round(($u.MaxDownloadSize / 1MB), 1) } else { 0 }
+              $pending += [PSCustomObject]@{
+                title = [string]$u.Title
+                kbs = ($kbs -join ', ')
+                isDownloaded = [bool]$u.IsDownloaded
+                rebootRequired = [bool]$u.RebootRequired
+                severity = if ($u.MsrcSeverity) { [string]$u.MsrcSeverity } else { 'Optional / Driver' }
+                sizeMb = [double]$sizeMb
+              }
+            }
+          }
         }
+      } catch {
+        $scanNote = $_.Exception.Message
       }
 
       [PSCustomObject]@{
@@ -1110,6 +1187,7 @@ export async function getWindowsUpdateStatus(options?: {
         recentHotfixes = $hotfixes
         pendingUpdates = $pending
         pendingScanned = $didScan
+        scanNote = $scanNote
       } | ConvertTo-Json -Depth 4 -Compress
     `
 
@@ -1164,12 +1242,13 @@ export async function getWindowsUpdateStatus(options?: {
       recentHotfixes,
       pendingUpdates: cachedPendingUpdates,
       pendingScanned: hasScannedPendingOnce,
-      lastCheckedAt: new Date().toLocaleTimeString()
+      lastCheckedAt: new Date().toLocaleTimeString(),
+      scanNote: parsed.scanNote ? String(parsed.scanNote) : undefined
     }
 
     cachedWindowsUpdateStatus = status
     return status
-  } catch {
+  } catch (err) {
     return (
       cachedWindowsUpdateStatus ?? {
         rebootPending: false,
@@ -1184,20 +1263,17 @@ export async function getWindowsUpdateStatus(options?: {
         recentHotfixes: [],
         pendingUpdates: cachedPendingUpdates,
         pendingScanned: hasScannedPendingOnce,
-        lastCheckedAt: new Date().toLocaleTimeString()
+        lastCheckedAt: new Date().toLocaleTimeString(),
+        scanNote: err instanceof Error ? err.message : undefined
       }
     )
   }
 }
 
 export async function runWindowsUpdateAction(
-  action:
-    | 'open-settings'
-    | 'open-history'
-    | 'trigger-scan'
-    | 'schedule-reboot-60s'
-    | 'cancel-reboot'
-): Promise<{ success: boolean; message: string }> {
+  action: WindowsUpdateActionType,
+  targetKbOrTitle?: string
+): Promise<{ success: boolean; message: string; status?: WindowsUpdateStatus }> {
   try {
     if (action === 'open-settings') {
       await shell.openExternal('ms-settings:windowsupdate')
@@ -1208,11 +1284,114 @@ export async function runWindowsUpdateAction(
       return { success: true, message: 'Opened Windows Update History' }
     }
     if (action === 'trigger-scan') {
-      execFile('UsoClient.exe', ['StartInteractiveScan'], { windowsHide: true }, () => { })
-      await shell.openExternal('ms-settings:windowsupdate')
+      execFile('UsoClient.exe', ['StartInteractiveScan'], { windowsHide: true }, () => {})
+      execFile('UsoClient.exe', ['StartScan'], { windowsHide: true }, () => {})
+      const status = await getWindowsUpdateStatus({ force: true, scanPending: true, online: false })
+      const count = status.pendingUpdates.length
       return {
         success: true,
-        message: 'Triggered Windows Update interactive scan and opened Settings'
+        message:
+          count > 0
+            ? `OS Update Scan complete: ${count} pending update(s) ready`
+            : 'Triggered Windows Update OS scan — system is up to date (0 pending updates)',
+        status
+      }
+    }
+    if (action === 'download-updates') {
+      execFile('UsoClient.exe', ['StartDownload'], { windowsHide: true }, () => {})
+      const filterStr = (targetKbOrTitle || '').replace(/'/g, "''").trim()
+      const dlScript = `
+        $ErrorActionPreference = 'Stop'
+        $session = New-Object -ComObject Microsoft.Update.Session
+        $searcher = $session.CreateUpdateSearcher()
+        $searcher.Online = $false
+        $res = $searcher.Search("IsInstalled=0 and IsHidden=0")
+        $toDownload = New-Object -ComObject Microsoft.Update.UpdateColl
+        foreach ($u in $res.Updates) {
+          if ('${filterStr}' -ne '') {
+            $kbs = ($u.KBArticleIDs | ForEach-Object { "KB$_" }) -join ' '
+            if ($u.Title -notlike "*${filterStr}*" -and $kbs -notlike "*${filterStr}*") { continue }
+          }
+          if (-not $u.IsDownloaded) {
+            if (-not $u.EulaAccepted) { $u.AcceptEula() }
+            [void]$toDownload.Add($u)
+          }
+        }
+        if ($toDownload.Count -gt 0) {
+          $downloader = $session.CreateUpdateDownloader()
+          $downloader.Updates = $toDownload
+          [void]$downloader.Download()
+        }
+      `
+      const elevRes = await runElevatedWait(dlScript, 180000)
+      const status = await getWindowsUpdateStatus({ force: true, scanPending: true, online: false })
+      return {
+        success: elevRes.success,
+        message: elevRes.success
+          ? 'Downloaded pending Windows Updates into local cache'
+          : `Triggered UsoClient StartDownload (${elevRes.message})`,
+        status
+      }
+    }
+    if (action === 'install-updates') {
+      execFile('UsoClient.exe', ['StartDownload'], { windowsHide: true }, () => {})
+      execFile('UsoClient.exe', ['StartInstall'], { windowsHide: true }, () => {})
+      const filterStr = (targetKbOrTitle || '').replace(/'/g, "''").trim()
+      const installScript = `
+        $ErrorActionPreference = 'Stop'
+        Start-Service -Name wuauserv -ErrorAction SilentlyContinue
+        $session = New-Object -ComObject Microsoft.Update.Session
+        $searcher = $session.CreateUpdateSearcher()
+        $searcher.Online = $false
+        $res = $searcher.Search("IsInstalled=0 and IsHidden=0")
+        $toDownload = New-Object -ComObject Microsoft.Update.UpdateColl
+        $toInstall = New-Object -ComObject Microsoft.Update.UpdateColl
+        foreach ($u in $res.Updates) {
+          if ('${filterStr}' -ne '') {
+            $kbs = ($u.KBArticleIDs | ForEach-Object { "KB$_" }) -join ' '
+            if ($u.Title -notlike "*${filterStr}*" -and $kbs -notlike "*${filterStr}*") { continue }
+          }
+          if (-not $u.EulaAccepted) { $u.AcceptEula() }
+          if (-not $u.IsDownloaded) {
+            [void]$toDownload.Add($u)
+          }
+          [void]$toInstall.Add($u)
+        }
+        if ($toDownload.Count -gt 0) {
+          $downloader = $session.CreateUpdateDownloader()
+          $downloader.Updates = $toDownload
+          [void]$downloader.Download()
+        }
+        if ($toInstall.Count -gt 0) {
+          $installer = $session.CreateUpdateInstaller()
+          $installer.Updates = $toInstall
+          $installRes = $installer.Install()
+          if ($installRes.ResultCode -eq 2 -or $installRes.ResultCode -eq 3) { exit 0 } else { exit 1 }
+        }
+        exit 0
+      `
+      const elevRes = await runElevatedWait(installScript, 300000)
+      const status = await getWindowsUpdateStatus({ force: true, scanPending: true, online: false })
+      return {
+        success: elevRes.success,
+        message: elevRes.success
+          ? targetKbOrTitle
+            ? `Installed update "${targetKbOrTitle}"${status.rebootPending ? ' (Reboot Required)' : ''}`
+            : `Downloaded & installed pending Windows Updates${status.rebootPending ? ' (Reboot Required)' : ''}`
+          : `Windows Update install job finished with note: ${elevRes.message}`,
+        status
+      }
+    }
+    if (action === 'install-in-terminal') {
+      const filterStr = (targetKbOrTitle || '').replace(/'/g, "''").trim()
+      const termCmd = `$s = New-Object -ComObject Microsoft.Update.Session; $u = $s.CreateUpdateSearcher().Search('IsInstalled=0 and IsHidden=0').Updates${filterStr ? ` | Where-Object { $_.Title -like '*${filterStr}*' }` : ''}; Write-Host "Found $($u.Count) pending update(s)..." -ForegroundColor Cyan; UsoClient.exe StartInteractiveScan; UsoClient.exe StartDownload; UsoClient.exe StartInstall; foreach ($item in $u) { Write-Host " -> $($item.Title)" -ForegroundColor Yellow }`
+      openTerminal()
+      setTimeout(() => {
+        runInTerminal(termCmd)
+      }, 90)
+      return {
+        success: true,
+        message: 'Started Windows Update scan/download/install stream in Terminal (>_)'
       }
     }
     if (action === 'schedule-reboot-60s') {
@@ -2270,15 +2449,8 @@ export function registerSystemManagerIpc(): void {
   )
   ipcMain.handle(
     'system-run-windows-update-action',
-    (
-      _event,
-      action:
-        | 'open-settings'
-        | 'open-history'
-        | 'trigger-scan'
-        | 'schedule-reboot-60s'
-        | 'cancel-reboot'
-    ) => runWindowsUpdateAction(action)
+    (_event, action: WindowsUpdateActionType, targetKbOrTitle?: string) =>
+      runWindowsUpdateAction(action, targetKbOrTitle)
   )
   ipcMain.handle('system-get-ecosystem-updates', (_event, force?: boolean) =>
     getEcosystemUpdates(Boolean(force))

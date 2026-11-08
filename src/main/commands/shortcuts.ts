@@ -1,10 +1,10 @@
 import type { SearchResultItem } from '../../shared/types'
 import { openShortcutsWindow } from '../shortcutsWindow'
-import { executeShortcutOverlayItem, getShortcutsOverlayData } from '../shortcutsManager'
+import { executeShortcutOverlayItem, getShortcutsOverlayDataSync } from '../shortcutsManager'
 
 export function search(query: string): SearchResultItem[] {
   const q = query.trim().toLowerCase()
-  const data = getShortcutsOverlayData()
+  const data = getShortcutsOverlayDataSync()
 
   const tabEntries: SearchResultItem[] = [
     {
@@ -63,7 +63,7 @@ export async function execute(
 
   if (item.value.startsWith('__exec_shortcut__::')) {
     const id = item.value.slice('__exec_shortcut__::'.length)
-    const data = getShortcutsOverlayData()
+    const data = getShortcutsOverlayDataSync()
     const target = data.items.find((i) => i.id === id)
     if (target) {
       await executeShortcutOverlayItem(target, elevated)

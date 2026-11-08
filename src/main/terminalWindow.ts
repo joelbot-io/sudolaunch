@@ -149,9 +149,13 @@ export function createTerminalWindow(icon: NativeImage): BrowserWindow {
     icon,
     webPreferences: {
       preload: join(__dirname, '../preload/index.js'),
+      contextIsolation: true,
+      nodeIntegration: false,
       sandbox: false
     }
   })
+  termWindow.webContents.setWindowOpenHandler(() => ({ action: 'deny' }))
+  termWindow.webContents.on('will-navigate', (e) => e.preventDefault())
   // Plain alwaysOnTop:true only reaches the "floating" level, which the taskbar/Start
   // menu still renders above — "screen-saver" is what actually clears that band (see
   // the same fix on the bar/popup windows in main/index.ts's createBaseWindow).

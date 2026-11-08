@@ -14,6 +14,9 @@ import type {
   FocusTimerState,
   GitRepoStatus,
   KnownRepoItem,
+  GitProjectPreset,
+  GitWatcherConfigInput,
+  GitWatcherItem,
   ProfileItem,
   BackupArchiveItem,
   WingetPackageItem,
@@ -34,6 +37,7 @@ import type {
   SystemProcessItem,
   CleanupTargetItem,
   WindowsUpdateStatus,
+  WindowsUpdateActionType,
   SystemEnvVarItem,
   SystemScheduledTaskItem,
   SystemHostEntryItem,
@@ -133,6 +137,20 @@ declare global {
       setActiveGitRepo: (repoPath: string) => Promise<GitRepoStatus>
       getKnownGitRepos: () => Promise<KnownRepoItem[]>
 
+      // Git Hot-Reload Watchers APIs
+      getGitWatchers?: () => Promise<GitWatcherItem[]>
+      getGitWatcherPresets?: (repoPath?: string) => Promise<GitProjectPreset[]>
+      saveGitWatcher?: (input: GitWatcherConfigInput) => Promise<GitWatcherItem[]>
+      deleteGitWatcher?: (id: string) => Promise<GitWatcherItem[]>
+      startGitWatcher?: (id: string) => Promise<GitWatcherItem[]>
+      stopGitWatcher?: (id: string) => Promise<GitWatcherItem[]>
+      stopAllGitWatchers?: () => Promise<GitWatcherItem[]>
+      triggerGitWatcherReload?: (id: string) => Promise<GitWatcherItem[]>
+      clearGitWatcherLogs?: (id: string) => Promise<GitWatcherItem[]>
+      openGitWatcherInTerminal?: (id: string) => Promise<void>
+      selectWatcherProjectFolder?: () => Promise<string | null>
+      onGitWatchersUpdated?: (callback: (watchers: GitWatcherItem[]) => void) => () => void
+
       // Profile APIs
       executeProfileCommand: (action: string) => Promise<void>
       listProfiles: () => Promise<ProfileItem[]>
@@ -209,13 +227,9 @@ declare global {
         online?: boolean
       }) => Promise<WindowsUpdateStatus>
       runWindowsUpdateAction?: (
-        action:
-          | 'open-settings'
-          | 'open-history'
-          | 'trigger-scan'
-          | 'schedule-reboot-60s'
-          | 'cancel-reboot'
-      ) => Promise<{ success: boolean; message: string }>
+        action: WindowsUpdateActionType,
+        targetKbOrTitle?: string
+      ) => Promise<{ success: boolean; message: string; status?: WindowsUpdateStatus }>
       getSystemEnvVars?: () => Promise<SystemEnvVarItem[]>
       setSystemEnvVar?: (params: {
         name: string
@@ -246,11 +260,11 @@ declare global {
       getSystemNetworkAdapters?: () => Promise<SystemNetworkAdapterItem[]>
       runSystemNetworkAction?: (params: {
         action:
-          | 'flush-dns'
-          | 'reset-winsock'
-          | 'set-dns'
-          | 'allow-port-firewall'
-          | 'open-hosts-folder'
+        | 'flush-dns'
+        | 'reset-winsock'
+        | 'set-dns'
+        | 'allow-port-firewall'
+        | 'open-hosts-folder'
         adapterName?: string
         dnsPreset?: 'cloudflare' | 'google' | 'quad9' | 'dhcp'
         port?: number
@@ -258,24 +272,24 @@ declare global {
       getSystemStorageAndPower?: () => Promise<SystemStorageAndPowerOverview>
       runSystemPowerOrRepairAction?: (params: {
         action:
-          | 'set-power-plan'
-          | 'wsl-shutdown'
-          | 'sfc-scannow'
-          | 'dism-check'
-          | 'dism-restore'
-          | 'dism-cleanup'
-          | 'wsreset'
-          | 'battery-report'
+        | 'set-power-plan'
+        | 'wsl-shutdown'
+        | 'sfc-scannow'
+        | 'dism-check'
+        | 'dism-restore'
+        | 'dism-cleanup'
+        | 'wsreset'
+        | 'battery-report'
         planGuid?: string
       }) => Promise<{ success: boolean; message: string }>
       getSystemSecurityPosture?: (force?: boolean) => Promise<SystemSecurityPosture>
       runSystemSecurityAction?: (params: {
         action:
-          | 'update-signatures'
-          | 'quick-scan'
-          | 'open-defender'
-          | 'add-exclusion-path'
-          | 'remove-exclusion-path'
+        | 'update-signatures'
+        | 'quick-scan'
+        | 'open-defender'
+        | 'add-exclusion-path'
+        | 'remove-exclusion-path'
         targetPath?: string
       }) => Promise<{ success: boolean; message: string; posture?: SystemSecurityPosture }>
       getSystemEventLogs?: () => Promise<SystemEventLogItem[]>
@@ -315,4 +329,4 @@ declare global {
   }
 }
 
-export {}
+export { }

@@ -195,6 +195,8 @@ export default function CommandPalette(): JSX.Element {
   const [focusState, setFocusState] = useState<FocusTimerState | null>(null)
   const [gitStatus, setGitStatus] = useState<GitRepoStatus | null>(null)
   const [gitBranches, setGitBranches] = useState<string[]>([])
+  const [gitSubTab, setGitSubTab] = useState<'branches' | 'watchers'>('branches')
+  const [gitWatchersCount, setGitWatchersCount] = useState(0)
   const [activeModuleView, setActiveModuleView] = useState<'focus' | 'git' | 'profile' | 'system' | null>(null)
   const [systemSubTab, setSystemSubTab] = useState<WingetSubTab>('updates')
   const [wingetUpdatesCount, setWingetUpdatesCount] = useState(0)
@@ -332,11 +334,11 @@ export default function CommandPalette(): JSX.Element {
   const folderMatch = value.match(/^\/([^/\s]+)\/(.*)$/)
   const activeFolder = folderMatch
     ? layout.folders.find(
-        (f) =>
-          f.name.toLowerCase() === folderMatch[1].toLowerCase() ||
-          f.id.toLowerCase() === folderMatch[1].toLowerCase() ||
-          f.id.toLowerCase() === `folder:${folderMatch[1].toLowerCase()}`
-      )
+      (f) =>
+        f.name.toLowerCase() === folderMatch[1].toLowerCase() ||
+        f.id.toLowerCase() === folderMatch[1].toLowerCase() ||
+        f.id.toLowerCase() === `folder:${folderMatch[1].toLowerCase()}`
+    )
     : null
   const folderSubQuery = folderMatch ? folderMatch[2].trim().toLowerCase() : ''
 
@@ -430,6 +432,11 @@ export default function CommandPalette(): JSX.Element {
   const refreshGit = useCallback(() => {
     window.api.getGitRepoStatus?.().then(setGitStatus)
     window.api.getGitBranches?.().then(setGitBranches)
+    window.api.getGitWatchers?.().then((list) => {
+      if (Array.isArray(list)) {
+        setGitWatchersCount(list.filter((w) => w.enabled).length)
+      }
+    })
   }, [])
 
   // The palette hotkey is editable from Settings, so this re-runs on config-changed too.
@@ -675,6 +682,11 @@ export default function CommandPalette(): JSX.Element {
       }),
       window.api.onShortcutsActive?.((active) => {
         setShortcutsActive(active)
+      }),
+      window.api.onGitWatchersUpdated?.((list) => {
+        if (Array.isArray(list)) {
+          setGitWatchersCount(list.filter((w) => w.enabled).length)
+        }
       })
     ]
     return () => {
@@ -700,18 +712,49 @@ export default function CommandPalette(): JSX.Element {
         setIsSearching(false)
         return
       }
-      window.api.runCalc(expr).then((res: string | null) => {
-        if (requestId === requestIdRef.current) setCalcResult(res)
+      const timer = setTimeout(() => {
+        window.api.runCalc(expr).then((res: string | null) => {
+          if (requestId === requestIdRef.current) setCalcResult(res)
+        })
+      }, 25)
+      return () => clearTimeout(timer)
+    }
+
+    const heavyCommands = new Set([
+      'cert',
+      'dns',
+      'proc',
+      'svc',
+      'pkg',
+      'wsl',
+      'expmod',
+      'port',
+      'docker'
+    ])
+    const trimmedQuery = query.trim()
+    const debounceMs =
+      trimmedQuery === '' ? 0 : heavyCommands.has(command) ? 200 : 35
+
+    setIsSearching(true)
+    if (debounceMs === 0) {
+      window.api.search(command, query).then((res: SearchResultItem[]) => {
+        if (requestId === requestIdRef.current) {
+          setResults(res)
+          setIsSearching(false)
+        }
       })
       return
     }
-    setIsSearching(true)
-    window.api.search(command, query).then((res: SearchResultItem[]) => {
-      if (requestId === requestIdRef.current) {
-        setResults(res)
-        setIsSearching(false)
-      }
-    })
+
+    const timer = setTimeout(() => {
+      window.api.search(command, query).then((res: SearchResultItem[]) => {
+        if (requestId === requestIdRef.current) {
+          setResults(res)
+          setIsSearching(false)
+        }
+      })
+    }, debounceMs)
+    return () => clearTimeout(timer)
   }, [command, query])
 
   useEffect(() => {
@@ -944,7 +987,7 @@ export default function CommandPalette(): JSX.Element {
 
   const runCommand = useCallback((cmd: CommandName, item: SearchResultItem, elevated = false): void => {
     if (item.value && !item.value.startsWith('__')) {
-      navigator.clipboard?.writeText(item.value).catch(() => {})
+      navigator.clipboard?.writeText(item.value).catch(() => { })
     }
     window.api.executeCommand(cmd, item, query, elevated).then(handleExecuteResult)
   }, [query])
@@ -1302,6 +1345,29 @@ export default function CommandPalette(): JSX.Element {
             return
           }
           if (command === 'repo') {
+            if (r.value === '__openGitWatchers') {
+              setGitSubTab('watchers')
+              setActiveModuleView('git')
+              return
+            }
+            if (r.value === '__openGitPanel') {
+              setGitSubTab('branches')
+              setActiveModuleView('git')
+              return
+            }
+            if (r.value.startsWith('__toggleWatcher::')) {
+              runCommand(command, r, elevated)
+              return
+            }
+            if (r.value) {
+              window.api.setActiveGitRepo?.(r.value).then(() => {
+                refreshGit()
+                setGitSubTab('branches')
+                setActiveModuleView('git')
+              })
+              return
+            }
+            setGitSubTab('branches')
             setActiveModuleView('git')
             return
           }
@@ -1853,791 +1919,814 @@ export default function CommandPalette(): JSX.Element {
                     <path d="M18 9a9 9 0 0 1-9 9" />
                   </svg>
                 </span>
-                {gitStatus?.isRepo && gitStatus.branch && (
-                  <span className={`shelf-badge-indicator shelf-git-badge ${gitStatus.dirty ? 'is-dirty' : ''}`}>
-                    {gitStatus.branch.length > 7 ? gitStatus.branch.slice(0, 6) + '…' : gitStatus.branch}
-                    {gitStatus.dirty ? ' •' : ''}
-                  </span>
-                )}
-              </button>
-            )
+                    {(gitStatus?.isRepo && gitStatus.branch) || gitWatchersCount > 0 ? (
+                      <span className={`shelf-badge-indicator shelf-git-badge ${gitStatus?.dirty ? 'is-dirty' : ''}`}>
+                        {gitStatus?.isRepo && gitStatus.branch
+                          ? gitStatus.branch.length > 7
+                            ? gitStatus.branch.slice(0, 6) + '…'
+                            : gitStatus.branch
+                          : ''}
+                        {gitStatus?.dirty ? ' •' : ''}
+                        {gitWatchersCount > 0 ? ` 🔥${gitWatchersCount}` : ''}
+                      </span>
+                ) : null}
+                  </button>
+                )
           case 'profile':
-            return (
-              <button
-                key="profile"
-                type="button"
-                className={`shelf-icon shelf-icon-profile ${shelfPaletteActive && activeShelfModule === 'profile' ? 'is-active' : ''}`}
-                onClick={() => {
-                  window.api.barActivate('profile')
-                }}
-              >
-                <span className="shelf-icon-glyph">
-                  <svg
-                    width="18"
-                    height="18"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="2"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                  >
-                    <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
-                    <circle cx="12" cy="7" r="4" />
-                  </svg>
-                </span>
-              </button>
-            )
-          case 'system':
-            return (
-              <button
-                key="system"
-                type="button"
-                className={`shelf-icon shelf-icon-system ${shelfPaletteActive && activeShelfModule === 'system' ? 'is-active' : ''}`}
-                onClick={() => {
-                  window.api.barActivate('system')
-                }}
-              >
-                <span className="shelf-icon-glyph">
-                  <svg
-                    width="18"
-                    height="18"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="2"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                  >
-                    <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z" />
-                    <polyline points="3.27 6.96 12 12.01 20.73 6.96" />
-                    <line x1="12" y1="22.08" x2="12" y2="12" />
-                  </svg>
-                </span>
-                {wingetUpdatesCount > 0 && (
-                  <span className="shelf-badge-indicator" style={{ background: '#3b82f6' }}>
-                    {wingetUpdatesCount > 99 ? '99+' : wingetUpdatesCount}
+                return (
+                <button
+                  key="profile"
+                  type="button"
+                  className={`shelf-icon shelf-icon-profile ${shelfPaletteActive && activeShelfModule === 'profile' ? 'is-active' : ''}`}
+                  onClick={() => {
+                    window.api.barActivate('profile')
+                  }}
+                >
+                  <span className="shelf-icon-glyph">
+                    <svg
+                      width="18"
+                      height="18"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    >
+                      <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
+                      <circle cx="12" cy="7" r="4" />
+                    </svg>
                   </span>
-                )}
-              </button>
-            )
-          case 'shortcuts':
-            return (
-              <button
-                key="shortcuts"
-                type="button"
-                className={`shelf-icon shelf-icon-shortcuts ${shortcutsActive ? 'is-active' : ''}`}
-                title="Shortcuts Overlay [⌨️] (/shortcuts)"
-                onClick={() => {
-                  window.api.shortcutsToggle?.()
-                }}
-              >
-                <span className="shelf-icon-glyph">
-                  <svg
-                    width="18"
-                    height="18"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="2"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                  >
-                    <rect x="2" y="4" width="20" height="16" rx="2" ry="2" />
-                    <path d="M6 8h.001" />
-                    <path d="M10 8h.001" />
-                    <path d="M14 8h.001" />
-                    <path d="M18 8h.001" />
-                    <path d="M8 12h.001" />
-                    <path d="M12 12h.001" />
-                    <path d="M16 12h.001" />
-                    <path d="M7 16h10" />
-                  </svg>
-                </span>
-              </button>
-            )
-          default:
-            return null
+                </button>
+                )
+                case 'system':
+                return (
+                <button
+                  key="system"
+                  type="button"
+                  className={`shelf-icon shelf-icon-system ${shelfPaletteActive && activeShelfModule === 'system' ? 'is-active' : ''}`}
+                  onClick={() => {
+                    window.api.barActivate('system')
+                  }}
+                >
+                  <span className="shelf-icon-glyph">
+                    <svg
+                      width="18"
+                      height="18"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    >
+                      <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z" />
+                      <polyline points="3.27 6.96 12 12.01 20.73 6.96" />
+                      <line x1="12" y1="22.08" x2="12" y2="12" />
+                    </svg>
+                  </span>
+                  {wingetUpdatesCount > 0 && (
+                    <span className="shelf-badge-indicator" style={{ background: '#3b82f6' }}>
+                      {wingetUpdatesCount > 99 ? '99+' : wingetUpdatesCount}
+                    </span>
+                  )}
+                </button>
+                )
+                case 'shortcuts':
+                return (
+                <button
+                  key="shortcuts"
+                  type="button"
+                  className={`shelf-icon shelf-icon-shortcuts ${shortcutsActive ? 'is-active' : ''}`}
+                  title="Shortcuts Overlay [⌨️] (/shortcuts)"
+                  onClick={() => {
+                    window.api.shortcutsToggle?.()
+                  }}
+                >
+                  <span className="shelf-icon-glyph">
+                    <svg
+                      width="18"
+                      height="18"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    >
+                      <rect x="2" y="4" width="20" height="16" rx="2" ry="2" />
+                      <path d="M6 8h.001" />
+                      <path d="M10 8h.001" />
+                      <path d="M14 8h.001" />
+                      <path d="M18 8h.001" />
+                      <path d="M8 12h.001" />
+                      <path d="M12 12h.001" />
+                      <path d="M16 12h.001" />
+                      <path d="M7 16h10" />
+                    </svg>
+                  </span>
+                </button>
+                )
+                default:
+                return null
         }
       }
 
-      if (shelfCollapsed) {
+                if (shelfCollapsed) {
         const focusRemaining = focusState?.remainingSeconds ?? 0
-        const focusMinutes = Math.floor(focusRemaining / 60)
-        const focusSeconds = focusRemaining % 60
-        const formattedFocusClock = `${focusMinutes}:${focusSeconds.toString().padStart(2, '0')}`
-        const isTimerActive = Boolean(focusState && (focusState.running || focusState.paused))
+                const focusMinutes = Math.floor(focusRemaining / 60)
+                const focusSeconds = focusRemaining % 60
+                const formattedFocusClock = `${focusMinutes}:${focusSeconds.toString().padStart(2, '0')}`
+                const isTimerActive = Boolean(focusState && (focusState.running || focusState.paused))
 
-        return (
-          <div
-            className={`dock-shelf-container ${summonPulse ? 'summon-pulse' : ''} ${dockFading ? 'dock-fading' : ''}`}
-            style={
-              {
-                ...(summonColor ? { '--summon-color': summonColor } : {}),
-                ...(summonGlow ? { '--summon-glow-color': summonGlow } : {}),
-                ...(dockGlowColor ? { '--dock-glow-color': dockGlowColor } : {})
-              } as React.CSSProperties
-            }
-          >
-            <div className="dock-shelf-collapsed-wrap">
-              {isTimerActive && (
-                <button
-                  type="button"
-                  className={`shelf-focus-countdown-clock is-collapsed-pill ${focusState?.paused ? 'is-paused' : ''}`}
-                  title={`Focus timer: ${formattedFocusClock} (${focusState?.paused ? 'Paused' : 'Running'}) — Click to expand`}
-                  onClick={() => setShelfCollapsed(false)}
-                >
-                  <span className="countdown-pulse-dot" />
-                  <span className="countdown-time-digits">{formattedFocusClock}</span>
-                </button>
-              )}
-              <button
-                type="button"
-                className={`dock-shelf-glow-bar glow-${dockGlowStyle}`}
-                title="Click to expand · Double-click to search · Right-click for menu"
-                onClick={() => setShelfCollapsed(false)}
-                onDoubleClick={(e) => {
-                  e.stopPropagation()
-                  setShelfCollapsed(false)
-                  if (windowMode === 'bar') {
-                    window.api.barActivate()
-                  } else {
-                    window.api.hidePalette()
+                return (
+                <div
+                  className={`dock-shelf-container ${summonPulse ? 'summon-pulse' : ''} ${dockFading ? 'dock-fading' : ''}`}
+                  style={
+                    {
+                      ...(summonColor ? { '--summon-color': summonColor } : {}),
+                      ...(summonGlow ? { '--summon-glow-color': summonGlow } : {}),
+                      ...(dockGlowColor ? { '--dock-glow-color': dockGlowColor } : {})
+                    } as React.CSSProperties
                   }
-                }}
-                onContextMenu={(e) => {
-                  e.preventDefault()
-                  e.stopPropagation()
-                  window.api.showDockContextMenu?.()
-                }}
-              />
-            </div>
-          </div>
-        )
+                >
+                  <div className="dock-shelf-collapsed-wrap">
+                    {isTimerActive && (
+                      <button
+                        type="button"
+                        className={`shelf-focus-countdown-clock is-collapsed-pill ${focusState?.paused ? 'is-paused' : ''}`}
+                        title={`Focus timer: ${formattedFocusClock} (${focusState?.paused ? 'Paused' : 'Running'}) — Click to expand`}
+                        onClick={() => setShelfCollapsed(false)}
+                      >
+                        <span className="countdown-pulse-dot" />
+                        <span className="countdown-time-digits">{formattedFocusClock}</span>
+                      </button>
+                    )}
+                    <button
+                      type="button"
+                      className={`dock-shelf-glow-bar glow-${dockGlowStyle}`}
+                      title="Click to expand · Double-click to search · Right-click for menu"
+                      onClick={() => setShelfCollapsed(false)}
+                      onDoubleClick={(e) => {
+                        e.stopPropagation()
+                        setShelfCollapsed(false)
+                        if (windowMode === 'bar') {
+                          window.api.barActivate()
+                        } else {
+                          window.api.hidePalette()
+                        }
+                      }}
+                      onContextMenu={(e) => {
+                        e.preventDefault()
+                        e.stopPropagation()
+                        window.api.showDockContextMenu?.()
+                      }}
+                    />
+                  </div>
+                </div>
+                )
       }
 
-      return (
-        <div
-          className={`dock-shelf-container ${summonPulse ? 'summon-pulse' : ''} ${dockFading ? 'dock-fading' : ''}`}
-          style={
-            {
-              ...(dockGlowColor ? { '--dock-glow-color': dockGlowColor } : {}),
-              ...(summonColor ? { '--summon-color': summonColor } : {}),
-              ...(summonGlow ? { '--summon-glow-color': summonGlow } : {})
-            } as React.CSSProperties
-          }
-        >
-          <div
-            className="dock-shelf"
-            onClickCapture={() => setShelfInteractionTick((t) => t + 1)}
-            onContextMenu={(e) => {
-              if (e.target === e.currentTarget || (e.target as HTMLElement).classList.contains('dock-shelf')) {
-                e.preventDefault()
-                window.api.showDockContextMenu?.()
-              }
-            }}
-          >
-            {shelfIcons.map((id) => renderShelfIcon(id))}
-          </div>
-        </div>
-      )
+                return (
+                <div
+                  className={`dock-shelf-container ${summonPulse ? 'summon-pulse' : ''} ${dockFading ? 'dock-fading' : ''}`}
+                  style={
+                    {
+                      ...(dockGlowColor ? { '--dock-glow-color': dockGlowColor } : {}),
+                      ...(summonColor ? { '--summon-color': summonColor } : {}),
+                      ...(summonGlow ? { '--summon-glow-color': summonGlow } : {})
+                    } as React.CSSProperties
+                  }
+                >
+                  <div
+                    className="dock-shelf"
+                    onClickCapture={() => setShelfInteractionTick((t) => t + 1)}
+                    onContextMenu={(e) => {
+                      if (e.target === e.currentTarget || (e.target as HTMLElement).classList.contains('dock-shelf')) {
+                        e.preventDefault()
+                        window.api.showDockContextMenu?.()
+                      }
+                    }}
+                  >
+                    {shelfIcons.map((id) => renderShelfIcon(id))}
+                  </div>
+                </div>
+                )
     }
 
-    if (dockLayout === 'circle') {
+                if (dockLayout === 'circle') {
       const orbitModuleList: ShelfModuleId[] = [
-        'bar',
+                'bar',
         ...shelfIcons.filter((id) => id !== 'bar')
-      ]
-      const count = orbitModuleList.length
-      const orbitRadius = 48
-      const centerCoord = 75
+                ]
+                const count = orbitModuleList.length
+                const orbitRadius = 48
+                const centerCoord = 75
 
-      const focusRemaining = focusState?.remainingSeconds ?? 0
-      const focusMinutes = Math.floor(focusRemaining / 60)
-      const focusSeconds = focusRemaining % 60
-      const formattedFocusClock = `${focusMinutes}:${focusSeconds.toString().padStart(2, '0')}`
-      const isTimerActive = Boolean(focusState && (focusState.running || focusState.paused))
-      const isOrbiting = isDockAtHome && isOrbitIdle && !shelfPaletteActive && !barActive
+                const focusRemaining = focusState?.remainingSeconds ?? 0
+                const focusMinutes = Math.floor(focusRemaining / 60)
+                const focusSeconds = focusRemaining % 60
+                const formattedFocusClock = `${focusMinutes}:${focusSeconds.toString().padStart(2, '0')}`
+                const isTimerActive = Boolean(focusState && (focusState.running || focusState.paused))
+                const isOrbiting = isDockAtHome && isOrbitIdle && !shelfPaletteActive && !barActive
 
       const renderOrbitSatellite = (moduleId: ShelfModuleId, idx: number): JSX.Element | null => {
         const angle = -Math.PI / 2 + (idx * 2 * Math.PI) / count
-        const sx = Math.round(centerCoord + orbitRadius * Math.cos(angle))
-        const sy = Math.round(centerCoord + orbitRadius * Math.sin(angle))
-        const isBar = moduleId === 'bar'
-        const btnSize = isBar ? 36 : 32
+                const sx = Math.round(centerCoord + orbitRadius * Math.cos(angle))
+                const sy = Math.round(centerCoord + orbitRadius * Math.sin(angle))
+                const isBar = moduleId === 'bar'
+                const btnSize = isBar ? 36 : 32
 
-        let iconContent: JSX.Element
-        let title: string
-        let isModuleActive = false
-        let hasUnread = false
-        let badgeContent: React.ReactNode = null
+                let iconContent: JSX.Element
+                let title: string
+                let isModuleActive = false
+                let hasUnread = false
+                let badgeContent: React.ReactNode = null
         let onClick: () => void
 
-        switch (moduleId) {
+                switch (moduleId) {
           case 'bar':
-            title = paletteHotkey ? `Command Palette [/] (${paletteHotkey})` : 'Command Palette [/]'
-            isModuleActive = shelfPaletteActive && activeShelfModule === 'bar'
-            iconContent = <span style={{ fontSize: 16, fontWeight: 800, color: !isModuleActive ? (dockGlowColor || undefined) : undefined }}>/</span>
+                title = paletteHotkey ? `Command Palette [/] (${paletteHotkey})` : 'Command Palette [/]'
+                isModuleActive = shelfPaletteActive && activeShelfModule === 'bar'
+                iconContent = <span style={{ fontSize: 16, fontWeight: 800, color: !isModuleActive ? (dockGlowColor || undefined) : undefined }}>/</span>
             onClick = () => window.api.barActivate('bar')
-            break
-          case 'term':
+                break
+                case 'term':
             title = 'PowerShell Terminal [>_]'
-            hasUnread = termUnread
-            if (termUnread) {
-              badgeContent = <span className="circle-orbit-badge" style={{ background: '#38bdf8' }}>•</span>
-            }
-            iconContent = <span style={{ fontSize: 12, fontWeight: 800, fontFamily: 'monospace' }}>&gt;_</span>
+                hasUnread = termUnread
+                if (termUnread) {
+                  badgeContent = <span className="circle-orbit-badge" style={{ background: '#38bdf8' }}>•</span>
+                }
+                iconContent = <span style={{ fontSize: 12, fontWeight: 800, fontFamily: 'monospace' }}>&gt;_</span>
             onClick = () => window.api.termToggle()
-            break
-          case 'notify':
+                break
+                case 'notify':
             title = notifyCount > 0 ? `Notification Center [🔔] (${notifyCount} unread)` : 'Notification Center [🔔]'
             if (notifyCount > 0) {
-              badgeContent = (
-                <span className="circle-orbit-badge">
-                  {notifyCount > 9 ? '9+' : notifyCount}
-                </span>
-              )
-            }
-            iconContent = (
-              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" />
-                <path d="M13.73 21a2 2 0 0 1-3.46 0" />
-              </svg>
-            )
+                  badgeContent = (
+                    <span className="circle-orbit-badge">
+                      {notifyCount > 9 ? '9+' : notifyCount}
+                    </span>
+                  )
+                }
+                iconContent = (
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" />
+                  <path d="M13.73 21a2 2 0 0 1-3.46 0" />
+                </svg>
+                )
             onClick = () => window.api.notifyToggle()
-            break
-          case 'git':
-            title = gitStatus?.isRepo && gitStatus.branch ? `Git [🔀] (${gitStatus.branch}${gitStatus.dirty ? ' *' : ''})` : 'Git Repository [🔀]'
-            isModuleActive = shelfPaletteActive && activeShelfModule === 'git'
-            if (gitStatus?.dirty) {
-              badgeContent = <span className="circle-orbit-badge" style={{ background: '#f59e0b' }}>•</span>
-            }
-            iconContent = (
-              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <line x1="6" y1="3" x2="6" y2="15" />
-                <circle cx="18" cy="6" r="3" />
-                <circle cx="6" cy="18" r="3" />
-                <path d="M18 9a9 9 0 0 1-9 9" />
-              </svg>
-            )
+                break
+                case 'git':
+                title =
+                gitStatus?.isRepo && gitStatus.branch
+                ? `Git [🔀] (${gitStatus.branch}${gitStatus.dirty ? ' *' : ''}${gitWatchersCount > 0 ? ` · 🔥 ${gitWatchersCount} watcher(s)` : ''})`
+                : 'Git Repository & Watchers [🔀]'
+                isModuleActive = shelfPaletteActive && activeShelfModule === 'git'
+            if (gitWatchersCount > 0) {
+                  badgeContent = (
+                    <span className="circle-orbit-badge" style={{ background: '#10b981' }}>
+                      {gitWatchersCount}
+                    </span>
+                  )
+                } else if (gitStatus?.dirty) {
+                  badgeContent = <span className="circle-orbit-badge" style={{ background: '#f59e0b' }}>•</span>
+                }
+                iconContent = (
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <line x1="6" y1="3" x2="6" y2="15" />
+                  <circle cx="18" cy="6" r="3" />
+                  <circle cx="6" cy="18" r="3" />
+                  <path d="M18 9a9 9 0 0 1-9 9" />
+                </svg>
+                )
             onClick = () => window.api.barActivate('git')
-            break
-          case 'focus': {
-            title = isTimerActive
-              ? `Focus Timer [⏱️] (${Math.floor((focusState?.remainingSeconds ?? 0) / 60)}m left)`
-              : 'Focus & Pomodoro Timer [⏱️]'
+                break
+                case 'focus': {
+                  title = isTimerActive
+                    ? `Focus Timer [⏱️] (${Math.floor((focusState?.remainingSeconds ?? 0) / 60)}m left)`
+                    : 'Focus & Pomodoro Timer [⏱️]'
             isModuleActive = shelfPaletteActive && activeShelfModule === 'focus'
-            if (focusState?.running) {
-              badgeContent = <span className="circle-orbit-badge" style={{ background: '#10b981' }}>⏱</span>
-            }
-            iconContent = (
-              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <circle cx="12" cy="14" r="8" />
-                <line x1="12" y1="2" x2="12" y2="6" />
-                <line x1="12" y1="14" x2="15" y2="11" />
-              </svg>
-            )
+                if (focusState?.running) {
+                  badgeContent = <span className="circle-orbit-badge" style={{ background: '#10b981' }}>⏱</span>
+                }
+                iconContent = (
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <circle cx="12" cy="14" r="8" />
+                  <line x1="12" y1="2" x2="12" y2="6" />
+                  <line x1="12" y1="14" x2="15" y2="11" />
+                </svg>
+                )
             onClick = () => window.api.barActivate('focus')
-            break
+                break
           }
-          case 'settings':
-            title = 'Settings [⚙️] (/config)'
-            isModuleActive = shelfPaletteActive && activeShelfModule === 'settings'
-            iconContent = (
-              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <circle cx="12" cy="12" r="3" />
-                <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z" />
-              </svg>
-            )
+                case 'settings':
+                title = 'Settings [⚙️] (/config)'
+                isModuleActive = shelfPaletteActive && activeShelfModule === 'settings'
+                iconContent = (
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <circle cx="12" cy="12" r="3" />
+                  <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z" />
+                </svg>
+                )
             onClick = () => window.api.barActivate('settings')
-            break
-          case 'profile':
-            title = 'Profiles [👤] (/profile)'
-            isModuleActive = shelfPaletteActive && activeShelfModule === 'profile'
-            iconContent = (
-              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
-                <circle cx="12" cy="7" r="4" />
-              </svg>
-            )
+                break
+                case 'profile':
+                title = 'Profiles [👤] (/profile)'
+                isModuleActive = shelfPaletteActive && activeShelfModule === 'profile'
+                iconContent = (
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
+                  <circle cx="12" cy="7" r="4" />
+                </svg>
+                )
             onClick = () => window.api.barActivate('profile')
-            break
-          case 'system':
-            title =
+                break
+                case 'system':
+                title =
               wingetUpdatesCount > 0
                 ? `System Management [🧰] (${wingetUpdatesCount} package updates)`
                 : 'System Management [🧰] (/system)'
-            isModuleActive = shelfPaletteActive && activeShelfModule === 'system'
+                isModuleActive = shelfPaletteActive && activeShelfModule === 'system'
             if (wingetUpdatesCount > 0) {
-              badgeContent = (
-                <span className="circle-orbit-badge" style={{ background: '#3b82f6' }}>
-                  {wingetUpdatesCount > 9 ? '9+' : wingetUpdatesCount}
-                </span>
-              )
-            }
-            iconContent = (
-              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z" />
-                <polyline points="3.27 6.96 12 12.01 20.73 6.96" />
-                <line x1="12" y1="22.08" x2="12" y2="12" />
-              </svg>
-            )
+                  badgeContent = (
+                    <span className="circle-orbit-badge" style={{ background: '#3b82f6' }}>
+                      {wingetUpdatesCount > 9 ? '9+' : wingetUpdatesCount}
+                    </span>
+                  )
+                }
+                iconContent = (
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z" />
+                  <polyline points="3.27 6.96 12 12.01 20.73 6.96" />
+                  <line x1="12" y1="22.08" x2="12" y2="12" />
+                </svg>
+                )
             onClick = () => window.api.barActivate('system')
-            break
-          case 'shortcuts':
-            title = 'Shortcuts Overlay [⌨️] (/shortcuts)'
-            isModuleActive = shortcutsActive
-            iconContent = (
-              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <rect x="2" y="4" width="20" height="16" rx="2" ry="2" />
-                <path d="M6 8h.001" />
-                <path d="M10 8h.001" />
-                <path d="M14 8h.001" />
-                <path d="M18 8h.001" />
-                <path d="M8 12h.001" />
-                <path d="M12 12h.001" />
-                <path d="M16 12h.001" />
-                <path d="M7 16h10" />
-              </svg>
-            )
+                break
+                case 'shortcuts':
+                title = 'Shortcuts Overlay [⌨️] (/shortcuts)'
+                isModuleActive = shortcutsActive
+                iconContent = (
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <rect x="2" y="4" width="20" height="16" rx="2" ry="2" />
+                  <path d="M6 8h.001" />
+                  <path d="M10 8h.001" />
+                  <path d="M14 8h.001" />
+                  <path d="M18 8h.001" />
+                  <path d="M8 12h.001" />
+                  <path d="M12 12h.001" />
+                  <path d="M16 12h.001" />
+                  <path d="M7 16h10" />
+                </svg>
+                )
             onClick = () => window.api.shortcutsToggle?.()
-            break
-          default:
-            return null
+                break
+                default:
+                return null
         }
 
-        return (
-          <button
-            key={moduleId}
-            type="button"
-            className={`circle-orbit-satellite-btn ${isModuleActive ? 'is-active' : ''} ${hasUnread ? 'has-unread' : ''} ${summonPulse ? 'summon-pulse' : ''}`}
-            style={{
-              left: sx,
-              top: sy,
-              transform: 'translate(-50%, -50%)',
-              width: btnSize,
-              height: btnSize,
-              color: isBar && !isModuleActive ? '#38bdf8' : undefined
-            }}
-            title={title}
-            onClick={onClick}
-          >
-            <div className="circle-orbit-glyph-wrapper">
-              {iconContent}
-              {badgeContent}
-            </div>
-          </button>
-        )
+                return (
+                <button
+                  key={moduleId}
+                  type="button"
+                  className={`circle-orbit-satellite-btn ${isModuleActive ? 'is-active' : ''} ${hasUnread ? 'has-unread' : ''} ${summonPulse ? 'summon-pulse' : ''}`}
+                  style={{
+                    left: sx,
+                    top: sy,
+                    transform: 'translate(-50%, -50%)',
+                    width: btnSize,
+                    height: btnSize,
+                    color: isBar && !isModuleActive ? '#38bdf8' : undefined
+                  }}
+                  title={title}
+                  onClick={onClick}
+                >
+                  <div className="circle-orbit-glyph-wrapper">
+                    {iconContent}
+                    {badgeContent}
+                  </div>
+                </button>
+                )
       }
 
-      return (
-        <div
-          className={`circle-orbit-container ${summonPulse ? 'summon-pulse' : ''} ${dockFading ? 'dock-fading' : ''}`}
-          style={
-            {
-              ...(dockGlowColor ? { '--dock-glow-color': dockGlowColor } : {}),
-              ...(summonColor ? { '--summon-color': summonColor } : {}),
-              ...(summonGlow ? { '--summon-glow-color': summonGlow } : {})
-            } as React.CSSProperties
-          }
-          onContextMenu={(e) => {
-            e.preventDefault()
-            window.api.showDockContextMenu?.()
-          }}
-        >
-          {/* Subtle Glowing Orbit Guide Track */}
-          <div
-            style={{
-              position: 'absolute',
-              inset: 27,
-              borderRadius: '50%',
-              border: '1.5px dashed var(--dock-glow-color, rgba(56, 189, 248, 0.45))',
-              pointerEvents: 'none',
-              animation: 'orbit-track-pulse 4s ease-in-out infinite'
-            }}
-          />
+                return (
+                <div
+                  className={`circle-orbit-container ${summonPulse ? 'summon-pulse' : ''} ${dockFading ? 'dock-fading' : ''}`}
+                  style={
+                    {
+                      ...(dockGlowColor ? { '--dock-glow-color': dockGlowColor } : {}),
+                      ...(summonColor ? { '--summon-color': summonColor } : {}),
+                      ...(summonGlow ? { '--summon-glow-color': summonGlow } : {})
+                    } as React.CSSProperties
+                  }
+                  onContextMenu={(e) => {
+                    e.preventDefault()
+                    window.api.showDockContextMenu?.()
+                  }}
+                >
+                  {/* Subtle Glowing Orbit Guide Track */}
+                  <div
+                    style={{
+                      position: 'absolute',
+                      inset: 27,
+                      borderRadius: '50%',
+                      border: '1.5px dashed var(--dock-glow-color, rgba(56, 189, 248, 0.45))',
+                      pointerEvents: 'none',
+                      animation: 'orbit-track-pulse 4s ease-in-out infinite'
+                    }}
+                  />
 
-          {/* Faint Inner Gravitational Track Ring */}
-          <div
-            style={{
-              position: 'absolute',
-              inset: 51,
-              borderRadius: '50%',
-              border: '1px dotted var(--dock-glow-color, rgba(56, 189, 248, 0.22))',
-              pointerEvents: 'none'
-            }}
-          />
+                  {/* Faint Inner Gravitational Track Ring */}
+                  <div
+                    style={{
+                      position: 'absolute',
+                      inset: 51,
+                      borderRadius: '50%',
+                      border: '1px dotted var(--dock-glow-color, rgba(56, 189, 248, 0.22))',
+                      pointerEvents: 'none'
+                    }}
+                  />
 
-          {/* SVG Radial Radar Spokes */}
-          <svg
-            style={{
-              position: 'absolute',
-              inset: 0,
-              width: 150,
-              height: 150,
-              pointerEvents: 'none'
-            }}
-          >
-            {orbitModuleList.map((_, idx) => {
-              const angle = -Math.PI / 2 + (idx * 2 * Math.PI) / count
-              return (
-                <line
-                  key={idx}
-                  x1={centerCoord}
-                  y1={centerCoord}
-                  x2={Math.round(centerCoord + orbitRadius * Math.cos(angle))}
-                  y2={Math.round(centerCoord + orbitRadius * Math.sin(angle))}
-                  stroke="var(--dock-glow-color, rgba(56, 189, 248, 0.22))"
-                  strokeWidth="1"
-                  strokeDasharray="2 3"
-                />
-              )
-            })}
-          </svg>
+                  {/* SVG Radial Radar Spokes */}
+                  <svg
+                    style={{
+                      position: 'absolute',
+                      inset: 0,
+                      width: 150,
+                      height: 150,
+                      pointerEvents: 'none'
+                    }}
+                  >
+                    {orbitModuleList.map((_, idx) => {
+                      const angle = -Math.PI / 2 + (idx * 2 * Math.PI) / count
+                      return (
+                        <line
+                          key={idx}
+                          x1={centerCoord}
+                          y1={centerCoord}
+                          x2={Math.round(centerCoord + orbitRadius * Math.cos(angle))}
+                          y2={Math.round(centerCoord + orbitRadius * Math.sin(angle))}
+                          stroke="var(--dock-glow-color, rgba(56, 189, 248, 0.22))"
+                          strokeWidth="1"
+                          strokeDasharray="2 3"
+                        />
+                      )
+                    })}
+                  </svg>
 
-          {/* Center Element: Active Focus Timer Countdown OR Mouse Anchor Beacon */}
-          {isTimerActive ? (
-            <button
-              type="button"
-              className={`circle-orbit-center-timer ${focusState?.paused ? 'is-paused' : ''}`}
-              title={focusState?.paused ? 'Paused — click to resume timer' : 'Timer running — click to pause'}
-              onClick={(e) => {
-                e.stopPropagation()
-                window.api.pauseFocusTimer?.().then(setFocusState)
-              }}
-              onMouseDown={(e) => e.stopPropagation()}
-            >
-              <div className="center-timer-icon">
-                {focusState?.paused ? (
-                  <span style={{ fontSize: '8px', color: '#f59e0b', lineHeight: 1, marginLeft: '1px' }}>▶</span>
-                ) : (
-                  <span className="center-timer-dot" />
-                )}
-              </div>
-              <span className="center-timer-digits">{formattedFocusClock}</span>
-            </button>
-          ) : (
-            <div
-              style={{
-                position: 'absolute',
-                left: '50%',
-                top: '50%',
-                width: 12,
-                height: 12,
-                borderRadius: '50%',
-                background: dockGlowColor || '#38bdf8',
-                boxShadow: dockGlowColor
-                  ? `0 0 7px ${dockGlowColor}, 0 0 15px ${dockGlowColor}`
-                  : '0 0 7px #38bdf8, 0 0 15px rgba(56, 189, 248, 0.55)',
-                pointerEvents: 'none',
-                zIndex: 15,
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                transform: 'translate(-50%, -50%)',
-                animation: 'orbit-center-beacon 3s ease-in-out infinite'
-              }}
-              title="Mouse Cursor anchor (Ctrl+Right Click location)"
-            >
-              <div style={{ width: 4, height: 4, borderRadius: '50%', background: '#ffffff' }} />
-            </div>
-          )}
+                  {/* Center Element: Active Focus Timer Countdown OR Mouse Anchor Beacon */}
+                  {isTimerActive ? (
+                    <button
+                      type="button"
+                      className={`circle-orbit-center-timer ${focusState?.paused ? 'is-paused' : ''}`}
+                      title={focusState?.paused ? 'Paused — click to resume timer' : 'Timer running — click to pause'}
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        window.api.pauseFocusTimer?.().then(setFocusState)
+                      }}
+                      onMouseDown={(e) => e.stopPropagation()}
+                    >
+                      <div className="center-timer-icon">
+                        {focusState?.paused ? (
+                          <span style={{ fontSize: '8px', color: '#f59e0b', lineHeight: 1, marginLeft: '1px' }}>▶</span>
+                        ) : (
+                          <span className="center-timer-dot" />
+                        )}
+                      </div>
+                      <span className="center-timer-digits">{formattedFocusClock}</span>
+                    </button>
+                  ) : (
+                    <div
+                      style={{
+                        position: 'absolute',
+                        left: '50%',
+                        top: '50%',
+                        width: 12,
+                        height: 12,
+                        borderRadius: '50%',
+                        background: dockGlowColor || '#38bdf8',
+                        boxShadow: dockGlowColor
+                          ? `0 0 7px ${dockGlowColor}, 0 0 15px ${dockGlowColor}`
+                          : '0 0 7px #38bdf8, 0 0 15px rgba(56, 189, 248, 0.55)',
+                        pointerEvents: 'none',
+                        zIndex: 15,
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        transform: 'translate(-50%, -50%)',
+                        animation: 'orbit-center-beacon 3s ease-in-out infinite'
+                      }}
+                      title="Mouse Cursor anchor (Ctrl+Right Click location)"
+                    >
+                      <div style={{ width: 4, height: 4, borderRadius: '50%', background: '#ffffff' }} />
+                    </div>
+                  )}
 
-          {/* Revolving Wheel Container holding all Satellites */}
-          <div className={`circle-orbit-wheel ${isOrbiting ? 'is-revolving' : ''}`}>
-            {orbitModuleList.map((id, idx) => renderOrbitSatellite(id, idx))}
-          </div>
-        </div>
-      )
+                  {/* Revolving Wheel Container holding all Satellites */}
+                  <div className={`circle-orbit-wheel ${isOrbiting ? 'is-revolving' : ''}`}>
+                    {orbitModuleList.map((id, idx) => renderOrbitSatellite(id, idx))}
+                  </div>
+                </div>
+                )
     }
 
-    return (
-      <div
-        className={`palette palette-bar-icon ${summonPulse ? 'summon-pulse' : ''} ${dockFading ? 'dock-fading' : ''} ${shimmerInfo ? `icon-shimmer shimmer-${shimmerInfo.corner}${shimmerInfo.flickerType ? ` has-flicker-${shimmerInfo.flickerType}` : ''}` : ''}`}
-        style={
-          {
-            ...(dockGlowColor ? { '--dock-glow-color': dockGlowColor } : {}),
-            ...(shimmerInfo
-              ? {
-                  '--shimmer-color': shimmerInfo.color,
-                  '--shimmer-gradient': shimmerInfo.gradient
-                }
-              : {}),
-            ...(summonColor ? { '--summon-color': summonColor } : {}),
-            ...(summonGlow ? { '--summon-glow-color': summonGlow } : {})
-          } as React.CSSProperties
-        }
-      >
-        <button
-          className="bar-icon-button"
-          title={paletteHotkey ? `Open command bar (${paletteHotkey})` : 'Open command bar'}
-          // Deliberately doesn't flip barActive itself — main's 'bar-activated' does that,
-          // arriving with the geometry the grow animation needs. Setting it here too would
-          // paint the palette at full size for a frame before that geometry lands.
-          onClick={() => window.api.barActivate()}
-        >
-          {'/'}
-        </button>
-      </div>
-    )
+                return (
+                <div
+                  className={`palette palette-bar-icon ${summonPulse ? 'summon-pulse' : ''} ${dockFading ? 'dock-fading' : ''} ${shimmerInfo ? `icon-shimmer shimmer-${shimmerInfo.corner}${shimmerInfo.flickerType ? ` has-flicker-${shimmerInfo.flickerType}` : ''}` : ''}`}
+                  style={
+                    {
+                      ...(dockGlowColor ? { '--dock-glow-color': dockGlowColor } : {}),
+                      ...(shimmerInfo
+                        ? {
+                          '--shimmer-color': shimmerInfo.color,
+                          '--shimmer-gradient': shimmerInfo.gradient
+                        }
+                        : {}),
+                      ...(summonColor ? { '--summon-color': summonColor } : {}),
+                      ...(summonGlow ? { '--summon-glow-color': summonGlow } : {})
+                    } as React.CSSProperties
+                  }
+                >
+                  <button
+                    className="bar-icon-button"
+                    title={paletteHotkey ? `Open command bar (${paletteHotkey})` : 'Open command bar'}
+                    // Deliberately doesn't flip barActive itself — main's 'bar-activated' does that,
+                    // arriving with the geometry the grow animation needs. Setting it here too would
+                    // paint the palette at full size for a frame before that geometry lands.
+                    onClick={() => window.api.barActivate()}
+                  >
+                    {'/'}
+                  </button>
+                </div>
+                )
   }
 
-  // The grow animation is armed only for the frame right after activation (growOrigin is
-  // cleared on animationend), so ordinary re-renders don't replay it. The origin/scale come
-  // from main because only it knows where the icon was relative to the new window bounds.
-  const paletteClassName = [
-    'palette',
-    windowMode === 'bar' ? 'palette-bar' : '',
-    disableMouseInput ? 'disable-mouse-input' : '',
-    growClassNames,
-    pageFade === 'out' ? 'page-fade-out' : '',
-    pageFade === 'in' ? 'page-fade-in' : ''
-  ]
-    .filter(Boolean)
-    .join(' ')
+                // The grow animation is armed only for the frame right after activation (growOrigin is
+                // cleared on animationend), so ordinary re-renders don't replay it. The origin/scale come
+                // from main because only it knows where the icon was relative to the new window bounds.
+                const paletteClassName = [
+                'palette',
+                windowMode === 'bar' ? 'palette-bar' : '',
+                disableMouseInput ? 'disable-mouse-input' : '',
+                growClassNames,
+                pageFade === 'out' ? 'page-fade-out' : '',
+                pageFade === 'in' ? 'page-fade-in' : ''
+                ]
+                .filter(Boolean)
+                .join(' ')
 
-  if (isSettingsMode) {
+                if (isSettingsMode) {
     return (
-      <div className={paletteClassName} style={growStyle} onAnimationEnd={onGrowEnd}>
-        <ConfigManager
-          initialTarget={settingsTarget ?? undefined}
-          onExit={(exitVal) => {
-            setSettingsTarget(null)
-            if (windowMode === 'bar' && exitVal === undefined) {
-              window.api.barDeactivate()
-            } else if (windowMode !== 'bar' && exitVal === undefined) {
-              window.api.hidePalette()
-            } else {
-              setValue(exitVal !== undefined ? exitVal : getDefaultValue())
-            }
-          }}
-        />
-      </div>
-    )
+                <div className={paletteClassName} style={growStyle} onAnimationEnd={onGrowEnd}>
+                  <ConfigManager
+                    initialTarget={settingsTarget ?? undefined}
+                    onExit={(exitVal) => {
+                      setSettingsTarget(null)
+                      if (windowMode === 'bar' && exitVal === undefined) {
+                        window.api.barDeactivate()
+                      } else if (windowMode !== 'bar' && exitVal === undefined) {
+                        window.api.hidePalette()
+                      } else {
+                        setValue(exitVal !== undefined ? exitVal : getDefaultValue())
+                      }
+                    }}
+                  />
+                </div>
+                )
   }
 
-  if (activeModuleView === 'focus') {
+                if (activeModuleView === 'focus') {
     return (
-      <div className={paletteClassName} style={growStyle} onAnimationEnd={onGrowEnd}>
-        <FocusTimerPanel
-          focusState={focusState}
-          onClose={() => {
-            if (windowMode === 'bar') {
-              window.api.barDeactivate()
-            } else {
-              window.api.hidePalette()
-            }
-          }}
-          onBackToPalette={() => setActiveModuleView(null)}
-        />
-      </div>
-    )
+                <div className={paletteClassName} style={growStyle} onAnimationEnd={onGrowEnd}>
+                  <FocusTimerPanel
+                    focusState={focusState}
+                    onClose={() => {
+                      if (windowMode === 'bar') {
+                        window.api.barDeactivate()
+                      } else {
+                        window.api.hidePalette()
+                      }
+                    }}
+                    onBackToPalette={() => setActiveModuleView(null)}
+                  />
+                </div>
+                )
   }
 
-  if (activeModuleView === 'git') {
+                if (activeModuleView === 'git') {
     return (
-      <div className={paletteClassName} style={growStyle} onAnimationEnd={onGrowEnd}>
-        <GitStatusPanel
-          gitStatus={gitStatus}
-          branches={gitBranches}
-          onRefresh={refreshGit}
-          onClose={() => {
-            if (windowMode === 'bar') {
-              window.api.barDeactivate()
-            } else {
-              window.api.hidePalette()
-            }
-          }}
-          onBackToPalette={() => setActiveModuleView(null)}
-        />
-      </div>
-    )
+                <div className={paletteClassName} style={growStyle} onAnimationEnd={onGrowEnd}>
+                  <GitStatusPanel
+                    gitStatus={gitStatus}
+                    branches={gitBranches}
+                    initialTab={gitSubTab}
+                    onRefresh={refreshGit}
+                    onClose={() => {
+                      if (windowMode === 'bar') {
+                        window.api.barDeactivate()
+                      } else {
+                        window.api.hidePalette()
+                      }
+                    }}
+                    onBackToPalette={() => setActiveModuleView(null)}
+                  />
+                </div>
+                )
   }
 
-  if (activeModuleView === 'profile') {
+                if (activeModuleView === 'profile') {
     return (
-      <div className={paletteClassName} style={growStyle} onAnimationEnd={onGrowEnd}>
-        <ProfilePanel
-          onOpenSettings={() => {
-            setActiveModuleView(null)
-            setSettingsTarget('settings')
-          }}
-          onClose={() => {
-            if (windowMode === 'bar') {
-              window.api.barDeactivate()
-            } else {
-              window.api.hidePalette()
-            }
-          }}
-          onBackToPalette={() => setActiveModuleView(null)}
-        />
-      </div>
-    )
+                <div className={paletteClassName} style={growStyle} onAnimationEnd={onGrowEnd}>
+                  <ProfilePanel
+                    onOpenSettings={() => {
+                      setActiveModuleView(null)
+                      setSettingsTarget('settings')
+                    }}
+                    onClose={() => {
+                      if (windowMode === 'bar') {
+                        window.api.barDeactivate()
+                      } else {
+                        window.api.hidePalette()
+                      }
+                    }}
+                    onBackToPalette={() => setActiveModuleView(null)}
+                  />
+                </div>
+                )
   }
 
-  if (activeModuleView === 'system') {
+                if (activeModuleView === 'system') {
     return (
-      <div className={paletteClassName} style={growStyle} onAnimationEnd={onGrowEnd}>
-        <SystemManagementPanel
-          initialWingetTab={systemSubTab}
-          onClose={() => {
-            if (windowMode === 'bar') {
-              window.api.barDeactivate()
-            } else {
-              window.api.hidePalette()
-            }
-          }}
-          onBackToPalette={() => setActiveModuleView(null)}
-        />
-      </div>
-    )
+                <div className={paletteClassName} style={growStyle} onAnimationEnd={onGrowEnd}>
+                  <SystemManagementPanel
+                    initialWingetTab={systemSubTab}
+                    onClose={() => {
+                      if (windowMode === 'bar') {
+                        window.api.barDeactivate()
+                      } else {
+                        window.api.hidePalette()
+                      }
+                    }}
+                    onBackToPalette={() => setActiveModuleView(null)}
+                  />
+                </div>
+                )
   }
 
-  return (
-    <div
-      className={`${paletteClassName} palette-launchpad`}
-      style={growStyle}
-      onAnimationEnd={onGrowEnd}
-      onMouseDown={(e) => {
-        if (
-          e.target !== inputRef.current &&
-          !(e.target instanceof HTMLInputElement) &&
-          !(e.target instanceof HTMLTextAreaElement)
-        ) {
-          e.preventDefault()
-          inputRef.current?.focus()
-        }
-      }}
-    >
-      <div className="launchpad-search-pill">
-        <span className="launchpad-search-glyph">{value.startsWith('/') ? '⌘' : '⌕'}</span>
-        <input
-          ref={inputRef}
-          className="palette-input launchpad-input"
-          value={value}
-          placeholder={placeholderText}
-          autoFocus={windowMode === 'popup'}
-          onChange={(e) => setValue(e.target.value)}
-          onKeyDown={handleKeyDown}
-        />
-        {value !== '' && (
-          <button
-            type="button"
-            className="launchpad-clear-btn"
-            title="Clear filter (Esc)"
-            onClick={() => {
-              setValue(getDefaultValue())
-              inputRef.current?.focus()
-            }}
-          >
-            ×
-          </button>
-        )}
-        {activeActionHint && <span className="palette-input-action-badge">{activeActionHint}</span>}
-      </div>
-      {hotkeyError && <div className="palette-banner launchpad-banner">{hotkeyError}</div>}
-      {commandError && <div className="palette-banner launchpad-banner">{commandError}</div>}
-      {command === 'calc' && (
-        <div className="launchpad-calc-card">
-          <div className="launchpad-calc-label">Calculator Result (Press Enter to Copy)</div>
-          <div className="calc-result">{calcResult ?? (query ? 'Invalid expression' : 'Enter a math expression...')}</div>
-        </div>
-      )}
-      {command !== 'calc' && (
-        <div
-          ref={gridContainerRef}
-          className={ignoreMouse || disableMouseInput ? 'launchpad-grid-scroll ignore-mouse' : 'launchpad-grid-scroll'}
-          onMouseMove={(e) => {
-            if (disableMouseInput) return
-            const last = lastMousePosRef.current
-            if (last && (last.x !== e.clientX || last.y !== e.clientY)) {
-              if (ignoreMouse) setIgnoreMouse(false)
-            }
-            lastMousePosRef.current = { x: e.clientX, y: e.clientY }
-          }}
-        >
-          {items.length === 0 && (
-            <div className="launchpad-empty-card">
-              {isSearching && !showingCommandList ? 'Searching…' : 'No matching options found'}
-            </div>
-          )}
-          {groupedSections.map((group) => (
-            <section key={group.name} className="launchpad-section">
-              <div className="launchpad-section-header">
-                {group.icon && <span className="launchpad-section-icon">{group.icon}</span>}
-                <span className="launchpad-section-title">{group.name}</span>
-                <span className="launchpad-section-count">{group.items.length}</span>
-              </div>
-              <div className="launchpad-cards-grid">
-                {group.items.map(({ item, flatIndex }) => {
-                  const isActive = flatIndex === activeIndex
-                  return (
-                    <div
-                      key={item.key}
-                      data-card-index={flatIndex}
-                      ref={isActive ? (activeItemRef as React.RefObject<HTMLDivElement>) : undefined}
-                      className={isActive ? 'launchpad-card active' : 'launchpad-card'}
-                      onMouseEnter={() => {
-                        if (!ignoreMouse) setActiveIndex(flatIndex)
-                      }}
-                      onClick={(e) => item.onSelect(e.ctrlKey || e.metaKey)}
-                    >
-                      <div className="launchpad-card-top">
-                        <div className="launchpad-card-title-wrap">
-                          <span className="launchpad-card-label">{item.label}</span>
-                          {item.badge && <span className="launchpad-card-badge">{item.badge}</span>}
-                        </div>
-                      </div>
-                      {item.sublabel && <div className="launchpad-card-sublabel">{item.sublabel}</div>}
+                return (
+                <div
+                  className={`${paletteClassName} palette-launchpad`}
+                  style={growStyle}
+                  onAnimationEnd={onGrowEnd}
+                  onMouseDown={(e) => {
+                    if (
+                      e.target !== inputRef.current &&
+                      !(e.target instanceof HTMLInputElement) &&
+                      !(e.target instanceof HTMLTextAreaElement)
+                    ) {
+                      e.preventDefault()
+                      inputRef.current?.focus()
+                    }
+                  }}
+                >
+                  <div className="launchpad-search-pill">
+                    <span className="launchpad-search-glyph">
+                      {isSearching && !showingCommandList ? (
+                        <span className="sudo-spinner sudo-spinner-sm" />
+                      ) : value.startsWith('/') ? (
+                        '⌘'
+                      ) : (
+                        '⌕'
+                      )}
+                    </span>
+                    <input
+                      ref={inputRef}
+                      className="palette-input launchpad-input"
+                      value={value}
+                      placeholder={placeholderText}
+                      autoFocus={windowMode === 'popup'}
+                      onChange={(e) => setValue(e.target.value)}
+                      onKeyDown={handleKeyDown}
+                    />
+                    {value !== '' && (
+                      <button
+                        type="button"
+                        className="launchpad-clear-btn"
+                        title="Clear filter (Esc)"
+                        onClick={() => {
+                          setValue(getDefaultValue())
+                          inputRef.current?.focus()
+                        }}
+                      >
+                        ×
+                      </button>
+                    )}
+                    {activeActionHint && <span className="palette-input-action-badge">{activeActionHint}</span>}
+                  </div>
+                  {hotkeyError && <div className="palette-banner launchpad-banner">{hotkeyError}</div>}
+                  {commandError && <div className="palette-banner launchpad-banner">{commandError}</div>}
+                  {command === 'calc' && (
+                    <div className="launchpad-calc-card">
+                      <div className="launchpad-calc-label">Calculator Result (Press Enter to Copy)</div>
+                      <div className="calc-result">{calcResult ?? (query ? 'Invalid expression' : 'Enter a math expression...')}</div>
                     </div>
-                  )
-                })}
-              </div>
-            </section>
-          ))}
-        </div>
-      )}
-      <div className="launchpad-footer-pill">
-        <span className="palette-footer-hint">
-          <kbd className="palette-kbd">↑↓←→</kbd> Navigate
-        </span>
-        <span className="palette-footer-hint">
-          <kbd className="palette-kbd">↵</kbd>{' '}
-          {command === 'calc'
-            ? 'Copy'
-            : command === 'custom' || command === 'term'
-              ? 'Run in Terminal'
-              : 'Select'}
-        </span>
-        {(command === 'custom' || command === 'term') && (
-          <span className="palette-footer-hint">
-            <kbd className="palette-kbd">Ctrl+↵</kbd> Run Elevated
-          </span>
-        )}
-        {command === 'teams' && (
-          <span className="palette-footer-hint">
-            <kbd className="palette-kbd">Ctrl+E</kbd> Add / Edit
-          </span>
-        )}
-        {tabHintLabel && (
-          <span className="palette-footer-hint">
-            <kbd className="palette-kbd">Tab</kbd> {tabHintLabel}
-          </span>
-        )}
-        <span className="palette-footer-hint">
-          <kbd className="palette-kbd">Esc</kbd> Close
-        </span>
-        {value === '' && (
-          <span className="palette-footer-hint">
-            <kbd className="palette-kbd">/</kbd> All Commands
-          </span>
-        )}
-        {isHistoryActive && (
-          <span className="palette-footer-hint">
-            <kbd className="palette-kbd">Shift+Del</kbd> Remove
-          </span>
-        )}
-      </div>
-    </div>
-  )
+                  )}
+                  {command !== 'calc' && (
+                    <div
+                      ref={gridContainerRef}
+                      className={ignoreMouse || disableMouseInput ? 'launchpad-grid-scroll ignore-mouse' : 'launchpad-grid-scroll'}
+                      onMouseMove={(e) => {
+                        if (disableMouseInput) return
+                        const last = lastMousePosRef.current
+                        if (last && (last.x !== e.clientX || last.y !== e.clientY)) {
+                          if (ignoreMouse) setIgnoreMouse(false)
+                        }
+                        lastMousePosRef.current = { x: e.clientX, y: e.clientY }
+                      }}
+                    >
+                      {items.length === 0 && (
+                        <div className="launchpad-empty-card">
+                          {isSearching && !showingCommandList ? 'Searching…' : 'No matching options found'}
+                        </div>
+                      )}
+                      {groupedSections.map((group) => (
+                        <section key={group.name} className="launchpad-section">
+                          <div className="launchpad-section-header">
+                            {group.icon && <span className="launchpad-section-icon">{group.icon}</span>}
+                            <span className="launchpad-section-title">{group.name}</span>
+                            <span className="launchpad-section-count">{group.items.length}</span>
+                          </div>
+                          <div className="launchpad-cards-grid">
+                            {group.items.map(({ item, flatIndex }) => {
+                              const isActive = flatIndex === activeIndex
+                              return (
+                                <div
+                                  key={item.key}
+                                  data-card-index={flatIndex}
+                                  ref={isActive ? (activeItemRef as React.RefObject<HTMLDivElement>) : undefined}
+                                  className={isActive ? 'launchpad-card active' : 'launchpad-card'}
+                                  onMouseEnter={() => {
+                                    if (!ignoreMouse) setActiveIndex(flatIndex)
+                                  }}
+                                  onClick={(e) => item.onSelect(e.ctrlKey || e.metaKey)}
+                                >
+                                  <div className="launchpad-card-top">
+                                    <div className="launchpad-card-title-wrap">
+                                      <span className="launchpad-card-label">{item.label}</span>
+                                      {item.badge && <span className="launchpad-card-badge">{item.badge}</span>}
+                                    </div>
+                                  </div>
+                                  {item.sublabel && <div className="launchpad-card-sublabel">{item.sublabel}</div>}
+                                </div>
+                              )
+                            })}
+                          </div>
+                        </section>
+                      ))}
+                    </div>
+                  )}
+                  <div className="launchpad-footer-pill">
+                    <span className="palette-footer-hint">
+                      <kbd className="palette-kbd">↑↓←→</kbd> Navigate
+                    </span>
+                    <span className="palette-footer-hint">
+                      <kbd className="palette-kbd">↵</kbd>{' '}
+                      {command === 'calc'
+                        ? 'Copy'
+                        : command === 'custom' || command === 'term'
+                          ? 'Run in Terminal'
+                          : 'Select'}
+                    </span>
+                    {(command === 'custom' || command === 'term') && (
+                      <span className="palette-footer-hint">
+                        <kbd className="palette-kbd">Ctrl+↵</kbd> Run Elevated
+                      </span>
+                    )}
+                    {command === 'teams' && (
+                      <span className="palette-footer-hint">
+                        <kbd className="palette-kbd">Ctrl+E</kbd> Add / Edit
+                      </span>
+                    )}
+                    {tabHintLabel && (
+                      <span className="palette-footer-hint">
+                        <kbd className="palette-kbd">Tab</kbd> {tabHintLabel}
+                      </span>
+                    )}
+                    <span className="palette-footer-hint">
+                      <kbd className="palette-kbd">Esc</kbd> Close
+                    </span>
+                    {value === '' && (
+                      <span className="palette-footer-hint">
+                        <kbd className="palette-kbd">/</kbd> All Commands
+                      </span>
+                    )}
+                    {isHistoryActive && (
+                      <span className="palette-footer-hint">
+                        <kbd className="palette-kbd">Shift+Del</kbd> Remove
+                      </span>
+                    )}
+                  </div>
+                </div>
+                )
 }

@@ -14,6 +14,9 @@ import type {
   FocusTimerState,
   GitRepoStatus,
   KnownRepoItem,
+  GitProjectPreset,
+  GitWatcherConfigInput,
+  GitWatcherItem,
   ProfileItem,
   BackupArchiveItem,
   WingetPackageItem,
@@ -34,6 +37,7 @@ import type {
   SystemProcessItem,
   CleanupTargetItem,
   WindowsUpdateStatus,
+  WindowsUpdateActionType,
   SystemEnvVarItem,
   SystemScheduledTaskItem,
   SystemHostEntryItem,
@@ -283,6 +287,35 @@ const api = {
     ipcRenderer.invoke('git-set-active-repo', repoPath),
   getKnownGitRepos: (): Promise<KnownRepoItem[]> => ipcRenderer.invoke('git-get-known-repos'),
 
+  // Git Hot-Reload Watchers APIs
+  getGitWatchers: (): Promise<GitWatcherItem[]> => ipcRenderer.invoke('git-watchers-get'),
+  getGitWatcherPresets: (repoPath?: string): Promise<GitProjectPreset[]> =>
+    ipcRenderer.invoke('git-watcher-presets', repoPath),
+  saveGitWatcher: (input: GitWatcherConfigInput): Promise<GitWatcherItem[]> =>
+    ipcRenderer.invoke('git-watcher-save', input),
+  deleteGitWatcher: (id: string): Promise<GitWatcherItem[]> =>
+    ipcRenderer.invoke('git-watcher-delete', id),
+  startGitWatcher: (id: string): Promise<GitWatcherItem[]> =>
+    ipcRenderer.invoke('git-watcher-start', id),
+  stopGitWatcher: (id: string): Promise<GitWatcherItem[]> =>
+    ipcRenderer.invoke('git-watcher-stop', id),
+  stopAllGitWatchers: (): Promise<GitWatcherItem[]> =>
+    ipcRenderer.invoke('git-watcher-stop-all'),
+  triggerGitWatcherReload: (id: string): Promise<GitWatcherItem[]> =>
+    ipcRenderer.invoke('git-watcher-trigger', id),
+  clearGitWatcherLogs: (id: string): Promise<GitWatcherItem[]> =>
+    ipcRenderer.invoke('git-watcher-clear-logs', id),
+  openGitWatcherInTerminal: (id: string): Promise<void> =>
+    ipcRenderer.invoke('git-watcher-open-terminal', id),
+  selectWatcherProjectFolder: (): Promise<string | null> =>
+    ipcRenderer.invoke('git-watcher-select-folder'),
+  onGitWatchersUpdated: (callback: (watchers: GitWatcherItem[]) => void): (() => void) => {
+    const listener = (_event: Electron.IpcRendererEvent, watchers: GitWatcherItem[]): void =>
+      callback(watchers)
+    ipcRenderer.on('git-watchers-updated', listener)
+    return () => ipcRenderer.removeListener('git-watchers-updated', listener)
+  },
+
   // Profile APIs
   executeProfileCommand: (action: string): Promise<void> => ipcRenderer.invoke('profile-execute', action),
   listProfiles: (): Promise<ProfileItem[]> => ipcRenderer.invoke('profile-list'),
@@ -390,14 +423,10 @@ const api = {
   }): Promise<WindowsUpdateStatus> =>
     ipcRenderer.invoke('system-get-windows-update-status', options),
   runWindowsUpdateAction: (
-    action:
-      | 'open-settings'
-      | 'open-history'
-      | 'trigger-scan'
-      | 'schedule-reboot-60s'
-      | 'cancel-reboot'
-  ): Promise<{ success: boolean; message: string }> =>
-    ipcRenderer.invoke('system-run-windows-update-action', action),
+    action: WindowsUpdateActionType,
+    targetKbOrTitle?: string
+  ): Promise<{ success: boolean; message: string; status?: WindowsUpdateStatus }> =>
+    ipcRenderer.invoke('system-run-windows-update-action', action, targetKbOrTitle),
   getSystemEnvVars: (): Promise<SystemEnvVarItem[]> =>
     ipcRenderer.invoke('system-get-env-vars'),
   setSystemEnvVar: (params: {
@@ -436,11 +465,11 @@ const api = {
     ipcRenderer.invoke('system-get-network-adapters'),
   runSystemNetworkAction: (params: {
     action:
-      | 'flush-dns'
-      | 'reset-winsock'
-      | 'set-dns'
-      | 'allow-port-firewall'
-      | 'open-hosts-folder'
+    | 'flush-dns'
+    | 'reset-winsock'
+    | 'set-dns'
+    | 'allow-port-firewall'
+    | 'open-hosts-folder'
     adapterName?: string
     dnsPreset?: 'cloudflare' | 'google' | 'quad9' | 'dhcp'
     port?: number
@@ -450,14 +479,14 @@ const api = {
     ipcRenderer.invoke('system-get-storage-and-power'),
   runSystemPowerOrRepairAction: (params: {
     action:
-      | 'set-power-plan'
-      | 'wsl-shutdown'
-      | 'sfc-scannow'
-      | 'dism-check'
-      | 'dism-restore'
-      | 'dism-cleanup'
-      | 'wsreset'
-      | 'battery-report'
+    | 'set-power-plan'
+    | 'wsl-shutdown'
+    | 'sfc-scannow'
+    | 'dism-check'
+    | 'dism-restore'
+    | 'dism-cleanup'
+    | 'wsreset'
+    | 'battery-report'
     planGuid?: string
   }): Promise<{ success: boolean; message: string }> =>
     ipcRenderer.invoke('system-run-power-or-repair-action', params),
@@ -465,11 +494,11 @@ const api = {
     ipcRenderer.invoke('system-get-security-posture', force),
   runSystemSecurityAction: (params: {
     action:
-      | 'update-signatures'
-      | 'quick-scan'
-      | 'open-defender'
-      | 'add-exclusion-path'
-      | 'remove-exclusion-path'
+    | 'update-signatures'
+    | 'quick-scan'
+    | 'open-defender'
+    | 'add-exclusion-path'
+    | 'remove-exclusion-path'
     targetPath?: string
   }): Promise<{ success: boolean; message: string; posture?: SystemSecurityPosture }> =>
     ipcRenderer.invoke('system-run-security-action', params),

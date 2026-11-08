@@ -111,11 +111,13 @@ body::-webkit-scrollbar,
     box-shadow: 0 0 0 0 var(--summon-glow-color, rgba(122, 162, 247, 0.85));
     border-color: var(--summon-color, #5aa0ff);
   }
+
   50% {
     transform: scale(1.08);
     box-shadow: 0 0 14px 4px var(--summon-glow-color, rgba(122, 162, 247, 0.75));
     border-color: var(--summon-color, #5aa0ff);
   }
+
   100% {
     transform: scale(1);
     box-shadow: 0 0 0 0 transparent;
@@ -177,27 +179,36 @@ body::-webkit-scrollbar,
 
 /* Ambient floating hover micro-motion for dock icons */
 @keyframes dockIdleFloatBar {
-  0%, 100% {
+
+  0%,
+  100% {
     transform: translateY(0px);
   }
+
   50% {
     transform: translate(-1.2px, -1.2px);
   }
 }
 
 @keyframes dockIdleFloatTerm {
-  0%, 100% {
+
+  0%,
+  100% {
     transform: translateY(0px);
   }
+
   50% {
     transform: translate(0px, -1.8px);
   }
 }
 
 @keyframes dockIdleFloatNotify {
-  0%, 100% {
+
+  0%,
+  100% {
     transform: translateY(0px);
   }
+
   50% {
     transform: translate(1.2px, 1.2px);
   }
@@ -226,6 +237,7 @@ body::-webkit-scrollbar,
 }
 
 @media (prefers-reduced-motion: reduce) {
+
   .palette-bar-icon .bar-icon-button,
   .term-collapsed .term-icon,
   .notify-collapsed .notify-icon-btn {
@@ -310,10 +322,12 @@ body::-webkit-scrollbar,
     opacity: 0;
     filter: drop-shadow(0 0 0 transparent);
   }
+
   40% {
     opacity: 0.22;
     filter: drop-shadow(0 0 4px var(--shimmer-color, var(--accent)));
   }
+
   100% {
     opacity: 0;
     filter: drop-shadow(0 0 0 transparent);
@@ -321,36 +335,129 @@ body::-webkit-scrollbar,
 }
 
 @keyframes corner-shimmer-flicker-1 {
-  0% { opacity: 0; filter: drop-shadow(0 0 0 transparent); }
-  12% { opacity: 0.22; filter: drop-shadow(0 0 4px var(--shimmer-color, var(--accent))); }
-  18% { opacity: 0.04; filter: drop-shadow(0 0 0 transparent); }
-  26% { opacity: 0.18; filter: drop-shadow(0 0 3px var(--shimmer-color, var(--accent))); }
-  32% { opacity: 0.02; filter: drop-shadow(0 0 0 transparent); }
-  45% { opacity: 0.25; filter: drop-shadow(0 0 5px var(--shimmer-color, var(--accent))); }
-  75% { opacity: 0.20; filter: drop-shadow(0 0 4px var(--shimmer-color, var(--accent))); }
-  100% { opacity: 0; filter: drop-shadow(0 0 0 transparent); }
+  0% {
+    opacity: 0;
+    filter: drop-shadow(0 0 0 transparent);
+  }
+
+  12% {
+    opacity: 0.22;
+    filter: drop-shadow(0 0 4px var(--shimmer-color, var(--accent)));
+  }
+
+  18% {
+    opacity: 0.04;
+    filter: drop-shadow(0 0 0 transparent);
+  }
+
+  26% {
+    opacity: 0.18;
+    filter: drop-shadow(0 0 3px var(--shimmer-color, var(--accent)));
+  }
+
+  32% {
+    opacity: 0.02;
+    filter: drop-shadow(0 0 0 transparent);
+  }
+
+  45% {
+    opacity: 0.25;
+    filter: drop-shadow(0 0 5px var(--shimmer-color, var(--accent)));
+  }
+
+  75% {
+    opacity: 0.20;
+    filter: drop-shadow(0 0 4px var(--shimmer-color, var(--accent)));
+  }
+
+  100% {
+    opacity: 0;
+    filter: drop-shadow(0 0 0 transparent);
+  }
 }
 
 @keyframes corner-shimmer-flicker-2 {
-  0% { opacity: 0; filter: drop-shadow(0 0 0 transparent); }
-  15% { opacity: 0.10; filter: drop-shadow(0 0 2px var(--shimmer-color, var(--accent))); }
-  22% { opacity: 0.02; filter: drop-shadow(0 0 0 transparent); }
-  30% { opacity: 0.23; filter: drop-shadow(0 0 4px var(--shimmer-color, var(--accent))); }
-  36% { opacity: 0.05; filter: drop-shadow(0 0 1px var(--shimmer-color, var(--accent))); }
-  42% { opacity: 0.25; filter: drop-shadow(0 0 5px var(--shimmer-color, var(--accent))); }
-  80% { opacity: 0.18; filter: drop-shadow(0 0 3px var(--shimmer-color, var(--accent))); }
-  100% { opacity: 0; filter: drop-shadow(0 0 0 transparent); }
+  0% {
+    opacity: 0;
+    filter: drop-shadow(0 0 0 transparent);
+  }
+
+  15% {
+    opacity: 0.10;
+    filter: drop-shadow(0 0 2px var(--shimmer-color, var(--accent)));
+  }
+
+  22% {
+    opacity: 0.02;
+    filter: drop-shadow(0 0 0 transparent);
+  }
+
+  30% {
+    opacity: 0.23;
+    filter: drop-shadow(0 0 4px var(--shimmer-color, var(--accent)));
+  }
+
+  36% {
+    opacity: 0.05;
+    filter: drop-shadow(0 0 1px var(--shimmer-color, var(--accent)));
+  }
+
+  42% {
+    opacity: 0.25;
+    filter: drop-shadow(0 0 5px var(--shimmer-color, var(--accent)));
+  }
+
+  80% {
+    opacity: 0.18;
+    filter: drop-shadow(0 0 3px var(--shimmer-color, var(--accent)));
+  }
+
+  100% {
+    opacity: 0;
+    filter: drop-shadow(0 0 0 transparent);
+  }
 }
 
 @keyframes corner-shimmer-flicker-3 {
-  0% { opacity: 0; filter: drop-shadow(0 0 0 transparent); }
-  30% { opacity: 0.23; filter: drop-shadow(0 0 4px var(--shimmer-color, var(--accent))); }
-  48% { opacity: 0.19; filter: drop-shadow(0 0 3px var(--shimmer-color, var(--accent))); }
-  54% { opacity: 0.02; filter: drop-shadow(0 0 0 transparent); }
-  60% { opacity: 0.25; filter: drop-shadow(0 0 5px var(--shimmer-color, var(--accent))); }
-  65% { opacity: 0.04; filter: drop-shadow(0 0 1px var(--shimmer-color, var(--accent))); }
-  72% { opacity: 0.21; filter: drop-shadow(0 0 4px var(--shimmer-color, var(--accent))); }
-  100% { opacity: 0; filter: drop-shadow(0 0 0 transparent); }
+  0% {
+    opacity: 0;
+    filter: drop-shadow(0 0 0 transparent);
+  }
+
+  30% {
+    opacity: 0.23;
+    filter: drop-shadow(0 0 4px var(--shimmer-color, var(--accent)));
+  }
+
+  48% {
+    opacity: 0.19;
+    filter: drop-shadow(0 0 3px var(--shimmer-color, var(--accent)));
+  }
+
+  54% {
+    opacity: 0.02;
+    filter: drop-shadow(0 0 0 transparent);
+  }
+
+  60% {
+    opacity: 0.25;
+    filter: drop-shadow(0 0 5px var(--shimmer-color, var(--accent)));
+  }
+
+  65% {
+    opacity: 0.04;
+    filter: drop-shadow(0 0 1px var(--shimmer-color, var(--accent)));
+  }
+
+  72% {
+    opacity: 0.21;
+    filter: drop-shadow(0 0 4px var(--shimmer-color, var(--accent)));
+  }
+
+  100% {
+    opacity: 0;
+    filter: drop-shadow(0 0 0 transparent);
+  }
 }
 
 /* "/move" mode: the whole window becomes an OS-level drag handle (see main/barWindow.ts's
@@ -425,6 +532,7 @@ body::-webkit-scrollbar,
   from {
     opacity: 0;
   }
+
   to {
     opacity: 1;
   }
@@ -435,6 +543,7 @@ body::-webkit-scrollbar,
     transform: scale(var(--grow-scale, 0.07));
     opacity: 0;
   }
+
   to {
     transform: scale(1);
     opacity: 1;
@@ -446,6 +555,7 @@ body::-webkit-scrollbar,
     transform: scale(1);
     opacity: 1;
   }
+
   to {
     transform: scale(var(--grow-scale, 0.07));
     opacity: 0;
@@ -465,6 +575,7 @@ body::-webkit-scrollbar,
     from {
       opacity: 0;
     }
+
     to {
       opacity: 1;
     }
@@ -474,6 +585,7 @@ body::-webkit-scrollbar,
     from {
       opacity: 1;
     }
+
     to {
       opacity: 0;
     }
@@ -1272,10 +1384,12 @@ body::-webkit-scrollbar,
 }
 
 @keyframes term-icon-ended-glow {
+
   0%,
   100% {
     opacity: 0.35;
   }
+
   50% {
     opacity: 1;
   }
@@ -1311,11 +1425,13 @@ body::-webkit-scrollbar,
 }
 
 @keyframes term-icon-unread-glow {
+
   0%,
   100% {
     opacity: 0.35;
     transform: scale(0.96);
   }
+
   50% {
     opacity: 1;
     transform: scale(1.06);
@@ -1475,8 +1591,8 @@ body::-webkit-scrollbar,
    cold render could still be mid-flight when the window's opacity flips to 1, flashing
    the panel at full size for a frame. display:none removes it from the paint pipeline
    entirely until the grow-in animation actually starts. */
-.palette.grow-pending > *,
-.palette.grow-out > * {
+.palette.grow-pending>*,
+.palette.grow-out>* {
   display: none !important;
 }
 
@@ -1926,6 +2042,7 @@ body::-webkit-scrollbar,
     opacity: 0;
     transform: translateY(-3px);
   }
+
   to {
     opacity: 1;
     transform: translateY(0);
@@ -2071,7 +2188,8 @@ body::-webkit-scrollbar,
   display: flex;
   align-items: flex-end;
   justify-content: center;
-  padding-bottom: 8px; /* 8px margin above taskbar */
+  padding-bottom: 8px;
+  /* 8px margin above taskbar */
   box-sizing: border-box;
   background: transparent !important;
   user-select: none;
@@ -2166,10 +2284,12 @@ body::-webkit-scrollbar,
 }
 
 @keyframes dockGlowBarBreathe {
+
   0%,
   100% {
     opacity: 0.44;
   }
+
   50% {
     opacity: 0.72;
   }
@@ -2367,6 +2487,7 @@ body::-webkit-scrollbar,
     opacity: 0;
     transform: translate(-50%, 4px) scale(0.92);
   }
+
   to {
     opacity: 1;
     transform: translate(-50%, 0) scale(1);
@@ -2374,10 +2495,13 @@ body::-webkit-scrollbar,
 }
 
 @keyframes countdownDotPulse {
-  0%, 100% {
+
+  0%,
+  100% {
     opacity: 1;
     transform: scale(1);
   }
+
   50% {
     opacity: 0.35;
     transform: scale(0.85);
@@ -2390,9 +2514,12 @@ body::-webkit-scrollbar,
 }
 
 @keyframes focusRunningPulse {
-  0%, 100% {
+
+  0%,
+  100% {
     box-shadow: 0 0 6px rgba(16, 185, 129, 0.3);
   }
+
   50% {
     box-shadow: 0 0 14px rgba(16, 185, 129, 0.7);
   }
@@ -2433,9 +2560,12 @@ body::-webkit-scrollbar,
 }
 
 @keyframes termUnreadShelfGlow {
-  0%, 100% {
+
+  0%,
+  100% {
     box-shadow: 0 0 6px rgba(90, 160, 255, 0.3);
   }
+
   50% {
     box-shadow: 0 0 14px rgba(90, 160, 255, 0.8), inset 0 0 8px rgba(90, 160, 255, 0.3);
   }
@@ -2567,6 +2697,7 @@ body::-webkit-scrollbar,
     opacity: 0;
     transform: translateY(-2px);
   }
+
   to {
     opacity: 1;
     transform: translateY(0);
@@ -3398,6 +3529,7 @@ body::-webkit-scrollbar,
   from {
     transform: rotate(0deg);
   }
+
   to {
     transform: rotate(360deg);
   }
@@ -3407,16 +3539,20 @@ body::-webkit-scrollbar,
   from {
     transform: rotate(0deg);
   }
+
   to {
     transform: rotate(-360deg);
   }
 }
 
 @keyframes orbit-track-pulse {
-  0%, 100% {
+
+  0%,
+  100% {
     border-color: var(--dock-glow-color, rgba(56, 189, 248, 0.35));
     box-shadow: 0 0 10px var(--dock-glow-color, rgba(56, 189, 248, 0.12)), inset 0 0 10px var(--dock-glow-color, rgba(56, 189, 248, 0.06));
   }
+
   50% {
     border-color: var(--dock-glow-color, rgba(56, 189, 248, 0.65));
     box-shadow: 0 0 17px var(--dock-glow-color, rgba(56, 189, 248, 0.28)), inset 0 0 15px var(--dock-glow-color, rgba(56, 189, 248, 0.14));
@@ -3424,10 +3560,13 @@ body::-webkit-scrollbar,
 }
 
 @keyframes orbit-center-beacon {
-  0%, 100% {
+
+  0%,
+  100% {
     box-shadow: 0 0 6px var(--dock-glow-color, #38bdf8), 0 0 12px var(--dock-glow-color, rgba(56, 189, 248, 0.48));
     transform: translate(-50%, -50%) scale(1);
   }
+
   50% {
     box-shadow: 0 0 12px var(--dock-glow-color, #38bdf8), 0 0 22px var(--dock-glow-color, rgba(56, 189, 248, 0.72));
     transform: translate(-50%, -50%) scale(1.15);
@@ -4568,4 +4707,480 @@ body::-webkit-scrollbar,
   gap: 6px;
   justify-content: flex-end;
   margin-top: auto;
+}
+
+/* ============================================================================
+   Visual Loading Spinners & Running Job Indicators
+   ============================================================================ */
+
+@keyframes sudoSpin {
+  0% {
+    transform: rotate(0deg);
+  }
+
+  100% {
+    transform: rotate(360deg);
+  }
+}
+
+.sudo-spinner {
+  display: inline-block;
+  width: 12px;
+  height: 12px;
+  border: 2px solid rgba(255, 255, 255, 0.22);
+  border-top-color: currentColor;
+  border-radius: 50%;
+  animation: sudoSpin 0.68s linear infinite;
+  vertical-align: middle;
+  flex-shrink: 0;
+  box-sizing: border-box;
+}
+
+.sudo-spinner-sm {
+  width: 10px;
+  height: 10px;
+  border-width: 1.75px;
+}
+
+.sudo-spinner-lg {
+  width: 16px;
+  height: 16px;
+  border-width: 2.25px;
+}
+
+.sudo-job-running-banner {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 12px;
+  border-radius: 8px;
+  background: rgba(56, 189, 248, 0.12);
+  border: 1px solid rgba(56, 189, 248, 0.35);
+  color: #7dd3fc;
+  font-size: 11.5px;
+  font-weight: 600;
+  animation: fadeIn 0.16s ease-out;
+}
+
+/* ============================================================================
+   Git Hot-Reload Filesystem Watchers Styles
+   ============================================================================ */
+
+.git-watcher-quick-strip {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 7px 10px;
+  margin-top: 2px;
+  border-radius: 7px;
+  background: rgba(16, 185, 129, 0.08);
+  border: 1px solid rgba(16, 185, 129, 0.28);
+}
+
+.git-watcher-quick-strip-left {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+}
+
+.git-watcher-quick-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.35);
+  flex-shrink: 0;
+}
+
+.git-watcher-quick-dot[data-active='true'] {
+  background: #10b981;
+  box-shadow: 0 0 8px #10b981;
+}
+
+.git-watcher-quick-text {
+  font-size: 11.5px;
+  font-weight: 600;
+  color: #d1fae5;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.git-watcher-quick-strip-actions {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  flex-shrink: 0;
+}
+
+.git-watchers-container {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding-right: 2px;
+}
+
+.git-watchers-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.git-watchers-toolbar-left,
+.git-watchers-toolbar-right {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.git-watcher-form-card {
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+  padding: 12px;
+  border-radius: 9px;
+  border: 1px solid var(--accent);
+  background: rgba(15, 23, 42, 0.92);
+  box-shadow: 0 4px 18px rgba(0, 0, 0, 0.38);
+}
+
+.git-watcher-form-header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.git-watcher-form-title {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--fg);
+}
+
+.git-watcher-form-subtitle {
+  font-size: 11px;
+  color: var(--muted);
+}
+
+.git-watcher-form-row {
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+}
+
+.git-watcher-field {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+
+.git-watcher-label {
+  font-size: 10.5px;
+  font-weight: 600;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+}
+
+.git-watcher-input,
+.git-watcher-select {
+  background: rgba(0, 0, 0, 0.45);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 6px 9px;
+  color: var(--fg);
+  font-size: 12px;
+  outline: none;
+}
+
+.git-watcher-input:focus,
+.git-watcher-select:focus {
+  border-color: var(--accent);
+}
+
+.git-watcher-mono-input {
+  font-family: 'Cascadia Mono', Consolas, monospace;
+  font-size: 11.5px;
+}
+
+.git-watcher-presets-box {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  padding: 7px 9px;
+  border-radius: 7px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.git-watcher-preset-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+
+.git-watcher-preset-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 9px;
+  border-radius: 6px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  background: rgba(0, 0, 0, 0.32);
+  color: var(--fg);
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.12s ease;
+}
+
+.git-watcher-preset-chip:hover {
+  border-color: var(--accent);
+  background: rgba(90, 160, 255, 0.15);
+}
+
+.git-watcher-preset-chip.is-selected {
+  border-color: #10b981;
+  background: rgba(16, 185, 129, 0.18);
+  color: #6ee7b7;
+}
+
+.git-watcher-form-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding-top: 2px;
+}
+
+.git-watcher-empty-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: 6px;
+  padding: 18px 16px;
+  border-radius: 9px;
+  border: 1px dashed rgba(255, 255, 255, 0.18);
+  background: rgba(0, 0, 0, 0.2);
+}
+
+.git-watcher-empty-title {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--fg);
+}
+
+.git-watcher-empty-desc {
+  font-size: 11.5px;
+  color: var(--muted);
+  max-width: 520px;
+  line-height: 1.4;
+}
+
+.git-watcher-quick-presets {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  margin-top: 6px;
+}
+
+.git-watchers-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.git-watcher-card {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: rgba(0, 0, 0, 0.28);
+  transition: all 0.14s ease;
+}
+
+.git-watcher-card.is-enabled {
+  border-color: rgba(16, 185, 129, 0.42);
+  background: rgba(16, 185, 129, 0.05);
+}
+
+.git-watcher-card.is-error {
+  border-color: rgba(239, 68, 68, 0.48);
+  background: rgba(239, 68, 68, 0.06);
+}
+
+.git-watcher-card-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.git-watcher-card-title-group {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+  flex-wrap: wrap;
+}
+
+.git-watcher-status-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 10px;
+  font-weight: 700;
+  padding: 2px 7px;
+  border-radius: 99px;
+  letter-spacing: 0.3px;
+}
+
+.git-watcher-status-badge.status-running {
+  background: rgba(56, 189, 248, 0.18);
+  border: 1px solid rgba(56, 189, 248, 0.45);
+  color: #38bdf8;
+}
+
+.git-watcher-status-badge.status-watching {
+  background: rgba(16, 185, 129, 0.18);
+  border: 1px solid rgba(16, 185, 129, 0.42);
+  color: #34d399;
+}
+
+.git-watcher-status-badge.status-error {
+  background: rgba(239, 68, 68, 0.2);
+  border: 1px solid rgba(239, 68, 68, 0.45);
+  color: #f87171;
+}
+
+.git-watcher-status-badge.status-stopped {
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  color: var(--muted);
+}
+
+.git-watcher-pulse-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #34d399;
+  box-shadow: 0 0 6px #34d399;
+}
+
+.git-watcher-name {
+  font-size: 12.5px;
+  font-weight: 700;
+  color: var(--fg);
+}
+
+.git-watcher-repo-badge {
+  font-size: 10.5px;
+  padding: 1px 6px;
+  border-radius: 5px;
+  background: rgba(255, 255, 255, 0.07);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  color: var(--muted);
+  font-family: 'Cascadia Mono', Consolas, monospace;
+}
+
+.git-watcher-repo-badge.is-current-repo {
+  background: rgba(90, 160, 255, 0.14);
+  border-color: rgba(90, 160, 255, 0.35);
+  color: #93c5fd;
+}
+
+.git-watcher-mode-badge {
+  font-size: 10px;
+  padding: 1px 6px;
+  border-radius: 5px;
+  background: rgba(168, 85, 247, 0.14);
+  border: 1px solid rgba(168, 85, 247, 0.3);
+  color: #d8b4fe;
+}
+
+.git-watcher-card-actions {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  flex-shrink: 0;
+}
+
+.git-watcher-card-meta {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  font-size: 11px;
+  color: var(--muted);
+}
+
+.git-watcher-cmd-pill {
+  padding: 2px 7px;
+  border-radius: 5px;
+  background: rgba(0, 0, 0, 0.45);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  color: #93c5fd;
+  font-family: 'Cascadia Mono', Consolas, monospace;
+  font-size: 11px;
+  max-width: 280px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.git-watcher-meta-item strong {
+  color: var(--fg);
+}
+
+.git-watcher-reload-counter {
+  color: #fbbf24;
+}
+
+.git-watcher-last-file code {
+  font-family: 'Cascadia Mono', Consolas, monospace;
+  font-size: 10.5px;
+  color: #cbd5e1;
+}
+
+.git-watcher-logs-drawer {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: 2px;
+  padding: 8px;
+  border-radius: 6px;
+  background: rgba(0, 0, 0, 0.55);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+}
+
+.git-watcher-logs-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 10.5px;
+  font-weight: 600;
+  color: var(--muted);
+}
+
+.git-watcher-logs-pre {
+  margin: 0;
+  max-height: 155px;
+  overflow-y: auto;
+  font-family: 'Cascadia Mono', Consolas, monospace;
+  font-size: 10.5px;
+  line-height: 1.45;
+  color: #e2e8f0;
+  white-space: pre-wrap;
+  word-break: break-word;
 }

@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
+import { useState, useEffect, useCallback, useMemo, useRef, useDeferredValue } from 'react'
 import type {
   WingetPackageItem,
   WingetPinItem,
@@ -235,8 +235,21 @@ export function SystemManagementPanel({
   const [winUpdateStatus, setWinUpdateStatus] = useState<WindowsUpdateStatus | null>(null)
   const [loadingWinUpdate, setLoadingWinUpdate] = useState(false)
   const [scanningWinUpdate, setScanningWinUpdate] = useState(false)
+  const [winUpdateActionBusy, setWinUpdateActionBusy] = useState<string | null>(null)
   const [confirmScheduleReboot, setConfirmScheduleReboot] = useState(false)
   const [rebootScheduled, setRebootScheduled] = useState(false)
+
+  // Per-action busy states for visual loading spinners
+  const [ecosystemBusyKey, setEcosystemBusyKey] = useState<string | null>(null)
+  const [repairActionBusy, setRepairActionBusy] = useState<string | null>(null)
+  const [securityActionBusy, setSecurityActionBusy] = useState<string | null>(null)
+
+  // Deferred search values to prevent typing stutter over large lists
+  const deferredFilterText = useDeferredValue(filterText)
+  const deferredPathSearchText = useDeferredValue(pathSearchText)
+  const deferredServiceSearchText = useDeferredValue(serviceSearchText)
+  const deferredPortSearchText = useDeferredValue(portSearchText)
+  const deferredEventSearchText = useDeferredValue(eventSearchText)
 
   const flash = useCallback((msg: string): void => {
     setFeedback(msg)
@@ -494,19 +507,29 @@ export function SystemManagementPanel({
     async (options?: { force?: boolean; scanPending?: boolean; online?: boolean }) => {
       if (options?.scanPending) {
         setScanningWinUpdate(true)
+        setWinUpdateActionBusy(options.online ? 'scan-online' : 'scan-local')
       } else {
         setLoadingWinUpdate(true)
+        if (options?.force) setWinUpdateActionBusy('recheck')
       }
       try {
         const st = await window.api.getWindowsUpdateStatus?.(options)
         if (st) {
           setWinUpdateStatus(st)
+          if (options?.scanPending) {
+            flash(
+              st.pendingUpdates.length > 0
+                ? `Found ${st.pendingUpdates.length} pending Windows update(s)`
+                : 'Scan complete: 0 pending Windows updates found'
+            )
+          }
         }
       } catch (err) {
         flash(`Failed to query Windows Update & Pending Reboot status: ${err}`)
       } finally {
         setLoadingWinUpdate(false)
         setScanningWinUpdate(false)
+        setWinUpdateActionBusy(null)
       }
     },
     [flash]
@@ -904,7 +927,7 @@ export function SystemManagementPanel({
 
   // Filtered lists for WinGet
   const filteredUpdates = useMemo(() => {
-    const q = filterText.trim().toLowerCase()
+    const q = deferredFilterText.trim().toLowerCase()
     if (!q) return updates
     return updates.filter(
       (u) =>
@@ -913,7 +936,7 @@ export function SystemManagementPanel({
         u.version.toLowerCase().includes(q) ||
         (u.available && u.available.toLowerCase().includes(q))
     )
-  }, [updates, filterText])
+  }, [updates, deferredFilterText])
 
   const wingetSourceCount = useMemo(
     () => installed.filter((i) => i.source === 'winget').length,
@@ -937,7 +960,7 @@ export function SystemManagementPanel({
     } else if (installedFilterChip === 'pinned') {
       base = base.filter((i) => Boolean(i.isPinned))
     }
-    const q = filterText.trim().toLowerCase()
+    const q = deferredFilterText.trim().toLowerCase()
     if (!q) return base
     return base.filter(
       (i) =>
@@ -945,10 +968,10 @@ export function SystemManagementPanel({
         i.id.toLowerCase().includes(q) ||
         i.version.toLowerCase().includes(q)
     )
-  }, [installed, installedFilterChip, filterText])
+  }, [installed, installedFilterChip, deferredFilterText])
 
   const filteredPins = useMemo(() => {
-    const q = filterText.trim().toLowerCase()
+    const q = deferredFilterText.trim().toLowerCase()
     if (!q) return pins
     return pins.filter(
       (p) =>
@@ -956,19 +979,19 @@ export function SystemManagementPanel({
         p.id.toLowerCase().includes(q) ||
         p.pinType.toLowerCase().includes(q)
     )
-  }, [pins, filterText])
+  }, [pins, deferredFilterText])
 
   const filteredEcosystem = useMemo(() => {
     let base = ecosystemUpdates
     if (ecosystemFilterChip !== 'all') {
       base = base.filter((e) => e.manager === ecosystemFilterChip)
     }
-    const q = filterText.trim().toLowerCase()
+    const q = deferredFilterText.trim().toLowerCase()
     if (!q) return base
     return base.filter(
       (e) => e.name.toLowerCase().includes(q) || e.id.toLowerCase().includes(q)
     )
-  }, [ecosystemUpdates, ecosystemFilterChip, filterText])
+  }, [ecosystemUpdates, ecosystemFilterChip, deferredFilterText])
 
   // Filtered lists for PATH Doctor
   const brokenPathCount = useMemo(
@@ -990,10 +1013,10 @@ export function SystemManagementPanel({
     else if (pathFilterChip === 'duplicate') base = base.filter((p) => p.isDuplicate)
     else if (pathFilterChip === 'user') base = base.filter((p) => p.scope === 'User')
     else if (pathFilterChip === 'machine') base = base.filter((p) => p.scope === 'Machine')
-    const q = pathSearchText.trim().toLowerCase()
+    const q = deferredPathSearchText.trim().toLowerCase()
     if (!q) return base
     return base.filter((p) => p.path.toLowerCase().includes(q))
-  }, [pathEntries, pathFilterChip, pathSearchText])
+  }, [pathEntries, pathFilterChip, deferredPathSearchText])
 
   const filteredEnvVars = useMemo(() => {
     let base = envVars
@@ -1002,12 +1025,12 @@ export function SystemManagementPanel({
     } else if (envFilterChip === 'secrets') {
       base = base.filter((e) => e.isSecret)
     }
-    const q = pathSearchText.trim().toLowerCase()
+    const q = deferredPathSearchText.trim().toLowerCase()
     if (!q) return base
     return base.filter(
       (e) => e.name.toLowerCase().includes(q) || e.value.toLowerCase().includes(q)
     )
-  }, [envVars, envFilterChip, pathSearchText])
+  }, [envVars, envFilterChip, deferredPathSearchText])
 
   // Filtered lists for Services & Scheduled Tasks
   const filteredServices = useMemo(() => {
@@ -1015,13 +1038,13 @@ export function SystemManagementPanel({
     if (serviceFilterChip === 'pinned') base = base.filter((s) => s.isPinned)
     else if (serviceFilterChip === 'running') base = base.filter((s) => s.status === 'Running')
     else if (serviceFilterChip === 'stopped') base = base.filter((s) => s.status !== 'Running')
-    const q = serviceSearchText.trim().toLowerCase()
+    const q = deferredServiceSearchText.trim().toLowerCase()
     if (!q) return base
     return base.filter(
       (s) =>
         s.name.toLowerCase().includes(q) || s.displayName.toLowerCase().includes(q)
     )
-  }, [services, serviceFilterChip, serviceSearchText])
+  }, [services, serviceFilterChip, deferredServiceSearchText])
 
   const filteredScheduledTasks = useMemo(() => {
     let base = scheduledTasks
@@ -1029,7 +1052,7 @@ export function SystemManagementPanel({
     else if (taskFilterChip === 'ready')
       base = base.filter((t) => t.state === 'Ready' || t.state === 'Running')
     else if (taskFilterChip === 'disabled') base = base.filter((t) => t.state === 'Disabled')
-    const q = serviceSearchText.trim().toLowerCase()
+    const q = deferredServiceSearchText.trim().toLowerCase()
     if (!q) return base
     return base.filter(
       (t) =>
@@ -1038,7 +1061,7 @@ export function SystemManagementPanel({
         t.author.toLowerCase().includes(q) ||
         t.description.toLowerCase().includes(q)
     )
-  }, [scheduledTasks, taskFilterChip, serviceSearchText])
+  }, [scheduledTasks, taskFilterChip, deferredServiceSearchText])
 
   // Filtered lists for Event Logs
   const filteredEventLogs = useMemo(() => {
@@ -1048,7 +1071,7 @@ export function SystemManagementPanel({
     } else if (eventFilterChip === 'Critical') {
       base = base.filter((e) => e.level === 'Critical')
     }
-    const q = eventSearchText.trim().toLowerCase()
+    const q = deferredEventSearchText.trim().toLowerCase()
     if (!q) return base
     return base.filter(
       (e) =>
@@ -1056,13 +1079,13 @@ export function SystemManagementPanel({
         e.message.toLowerCase().includes(q) ||
         String(e.id).includes(q)
     )
-  }, [eventLogs, eventFilterChip, eventSearchText])
+  }, [eventLogs, eventFilterChip, deferredEventSearchText])
 
   // Filtered lists for Ports & Processes
   const filteredPorts = useMemo(() => {
     let base = ports
     if (portFilterChip === 'dev') base = base.filter((p) => p.isCommonDevPort)
-    const q = portSearchText.trim().toLowerCase()
+    const q = deferredPortSearchText.trim().toLowerCase()
     if (!q) return base
     return base.filter(
       (p) =>
@@ -1070,10 +1093,10 @@ export function SystemManagementPanel({
         p.processName.toLowerCase().includes(q) ||
         String(p.pid).includes(q)
     )
-  }, [ports, portFilterChip, portSearchText])
+  }, [ports, portFilterChip, deferredPortSearchText])
 
   const filteredProcesses = useMemo(() => {
-    const q = portSearchText.trim().toLowerCase()
+    const q = deferredPortSearchText.trim().toLowerCase()
     const base = q
       ? processes.filter(
           (p) =>
@@ -1085,7 +1108,7 @@ export function SystemManagementPanel({
     return [...base].sort((a, b) =>
       processSortBy === 'memory' ? b.memoryMb - a.memoryMb : b.cpuSec - a.cpuSec
     )
-  }, [processes, portSearchText, processSortBy])
+  }, [processes, deferredPortSearchText, processSortBy])
 
   const totalCleanupMb = useMemo(
     () =>
@@ -1097,6 +1120,23 @@ export function SystemManagementPanel({
   )
 
   const isOpRunning = opState?.status === 'running'
+  const isAnyLoading =
+    loadingUpdates ||
+    loadingInstalled ||
+    loadingPins ||
+    loadingSearch ||
+    loadingEcosystem ||
+    loadingSnapshots ||
+    loadingWinUpdate ||
+    scanningWinUpdate ||
+    Boolean(winUpdateActionBusy) ||
+    loadingRuntimes ||
+    loadingServices ||
+    loadingTasks ||
+    loadingPorts ||
+    loadingCleanup ||
+    cleaningBusy ||
+    loadingSecurity
 
   return (
     <div className="shelf-module-panel system-panel">
@@ -1238,10 +1278,17 @@ export function SystemManagementPanel({
           <button
             type="button"
             className="shelf-btn shelf-btn-sm"
+            disabled={isAnyLoading}
             onClick={handleRefreshCurrentView}
             title="Refresh current view"
           >
-            🔄 Refresh
+            {isAnyLoading ? (
+              <>
+                <span className="sudo-spinner sudo-spinner-sm" /> Refreshing…
+              </>
+            ) : (
+              '🔄 Refresh'
+            )}
           </button>
         </div>
       </div>
@@ -1253,7 +1300,11 @@ export function SystemManagementPanel({
         <div className={`winget-op-drawer status-${opState.status}`}>
           <div className="winget-op-header">
             <div className="winget-op-title-row">
-              <span className={`winget-op-dot status-${opState.status}`} />
+              {opState.status === 'running' ? (
+                <span className="sudo-spinner sudo-spinner-sm" />
+              ) : (
+                <span className={`winget-op-dot status-${opState.status}`} />
+              )}
               <span className="winget-op-title">
                 {opState.status === 'running'
                   ? `Running ${opState.action}: ${opState.packageName}`
@@ -2338,18 +2389,31 @@ export function SystemManagementPanel({
                             <button
                               type="button"
                               className="shelf-btn shelf-btn-primary shelf-btn-sm"
+                              disabled={ecosystemBusyKey !== null}
                               onClick={async () => {
+                                const key = `${item.manager}:${item.id}`
+                                setEcosystemBusyKey(key)
                                 flash(`Updating ${item.name}...`)
-                                const res = await window.api.runEcosystemUpdate?.({
-                                  manager: item.manager,
-                                  id: item.id,
-                                  inTerminal: item.manager === 'wsl'
-                                })
-                                if (res?.message) flash(res.message)
-                                void loadEcosystem(true)
+                                try {
+                                  const res = await window.api.runEcosystemUpdate?.({
+                                    manager: item.manager,
+                                    id: item.id,
+                                    inTerminal: item.manager === 'wsl'
+                                  })
+                                  if (res?.message) flash(res.message)
+                                  await loadEcosystem(true)
+                                } finally {
+                                  setEcosystemBusyKey(null)
+                                }
                               }}
                             >
-                              ⬆️ Update
+                              {ecosystemBusyKey === `${item.manager}:${item.id}` ? (
+                                <>
+                                  <span className="sudo-spinner sudo-spinner-sm" /> Updating…
+                                </>
+                              ) : (
+                                '⬆️ Update'
+                              )}
                             </button>
                             <button
                               type="button"
@@ -2416,7 +2480,13 @@ export function SystemManagementPanel({
                         }
                       }}
                     >
-                      {creatingSnapshot ? 'Saving...' : '📸 Save Snapshot'}
+                      {creatingSnapshot ? (
+                        <>
+                          <span className="sudo-spinner sudo-spinner-sm" /> Saving…
+                        </>
+                      ) : (
+                        '📸 Save Snapshot'
+                      )}
                     </button>
                     <button
                       type="button"
@@ -2511,6 +2581,28 @@ export function SystemManagementPanel({
               {/* SUB-TAB 7: WINDOWS UPDATE & PENDING REBOOT STATUS */}
               {subTab === 'winupdate' && (
                 <div className="winget-tab-body">
+                  {/* Live Job Running Spinner Banner */}
+                  {(loadingWinUpdate || scanningWinUpdate || winUpdateActionBusy) && (
+                    <div className="sudo-job-running-banner">
+                      <span className="sudo-spinner sudo-spinner-lg" />
+                      <span>
+                        {winUpdateActionBusy === 'scan-online'
+                          ? 'Querying Microsoft Update online servers for cumulative, security, and driver updates (this may take 10–30 seconds)...'
+                          : winUpdateActionBusy === 'scan-local'
+                            ? 'Scanning locally cached Windows Update catalog via Microsoft.Update.Session...'
+                            : winUpdateActionBusy === 'trigger-scan'
+                              ? 'Running Windows Update Orchestrator scan (UsoClient StartInteractiveScan) & refreshing pending updates...'
+                              : winUpdateActionBusy === 'install-all'
+                                ? 'Downloading & installing all pending Windows Updates via elevated Windows Update Agent (UAC)...'
+                                : winUpdateActionBusy === 'download-all'
+                                  ? 'Downloading pending Windows Updates into local cache via elevated Windows Update Agent...'
+                                  : winUpdateActionBusy?.startsWith('install-kb:')
+                                    ? `Downloading & installing update (${winUpdateActionBusy.replace('install-kb:', '')}) via elevated Windows Update Agent...`
+                                    : 'Checking Windows Reboot & Update registry indicators and hotfix history...'}
+                      </span>
+                    </div>
+                  )}
+
                   {/* Pending Reboot & OS Health Card */}
                   <div
                     className="winget-pin-editor-card"
@@ -2528,7 +2620,10 @@ export function SystemManagementPanel({
                       <div>
                         <div className="winget-pin-editor-title">
                           {loadingWinUpdate && !winUpdateStatus ? (
-                            '⏳ Checking Windows Reboot & Update Registry Indicators...'
+                            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
+                              <span className="sudo-spinner sudo-spinner-sm" />
+                              Checking Windows Reboot &amp; Update Registry Indicators...
+                            </span>
                           ) : winUpdateStatus?.rebootPending ? (
                             <span style={{ color: '#fbbf24' }}>
                               ⚠️ System Reboot Required ({winUpdateStatus.rebootReasons.length}{' '}
@@ -2656,34 +2751,50 @@ export function SystemManagementPanel({
                       <button
                         type="button"
                         className="shelf-btn shelf-btn-sm"
-                        disabled={loadingWinUpdate}
+                        disabled={loadingWinUpdate || scanningWinUpdate || Boolean(winUpdateActionBusy)}
                         onClick={() =>
                           void loadWindowsUpdateStatus({ force: true, scanPending: false })
                         }
                       >
-                        {loadingWinUpdate ? 'Checking...' : '🔄 Re-check Reboot Flags'}
+                        {loadingWinUpdate || winUpdateActionBusy === 'recheck' ? (
+                          <>
+                            <span className="sudo-spinner sudo-spinner-sm" /> Checking…
+                          </>
+                        ) : (
+                          '🔄 Re-check Reboot Flags'
+                        )}
                       </button>
                     </div>
                   </div>
 
-                  {/* Pending Windows & Driver Updates Scanner */}
+                  {/* Pending Windows & Driver Updates Scanner & Trigger Bar */}
                   <div className="winget-summary-bar">
                     <div className="winget-summary-left">
                       <span className="winget-summary-text">
-                        {scanningWinUpdate
-                          ? '🔍 Querying Windows Update Agent (Microsoft.Update.Session)...'
-                          : winUpdateStatus?.pendingScanned
-                            ? `${winUpdateStatus.pendingUpdates.length} pending Windows / Driver update${
-                                winUpdateStatus.pendingUpdates.length === 1 ? '' : 's'
-                              } found`
-                            : 'Pending Windows & Driver Updates (click Scan to query Windows Update Agent)'}
+                        {scanningWinUpdate || winUpdateActionBusy ? (
+                          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                            <span className="sudo-spinner sudo-spinner-sm" />
+                            <span>
+                              {winUpdateActionBusy === 'install-all' ||
+                              winUpdateActionBusy?.startsWith('install-kb:')
+                                ? 'Installing Windows Updates...'
+                                : 'Querying Windows Update Agent (Microsoft.Update.Session)...'}
+                            </span>
+                          </span>
+                        ) : winUpdateStatus?.pendingScanned ? (
+                          `${winUpdateStatus.pendingUpdates.length} pending Windows / Driver update${
+                            winUpdateStatus.pendingUpdates.length === 1 ? '' : 's'
+                          } found`
+                        ) : (
+                          'Pending Windows & Driver Updates (click Scan to query Windows Update Agent)'
+                        )}
                       </span>
                     </div>
                     <div className="winget-summary-actions">
                       <button
                         type="button"
                         className="shelf-btn shelf-btn-primary shelf-btn-sm"
-                        disabled={scanningWinUpdate}
+                        disabled={scanningWinUpdate || Boolean(winUpdateActionBusy)}
                         onClick={() =>
                           void loadWindowsUpdateStatus({
                             force: true,
@@ -2691,14 +2802,20 @@ export function SystemManagementPanel({
                             online: false
                           })
                         }
-                        title="Fast scan of locally cached Windows Update catalog (~5-8s)"
+                        title="Fast scan of locally cached Windows Update catalog (~3-8s)"
                       >
-                        {scanningWinUpdate ? '⏳ Scanning...' : '🔍 Scan Pending (Local Cache)'}
+                        {winUpdateActionBusy === 'scan-local' ? (
+                          <>
+                            <span className="sudo-spinner sudo-spinner-sm" /> Scanning Cache…
+                          </>
+                        ) : (
+                          '🔍 Scan Pending (Local Cache)'
+                        )}
                       </button>
                       <button
                         type="button"
                         className="shelf-btn shelf-btn-sm"
-                        disabled={scanningWinUpdate}
+                        disabled={scanningWinUpdate || Boolean(winUpdateActionBusy)}
                         onClick={() =>
                           void loadWindowsUpdateStatus({
                             force: true,
@@ -2708,21 +2825,97 @@ export function SystemManagementPanel({
                         }
                         title="Query Microsoft Update servers online for latest cumulative & driver updates"
                       >
-                        🌐 Scan Online
+                        {winUpdateActionBusy === 'scan-online' ? (
+                          <>
+                            <span className="sudo-spinner sudo-spinner-sm" /> Scanning Online…
+                          </>
+                        ) : (
+                          '🌐 Scan Online'
+                        )}
                       </button>
                       <button
                         type="button"
                         className="shelf-btn shelf-btn-sm"
+                        disabled={scanningWinUpdate || Boolean(winUpdateActionBusy)}
                         onClick={async () => {
-                          const res = await window.api.runWindowsUpdateAction?.('trigger-scan')
-                          if (res?.message) flash(res.message)
+                          setWinUpdateActionBusy('trigger-scan')
+                          try {
+                            const res = await window.api.runWindowsUpdateAction?.('trigger-scan')
+                            if (res?.status) setWinUpdateStatus(res.status)
+                            if (res?.message) flash(res.message)
+                          } finally {
+                            setWinUpdateActionBusy(null)
+                          }
                         }}
-                        title="Trigger Windows Update Orchestrator background scan (UsoClient StartScan)"
+                        title="Trigger Windows Update Orchestrator scan (UsoClient StartInteractiveScan + StartScan) and refresh pending list"
                       >
-                        ⚡ Trigger OS Scan
+                        {winUpdateActionBusy === 'trigger-scan' ? (
+                          <>
+                            <span className="sudo-spinner sudo-spinner-sm" /> Triggering Scan…
+                          </>
+                        ) : (
+                          '⚡ Trigger OS Scan'
+                        )}
                       </button>
+                      {(winUpdateStatus?.pendingUpdates.length ?? 0) > 0 && (
+                        <>
+                          <button
+                            type="button"
+                            className="shelf-btn shelf-btn-primary shelf-btn-sm"
+                            disabled={scanningWinUpdate || Boolean(winUpdateActionBusy)}
+                            onClick={async () => {
+                              setWinUpdateActionBusy('install-all')
+                              try {
+                                const res =
+                                  await window.api.runWindowsUpdateAction?.('install-updates')
+                                if (res?.status) setWinUpdateStatus(res.status)
+                                if (res?.message) flash(res.message)
+                              } finally {
+                                setWinUpdateActionBusy(null)
+                              }
+                            }}
+                            title="Download & install all pending Windows Updates via elevated Windows Update Agent (UAC)"
+                          >
+                            {winUpdateActionBusy === 'install-all' ? (
+                              <>
+                                <span className="sudo-spinner sudo-spinner-sm" /> Installing…
+                              </>
+                            ) : (
+                              `⬇️ Install All (${winUpdateStatus?.pendingUpdates.length})`
+                            )}
+                          </button>
+                          <button
+                            type="button"
+                            className="shelf-btn shelf-btn-sm"
+                            disabled={scanningWinUpdate || Boolean(winUpdateActionBusy)}
+                            onClick={async () => {
+                              const res =
+                                await window.api.runWindowsUpdateAction?.('install-in-terminal')
+                              if (res?.message) flash(res.message)
+                            }}
+                            title="Run Windows Update scan, download, and install stream in SudoLaunch Terminal (>_)"
+                          >
+                            &gt;_ Install in Terminal
+                          </button>
+                        </>
+                      )}
                     </div>
                   </div>
+
+                  {winUpdateStatus?.scanNote && (
+                    <div
+                      style={{
+                        padding: '6px 10px',
+                        fontSize: 11,
+                        borderRadius: 6,
+                        background: 'rgba(245, 158, 11, 0.1)',
+                        border: '1px solid rgba(245, 158, 11, 0.3)',
+                        color: '#fbbf24'
+                      }}
+                    >
+                      ℹ️ {winUpdateStatus.scanNote}
+                    </div>
+                  )}
 
                   {/* Pending Updates List (when scanned) */}
                   {winUpdateStatus?.pendingScanned && (
@@ -2736,52 +2929,86 @@ export function SystemManagementPanel({
                           Agent!
                         </div>
                       ) : (
-                        winUpdateStatus.pendingUpdates.map((u, idx) => (
-                          <div key={`${u.title}-${idx}`} className="winget-pkg-row">
-                            <div className="winget-pkg-main">
-                              <div className="winget-pkg-title-row">
-                                <span className="winget-pkg-name">{u.title}</span>
-                                {u.kbs && (
-                                  <button
-                                    type="button"
-                                    className="winget-pkg-id-btn"
-                                    onClick={() => handleCopyText(u.kbs, 'Copied KB ID')}
-                                    title="Click to copy KB ID"
-                                  >
-                                    {u.kbs}
-                                  </button>
-                                )}
-                                {u.isDownloaded && (
-                                  <span className="winget-badge winget-badge-installed">
-                                    ✓ Downloaded
-                                  </span>
-                                )}
-                                {u.rebootRequired && (
-                                  <span className="winget-badge winget-badge-blocked">
-                                    🔄 Needs Reboot
-                                  </span>
-                                )}
+                        winUpdateStatus.pendingUpdates.map((u, idx) => {
+                          const targetKey = u.kbs || u.title
+                          const isInstallingThis =
+                            winUpdateActionBusy === `install-kb:${targetKey}` ||
+                            winUpdateActionBusy === 'install-all'
+                          return (
+                            <div key={`${u.title}-${idx}`} className="winget-pkg-row">
+                              <div className="winget-pkg-main">
+                                <div className="winget-pkg-title-row">
+                                  <span className="winget-pkg-name">{u.title}</span>
+                                  {u.kbs && (
+                                    <button
+                                      type="button"
+                                      className="winget-pkg-id-btn"
+                                      onClick={() => handleCopyText(u.kbs, 'Copied KB ID')}
+                                      title="Click to copy KB ID"
+                                    >
+                                      {u.kbs}
+                                    </button>
+                                  )}
+                                  {u.isDownloaded && (
+                                    <span className="winget-badge winget-badge-installed">
+                                      ✓ Downloaded
+                                    </span>
+                                  )}
+                                  {u.rebootRequired && (
+                                    <span className="winget-badge winget-badge-blocked">
+                                      🔄 Needs Reboot
+                                    </span>
+                                  )}
+                                </div>
+                                <div className="winget-pkg-meta-row">
+                                  <span className="winget-source-tag">Severity: {u.severity}</span>
+                                  {u.sizeMb > 0 && (
+                                    <span className="winget-ver-current">{u.sizeMb} MB</span>
+                                  )}
+                                </div>
                               </div>
-                              <div className="winget-pkg-meta-row">
-                                <span className="winget-source-tag">Severity: {u.severity}</span>
-                                {u.sizeMb > 0 && (
-                                  <span className="winget-ver-current">{u.sizeMb} MB</span>
-                                )}
+                              <div className="winget-pkg-actions">
+                                <button
+                                  type="button"
+                                  className="shelf-btn shelf-btn-primary shelf-btn-sm"
+                                  disabled={scanningWinUpdate || Boolean(winUpdateActionBusy)}
+                                  onClick={async () => {
+                                    setWinUpdateActionBusy(`install-kb:${targetKey}`)
+                                    try {
+                                      const res = await window.api.runWindowsUpdateAction?.(
+                                        'install-updates',
+                                        targetKey
+                                      )
+                                      if (res?.status) setWinUpdateStatus(res.status)
+                                      if (res?.message) flash(res.message)
+                                    } finally {
+                                      setWinUpdateActionBusy(null)
+                                    }
+                                  }}
+                                  title="Download & install this update directly via elevated Windows Update Agent (UAC)"
+                                >
+                                  {isInstallingThis ? (
+                                    <>
+                                      <span className="sudo-spinner sudo-spinner-sm" /> Installing…
+                                    </>
+                                  ) : (
+                                    '⬇️ Install Update'
+                                  )}
+                                </button>
+                                <button
+                                  type="button"
+                                  className="shelf-btn shelf-btn-sm"
+                                  onClick={() =>
+                                    void window.api.runWindowsUpdateAction?.('open-settings')
+                                  }
+                                  title="Open Windows Update Settings (ms-settings:windowsupdate)"
+                                >
+                                  🪟 Settings
+                                </button>
                               </div>
                             </div>
-                            <div className="winget-pkg-actions">
-                              <button
-                                type="button"
-                                className="shelf-btn shelf-btn-primary shelf-btn-sm"
-                                onClick={() =>
-                                  void window.api.runWindowsUpdateAction?.('open-settings')
-                                }
-                              >
-                                🪟 Install in Settings
-                              </button>
-                            </div>
-                          </div>
-                        ))
+                          )
+                        })
                       )}
                     </div>
                   )}
@@ -4435,7 +4662,13 @@ export function SystemManagementPanel({
                       }
                     }}
                   >
-                    {cleaningBusy ? 'Cleaning...' : `🧹 Clean Selected (${totalCleanupMb} MB)`}
+                    {cleaningBusy ? (
+                      <>
+                        <span className="sudo-spinner sudo-spinner-sm" /> Cleaning…
+                      </>
+                    ) : (
+                      `🧹 Clean Selected (${totalCleanupMb} MB)`
+                    )}
                   </button>
                 </div>
               </div>
@@ -4884,28 +5117,52 @@ export function SystemManagementPanel({
                     <button
                       type="button"
                       className="shelf-btn shelf-btn-primary shelf-btn-sm"
+                      disabled={securityActionBusy !== null}
                       onClick={async () => {
+                        setSecurityActionBusy('update-signatures')
                         flash('Updating Microsoft Defender signatures...')
-                        const res = await window.api.runSystemSecurityAction?.({
-                          action: 'update-signatures'
-                        })
-                        if (res?.posture) setSecurityPosture(res.posture)
-                        if (res?.message) flash(res.message)
+                        try {
+                          const res = await window.api.runSystemSecurityAction?.({
+                            action: 'update-signatures'
+                          })
+                          if (res?.posture) setSecurityPosture(res.posture)
+                          if (res?.message) flash(res.message)
+                        } finally {
+                          setSecurityActionBusy(null)
+                        }
                       }}
                     >
-                      🔄 Update Signatures
+                      {securityActionBusy === 'update-signatures' ? (
+                        <>
+                          <span className="sudo-spinner sudo-spinner-sm" /> Updating…
+                        </>
+                      ) : (
+                        '🔄 Update Signatures'
+                      )}
                     </button>
                     <button
                       type="button"
                       className="shelf-btn shelf-btn-sm"
+                      disabled={securityActionBusy !== null}
                       onClick={async () => {
-                        const res = await window.api.runSystemSecurityAction?.({
-                          action: 'quick-scan'
-                        })
-                        if (res?.message) flash(res.message)
+                        setSecurityActionBusy('quick-scan')
+                        try {
+                          const res = await window.api.runSystemSecurityAction?.({
+                            action: 'quick-scan'
+                          })
+                          if (res?.message) flash(res.message)
+                        } finally {
+                          setSecurityActionBusy(null)
+                        }
                       }}
                     >
-                      🔍 Quick Scan
+                      {securityActionBusy === 'quick-scan' ? (
+                        <>
+                          <span className="sudo-spinner sudo-spinner-sm" /> Scanning…
+                        </>
+                      ) : (
+                        '🔍 Quick Scan'
+                      )}
                     </button>
                     <button
                       type="button"

@@ -30,21 +30,44 @@ export function ensureLookupDir(): void {
 
 type Record_ = Record<string, unknown>
 
+const LOOKUP_CACHE_TTL_MS = 4000
+let cachedTablesRoot = ''
+let cachedTablesList: string[] = []
+let cachedTablesAt = 0
+const cachedTableData = new Map<string, { at: number; records: Record_[] }>()
+
 function listTables(root: string): string[] {
+  const now = Date.now()
+  if (root === cachedTablesRoot && now - cachedTablesAt < LOOKUP_CACHE_TTL_MS) {
+    return cachedTablesList
+  }
   let names: string[] = []
   try {
     names = readdirSync(root)
   } catch {
     return []
   }
-  return names.filter((n) => extname(n).toLowerCase() === '.json').map((n) => basename(n, extname(n)))
+  cachedTablesRoot = root
+  cachedTablesAt = now
+  cachedTablesList = names
+    .filter((n) => extname(n).toLowerCase() === '.json')
+    .map((n) => basename(n, extname(n)))
+  return cachedTablesList
 }
 
 function loadTable(root: string, table: string): Record_[] {
+  const key = `${root}::${table}`
+  const now = Date.now()
+  const hit = cachedTableData.get(key)
+  if (hit && now - hit.at < LOOKUP_CACHE_TTL_MS) {
+    return hit.records
+  }
   try {
     const raw = readFileSync(join(root, `${table}.json`), 'utf-8').replace(/^\uFEFF/, '')
     const parsed = JSON.parse(raw)
-    return Array.isArray(parsed) ? parsed : []
+    const records = Array.isArray(parsed) ? parsed : []
+    cachedTableData.set(key, { at: now, records })
+    return records
   } catch {
     return []
   }

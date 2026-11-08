@@ -11,6 +11,7 @@ export class DockGeometry {
   static readonly BUTTON_SIZE = { width: 40, height: 40 } as const
   static readonly BAR_ACTIVE_SIZE = { width: 1480, height: 920 } as const
   static readonly MODULE_PANEL_SIZE = { width: 640, height: 480 } as const
+  static readonly GIT_PANEL_SIZE = { width: 760, height: 580 } as const
   static readonly SYSTEM_PANEL_SIZE = { width: 1040, height: 720 } as const
   static readonly FOCUS_PANEL_SIZE = { width: 640, height: 380 } as const
   static readonly TERMINAL_PANEL_SIZE = { width: 800, height: 360 } as const

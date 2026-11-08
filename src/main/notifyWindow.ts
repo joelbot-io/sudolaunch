@@ -134,10 +134,14 @@ export function createNotificationWindow(icon: NativeImage): BrowserWindow {
     icon,
     webPreferences: {
       preload: join(__dirname, '../preload/index.js'),
+      contextIsolation: true,
+      nodeIntegration: false,
       sandbox: false
     }
   })
 
+  notifyWindow.webContents.setWindowOpenHandler(() => ({ action: 'deny' }))
+  notifyWindow.webContents.on('will-navigate', (e) => e.preventDefault())
   notifyWindow.setAlwaysOnTop(true, 'screen-saver')
   loadRenderer(notifyWindow)
 

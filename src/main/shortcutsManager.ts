@@ -1,8 +1,11 @@
 import { app, ipcMain, shell } from 'electron'
 import { existsSync, readFileSync, writeFileSync } from 'fs'
 import { basename, join } from 'path'
-import { exec, execSync, spawn } from 'child_process'
+import { execFile, spawn } from 'child_process'
+import { promisify } from 'util'
 import { CONFIG_DIR, readLinks, readSettings, writeSettings } from './config'
+
+const execFileAsync = promisify(execFile)
 import { loadCustomCommands } from './customCommands'
 import { dockManager } from './dock/DockManager'
 import { openTerminal, runInTerminal, toggleTerminal } from './terminalWindow'
@@ -840,13 +843,31 @@ function writePersistedConfig(cfg: PersistedShortcutsConfig): void {
   }
 }
 
-function getDockerContainersSnapshot(): { available: boolean; containers: DockerQuickContainer[] } {
+const DOCKER_CACHE_TTL_MS = 8000
+let cachedDockerSnap: { available: boolean; containers: DockerQuickContainer[] } = {
+  available: false,
+  containers: []
+}
+let cachedDockerAt = 0
+
+async function getDockerContainersSnapshot(options?: {
+  force?: boolean
+  skipProbe?: boolean
+}): Promise<{ available: boolean; containers: DockerQuickContainer[] }> {
+  if (options?.skipProbe && cachedDockerAt > 0) {
+    return cachedDockerSnap
+  }
+  const now = Date.now()
+  if (!options?.force && cachedDockerAt > 0 && now - cachedDockerAt < DOCKER_CACHE_TTL_MS) {
+    return cachedDockerSnap
+  }
   try {
-    const raw = execSync(
-      'docker ps -a --format "{{.ID}}\t{{.Names}}\t{{.Image}}\t{{.Status}}\t{{.Ports}}"',
+    const { stdout: raw } = await execFileAsync(
+      'docker',
+      ['ps', '-a', '--format', '{{.ID}}\t{{.Names}}\t{{.Image}}\t{{.Status}}\t{{.Ports}}'],
       {
         encoding: 'utf8',
-        timeout: 2200,
+        timeout: 2500,
         windowsHide: true
       }
     )
@@ -866,13 +887,20 @@ function getDockerContainersSnapshot(): { available: boolean; containers: Docker
         })
       }
     }
-    return { available: true, containers: list }
+    cachedDockerSnap = { available: true, containers: list }
+    cachedDockerAt = Date.now()
+    return cachedDockerSnap
   } catch {
-    return { available: false, containers: [] }
+    cachedDockerSnap = { available: false, containers: [] }
+    cachedDockerAt = Date.now()
+    return cachedDockerSnap
   }
 }
 
-export function getShortcutsOverlayData(): ShortcutsOverlayData {
+function buildShortcutsOverlayDataWithDocker(dockerSnap: {
+  available: boolean
+  containers: DockerQuickContainer[]
+}): ShortcutsOverlayData {
   const cfg = readPersistedConfig()
   const settings = readSettings()
   const favSet = new Set(cfg.favoriteIds)
@@ -975,8 +1003,6 @@ export function getShortcutsOverlayData(): ShortcutsOverlayData {
     })
   }
 
-  const dockerSnap = getDockerContainersSnapshot()
-
   // Build Tab Summary List
   const baseTabs: Array<{ id: string; label: string; icon: string; isCustomTab?: boolean }> = [
     { id: 'favorites', label: 'Favorites', icon: '⭐' },
@@ -1009,6 +1035,21 @@ export function getShortcutsOverlayData(): ShortcutsOverlayData {
     grayscale: Boolean(settings.shortcutsGrayscale),
     windowSize: settings.shortcutsWindowSize ?? { width: 1040, height: 720 }
   }
+}
+
+export function getShortcutsOverlayDataSync(): ShortcutsOverlayData {
+  return buildShortcutsOverlayDataWithDocker(cachedDockerSnap)
+}
+
+export async function getShortcutsOverlayData(options?: {
+  forceDocker?: boolean
+  skipDockerProbe?: boolean
+}): Promise<ShortcutsOverlayData> {
+  const dockerSnap = await getDockerContainersSnapshot({
+    force: options?.forceDocker,
+    skipProbe: options?.skipDockerProbe
+  })
+  return buildShortcutsOverlayDataWithDocker(dockerSnap)
 }
 
 /**
@@ -1242,15 +1283,16 @@ export async function executeShortcutOverlayItem(
     }
 
     case 'powershell': {
+      const encoded = Buffer.from(item.actionPayload, 'utf16le').toString('base64')
       if (useAdmin) {
-        const encoded = Buffer.from(item.actionPayload, 'utf16le').toString('base64')
-        const elevateCmd = `Start-Process powershell.exe -Verb RunAs -WindowStyle Hidden -ArgumentList '-NoProfile -NonInteractive -EncodedCommand ${encoded}'`
-        exec(`powershell.exe -NoProfile -NonInteractive -Command "${elevateCmd}"`, {
-          windowsHide: true
-        })
+        const elevateCmd = `Start-Process powershell.exe -Verb RunAs -WindowStyle Hidden -ArgumentList @('-NoProfile', '-NonInteractive', '-EncodedCommand', '${encoded}')`
+        execFile(
+          'powershell.exe',
+          ['-NoProfile', '-NonInteractive', '-WindowStyle', 'Hidden', '-Command', elevateCmd],
+          { windowsHide: true }
+        )
         return { ok: true, message: `Ran elevated PowerShell: ${item.label}` }
       } else {
-        const encoded = Buffer.from(item.actionPayload, 'utf16le').toString('base64')
         spawn(
           'powershell.exe',
           ['-NoProfile', '-NonInteractive', '-WindowStyle', 'Hidden', '-EncodedCommand', encoded],
@@ -1272,7 +1314,10 @@ export async function executeShortcutOverlayItem(
         return { ok: true, message: `Opened ${item.label}` }
       }
       try {
-        spawn(target, [], { detached: true, stdio: 'ignore', shell: true }).unref()
+        const openErr = await shell.openPath(target)
+        if (openErr) {
+          spawn(target, [], { detached: true, stdio: 'ignore', windowsHide: false }).unref()
+        }
       } catch {
         await shell.openPath(target)
       }
@@ -1296,7 +1341,7 @@ export async function executeShortcutOverlayItem(
   }
 }
 
-export function toggleShortcutFavorite(id: string): ShortcutsOverlayData {
+export async function toggleShortcutFavorite(id: string): Promise<ShortcutsOverlayData> {
   const cfg = readPersistedConfig()
   const idx = cfg.favoriteIds.indexOf(id)
   if (idx !== -1) {
@@ -1305,10 +1350,10 @@ export function toggleShortcutFavorite(id: string): ShortcutsOverlayData {
     cfg.favoriteIds.push(id)
   }
   writePersistedConfig(cfg)
-  return getShortcutsOverlayData()
+  return getShortcutsOverlayData({ skipDockerProbe: true })
 }
 
-export function saveShortcutOverlayItem(item: ShortcutOverlayItem): ShortcutsOverlayData {
+export async function saveShortcutOverlayItem(item: ShortcutOverlayItem): Promise<ShortcutsOverlayData> {
   const cfg = readPersistedConfig()
   const isBuiltIn =
     BUILTIN_POWERTOYS_ITEMS.some((p) => p.id === item.id) ||
@@ -1373,10 +1418,10 @@ export function saveShortcutOverlayItem(item: ShortcutOverlayItem): ShortcutsOve
   }
 
   writePersistedConfig(cfg)
-  return getShortcutsOverlayData()
+  return getShortcutsOverlayData({ skipDockerProbe: true })
 }
 
-export function deleteShortcutOverlayItem(id: string): ShortcutsOverlayData {
+export async function deleteShortcutOverlayItem(id: string): Promise<ShortcutsOverlayData> {
   const cfg = readPersistedConfig()
   cfg.favoriteIds = cfg.favoriteIds.filter((fid) => fid !== id)
   const customIdx = cfg.customItems.findIndex((c) => c.id === id)
@@ -1388,13 +1433,13 @@ export function deleteShortcutOverlayItem(id: string): ShortcutsOverlayData {
     }
   }
   writePersistedConfig(cfg)
-  return getShortcutsOverlayData()
+  return getShortcutsOverlayData({ skipDockerProbe: true })
 }
 
-export function addShortcutCustomTab(label: string, icon?: string): ShortcutsOverlayData {
+export async function addShortcutCustomTab(label: string, icon?: string): Promise<ShortcutsOverlayData> {
   const cfg = readPersistedConfig()
   const cleanLabel = label.trim()
-  if (!cleanLabel) return getShortcutsOverlayData()
+  if (!cleanLabel) return getShortcutsOverlayData({ skipDockerProbe: true })
   const id = cleanLabel.toLowerCase().replace(/[^a-z0-9-_]/g, '-')
   if (!cfg.customTabs.some((t) => t.id === id)) {
     cfg.customTabs.push({
@@ -1404,10 +1449,10 @@ export function addShortcutCustomTab(label: string, icon?: string): ShortcutsOve
     })
     writePersistedConfig(cfg)
   }
-  return getShortcutsOverlayData()
+  return getShortcutsOverlayData({ skipDockerProbe: true })
 }
 
-export function deleteShortcutCustomTab(tabId: string): ShortcutsOverlayData {
+export async function deleteShortcutCustomTab(tabId: string): Promise<ShortcutsOverlayData> {
   const cfg = readPersistedConfig()
   cfg.customTabs = cfg.customTabs.filter((t) => t.id !== tabId)
   // Reassign any custom items in that tab to 'custom'
@@ -1417,15 +1462,15 @@ export function deleteShortcutCustomTab(tabId: string): ShortcutsOverlayData {
     }
   }
   writePersistedConfig(cfg)
-  return getShortcutsOverlayData()
+  return getShortcutsOverlayData({ skipDockerProbe: true })
 }
 
-export function restoreDefaultShortcuts(): ShortcutsOverlayData {
+export async function restoreDefaultShortcuts(): Promise<ShortcutsOverlayData> {
   const cfg = readPersistedConfig()
   cfg.hiddenBuiltInIds = []
   cfg.overrides = {}
   writePersistedConfig(cfg)
-  return getShortcutsOverlayData()
+  return getShortcutsOverlayData({ skipDockerProbe: true })
 }
 
 export async function runDockerQuickContainerAction(
@@ -1434,7 +1479,11 @@ export async function runDockerQuickContainerAction(
 ): Promise<{ ok: boolean; message: string; data: ShortcutsOverlayData }> {
   const safeTarget = containerNameOrId.replace(/[^a-zA-Z0-9_.-]/g, '')
   if (!safeTarget) {
-    return { ok: false, message: 'Invalid container identifier', data: getShortcutsOverlayData() }
+    return {
+      ok: false,
+      message: 'Invalid container identifier',
+      data: await getShortcutsOverlayData({ skipDockerProbe: true })
+    }
   }
 
   if (action === 'shell') {
@@ -1445,7 +1494,7 @@ export async function runDockerQuickContainerAction(
     return {
       ok: true,
       message: `Opened interactive shell in ${safeTarget}`,
-      data: getShortcutsOverlayData()
+      data: await getShortcutsOverlayData({ skipDockerProbe: true })
     }
   }
 
@@ -1457,7 +1506,7 @@ export async function runDockerQuickContainerAction(
     return {
       ok: true,
       message: `Streaming logs for ${safeTarget} in Terminal`,
-      data: getShortcutsOverlayData()
+      data: await getShortcutsOverlayData({ skipDockerProbe: true })
     }
   }
 
@@ -1469,26 +1518,26 @@ export async function runDockerQuickContainerAction(
     return {
       ok: true,
       message: `Inspecting container ${safeTarget} in Terminal`,
-      data: getShortcutsOverlayData()
+      data: await getShortcutsOverlayData({ skipDockerProbe: true })
     }
   }
 
   try {
-    execSync(`docker ${action} ${safeTarget}`, {
+    await execFileAsync('docker', [action, safeTarget], {
       encoding: 'utf8',
-      timeout: 10000,
+      timeout: 15000,
       windowsHide: true
     })
     return {
       ok: true,
       message: `Container ${safeTarget}: ${action} succeeded`,
-      data: getShortcutsOverlayData()
+      data: await getShortcutsOverlayData({ forceDocker: true })
     }
   } catch (err) {
     return {
       ok: false,
       message: err instanceof Error ? err.message : String(err),
-      data: getShortcutsOverlayData()
+      data: await getShortcutsOverlayData({ forceDocker: true })
     }
   }
 }
@@ -1497,7 +1546,7 @@ export function registerShortcutsIpc(): void {
   ipcMain.on('shortcuts-toggle', (_event, initialTab?: string) => toggleShortcutsWindow(initialTab))
   ipcMain.on('shortcuts-open', (_event, initialTab?: string) => openShortcutsWindow(initialTab))
   ipcMain.on('shortcuts-ready', () => resolveShortcutsReady())
-  ipcMain.handle('shortcuts-get-data', () => getShortcutsOverlayData())
+  ipcMain.handle('shortcuts-get-data', () => getShortcutsOverlayData({ forceDocker: true }))
   ipcMain.handle(
     'shortcuts-execute',
     (_event, item: ShortcutOverlayItem, elevated?: boolean) =>
@@ -1524,16 +1573,16 @@ export function registerShortcutsIpc(): void {
   ipcMain.handle('shortcuts-set-stay-open', (_event, stayOpen: boolean) => {
     const settings = readSettings()
     writeSettings({ ...settings, shortcutsStayOpen: stayOpen })
-    return getShortcutsOverlayData()
+    return getShortcutsOverlayData({ skipDockerProbe: true })
   })
   ipcMain.handle('shortcuts-set-grayscale', (_event, grayscale: boolean) => {
     const settings = readSettings()
     writeSettings({ ...settings, shortcutsGrayscale: Boolean(grayscale) })
-    return getShortcutsOverlayData()
+    return getShortcutsOverlayData({ skipDockerProbe: true })
   })
   ipcMain.handle('shortcuts-resize', (_event, width: number, height: number) => {
     resizeShortcutsWindow(width, height)
-    return getShortcutsOverlayData()
+    return getShortcutsOverlayData({ skipDockerProbe: true })
   })
 }
 

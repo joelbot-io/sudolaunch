@@ -123,10 +123,14 @@ export function createShortcutsWindow(icon: NativeImage): BrowserWindow {
     icon,
     webPreferences: {
       preload: join(__dirname, '../preload/index.js'),
+      contextIsolation: true,
+      nodeIntegration: false,
       sandbox: false
     }
   })
 
+  shortcutsWindow.webContents.setWindowOpenHandler(() => ({ action: 'deny' }))
+  shortcutsWindow.webContents.on('will-navigate', (e) => e.preventDefault())
   shortcutsWindow.setAlwaysOnTop(true, 'screen-saver')
   loadRenderer(shortcutsWindow)
 

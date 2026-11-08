@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from 'react'
 import { flushSync } from 'react-dom'
 import type {
   ShortcutActionType,
@@ -103,10 +103,13 @@ export default function ShortcutsOverlay(): JSX.Element {
   const [data, setData] = useState<ShortcutsOverlayData | null>(null)
   const [activeTab, setActiveTab] = useState<string>('favorites')
   const [searchQuery, setSearchQuery] = useState('')
+  const deferredSearchQuery = useDeferredValue(searchQuery)
   const [searchAllTabs, setSearchAllTabs] = useState(false)
   const [selectedIndex, setSelectedIndex] = useState(0)
   const [statusToast, setStatusToast] = useState<{ ok: boolean; text: string } | null>(null)
   const [dockGlowColor, setDockGlowColor] = useState<string>('')
+  const [refreshingOverlay, setRefreshingOverlay] = useState(false)
+  const [busyDockerAction, setBusyDockerAction] = useState<string | null>(null)
 
   // Add / Edit Shortcut Modal State
   const [editingItem, setEditingItem] = useState<ShortcutOverlayItem | null>(null)
@@ -130,9 +133,15 @@ export default function ShortcutsOverlay(): JSX.Element {
   }, [])
 
   const refreshData = useCallback(() => {
-    window.api.getShortcutsOverlayData?.().then((res) => {
-      if (res) setData(res)
-    })
+    setRefreshingOverlay(true)
+    window.api
+      .getShortcutsOverlayData?.()
+      .then((res) => {
+        if (res) setData(res)
+      })
+      .finally(() => {
+        setRefreshingOverlay(false)
+      })
   }, [])
 
   useEffect(() => {
@@ -205,7 +214,7 @@ export default function ShortcutsOverlay(): JSX.Element {
 
   const filteredItems = useMemo(() => {
     const items = data?.items ?? []
-    const q = searchQuery.trim().toLowerCase()
+    const q = deferredSearchQuery.trim().toLowerCase()
 
     return items.filter((item) => {
       const matchesTab =
@@ -225,7 +234,7 @@ export default function ShortcutsOverlay(): JSX.Element {
         item.actionPayload.toLowerCase().includes(q)
       )
     })
-  }, [data, activeTab, searchQuery, searchAllTabs])
+  }, [data, activeTab, deferredSearchQuery, searchAllTabs])
 
   useEffect(() => {
     setSelectedIndex((prev) => {
@@ -462,10 +471,16 @@ export default function ShortcutsOverlay(): JSX.Element {
     containerName: string,
     action: 'start' | 'stop' | 'restart' | 'shell' | 'logs' | 'inspect' | 'rm'
   ): Promise<void> {
-    const res = await window.api.runDockerShortcutContainerAction?.(containerName, action)
-    if (res) {
-      setData(res.data)
-      flashToast(res.ok, res.message)
+    const actionKey = `${containerName}:${action}`
+    setBusyDockerAction(actionKey)
+    try {
+      const res = await window.api.runDockerShortcutContainerAction?.(containerName, action)
+      if (res) {
+        setData(res.data)
+        flashToast(res.ok, res.message)
+      }
+    } finally {
+      setBusyDockerAction(null)
     }
   }
 
@@ -659,6 +674,7 @@ export default function ShortcutsOverlay(): JSX.Element {
           <button
             type="button"
             onClick={refreshData}
+            disabled={refreshingOverlay}
             title="Refresh shortcuts & Docker containers"
             style={{
               padding: '3px 7px',
@@ -667,10 +683,13 @@ export default function ShortcutsOverlay(): JSX.Element {
               border: '1px solid rgba(255, 255, 255, 0.1)',
               background: 'rgba(255, 255, 255, 0.04)',
               color: '#cbd5e1',
-              cursor: 'pointer'
+              cursor: refreshingOverlay ? 'wait' : 'pointer',
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: 4
             }}
           >
-            🔄
+            {refreshingOverlay ? <span className="sudo-spinner sudo-spinner-sm" /> : '🔄'}
           </button>
 
           <button
@@ -1551,6 +1570,7 @@ export default function ShortcutsOverlay(): JSX.Element {
                             </button>
                             <button
                               type="button"
+                              disabled={busyDockerAction !== null}
                               onClick={() => handleDockerContainerAction(c.name, 'restart')}
                               style={{
                                 padding: '2px 7px',
@@ -1559,14 +1579,24 @@ export default function ShortcutsOverlay(): JSX.Element {
                                 border: '1px solid rgba(255,255,255,0.14)',
                                 background: 'rgba(255,255,255,0.05)',
                                 color: '#cbd5e1',
-                                cursor: 'pointer'
+                                cursor: busyDockerAction ? 'wait' : 'pointer',
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: 4
                               }}
                               title="Restart container"
                             >
-                              🔄 Restart
+                              {busyDockerAction === `${c.name}:restart` ? (
+                                <>
+                                  <span className="sudo-spinner sudo-spinner-sm" /> Restarting…
+                                </>
+                              ) : (
+                                '🔄 Restart'
+                              )}
                             </button>
                             <button
                               type="button"
+                              disabled={busyDockerAction !== null}
                               onClick={() => handleDockerContainerAction(c.name, 'stop')}
                               style={{
                                 padding: '2px 7px',
@@ -1575,17 +1605,27 @@ export default function ShortcutsOverlay(): JSX.Element {
                                 border: '1px solid rgba(239, 68, 68, 0.35)',
                                 background: 'rgba(239, 68, 68, 0.14)',
                                 color: '#f87171',
-                                cursor: 'pointer'
+                                cursor: busyDockerAction ? 'wait' : 'pointer',
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: 4
                               }}
                               title="Stop container"
                             >
-                              ⏹ Stop
+                              {busyDockerAction === `${c.name}:stop` ? (
+                                <>
+                                  <span className="sudo-spinner sudo-spinner-sm" /> Stopping…
+                                </>
+                              ) : (
+                                '⏹ Stop'
+                              )}
                             </button>
                           </>
                         ) : (
                           <>
                             <button
                               type="button"
+                              disabled={busyDockerAction !== null}
                               onClick={() => handleDockerContainerAction(c.name, 'start')}
                               style={{
                                 padding: '2px 8px',
@@ -1595,11 +1635,20 @@ export default function ShortcutsOverlay(): JSX.Element {
                                 border: '1px solid rgba(16, 185, 129, 0.35)',
                                 background: 'rgba(16, 185, 129, 0.14)',
                                 color: '#34d399',
-                                cursor: 'pointer'
+                                cursor: busyDockerAction ? 'wait' : 'pointer',
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: 4
                               }}
                               title="Start container"
                             >
-                              ▶ Start
+                              {busyDockerAction === `${c.name}:start` ? (
+                                <>
+                                  <span className="sudo-spinner sudo-spinner-sm" /> Starting…
+                                </>
+                              ) : (
+                                '▶ Start'
+                              )}
                             </button>
                             <button
                               type="button"
@@ -1619,6 +1668,7 @@ export default function ShortcutsOverlay(): JSX.Element {
                             </button>
                             <button
                               type="button"
+                              disabled={busyDockerAction !== null}
                               onClick={() => handleDockerContainerAction(c.name, 'rm')}
                               style={{
                                 padding: '2px 7px',
@@ -1627,11 +1677,20 @@ export default function ShortcutsOverlay(): JSX.Element {
                                 border: '1px solid rgba(239, 68, 68, 0.35)',
                                 background: 'rgba(239, 68, 68, 0.14)',
                                 color: '#f87171',
-                                cursor: 'pointer'
+                                cursor: busyDockerAction ? 'wait' : 'pointer',
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: 4
                               }}
                               title="Remove stopped container (docker rm)"
                             >
-                              🗑️ Remove
+                              {busyDockerAction === `${c.name}:rm` ? (
+                                <>
+                                  <span className="sudo-spinner sudo-spinner-sm" /> Removing…
+                                </>
+                              ) : (
+                                '🗑️ Remove'
+                              )}
                             </button>
                           </>
                         )}
