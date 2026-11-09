@@ -66,8 +66,9 @@ interface Candidate {
   sublabel: string
 }
 
-const FOCUS_CACHE_TTL_MS = 3000
+const FOCUS_CACHE_TTL_MS = 8000
 let cachedCandidates: Candidate[] | null = null
+let cachedCandidatesFuse: Fuse<Candidate> | null = null
 let cachedCandidatesAt = 0
 
 function listCandidates(): Candidate[] {
@@ -102,14 +103,16 @@ function listCandidates(): Candidate[] {
     out.push({ id: win.id, label: title, sublabel })
   }
   cachedCandidates = out
+  cachedCandidatesFuse = new Fuse(out, { keys: ['label'], threshold: 0.35 })
   cachedCandidatesAt = now
   return out
 }
 
 export function search(query: string): SearchResultItem[] {
   const candidates = listCandidates()
+  const fuse = cachedCandidatesFuse ?? new Fuse(candidates, { keys: ['label'], threshold: 0.35 })
   const matches = query
-    ? new Fuse(candidates, { keys: ['label'], threshold: 0.35 }).search(query).map((r) => r.item)
+    ? fuse.search(query, { limit: 20 }).map((r) => r.item)
     : candidates.slice(0, 25)
   return matches.map((c) => ({ label: c.label, sublabel: c.sublabel, value: String(c.id) }))
 }

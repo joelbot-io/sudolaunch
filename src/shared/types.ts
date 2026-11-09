@@ -654,6 +654,77 @@ export interface GitWatcherItem {
   logLines: string[]
 }
 
+export type ScheduledJobTriggerType =
+  | 'cron'
+  | 'interval'
+  | 'startup'
+  | 'unlock'
+  | 'resume'
+  | 'network-change'
+
+export type ScheduledJobActionType =
+  | 'powershell'
+  | 'script'
+  | 'terminal'
+  | 'custom-command'
+
+export type ScheduledJobNotifyMode = 'always' | 'error' | 'never'
+
+export type ScheduledJobStatus = 'idle' | 'running' | 'success' | 'error'
+
+export interface ScheduledJobPreset {
+  id: string
+  name: string
+  description: string
+  actionType: ScheduledJobActionType
+  command: string
+  suggestedTriggerType: ScheduledJobTriggerType
+  suggestedSchedule: string
+  source: 'maintenance-script' | 'custom-command' | 'builtin'
+  icon: string
+}
+
+export interface ScheduledJobInput {
+  id?: string
+  name: string
+  description?: string
+  enabled?: boolean
+  triggerType: ScheduledJobTriggerType
+  schedule: string
+  actionType: ScheduledJobActionType
+  command: string
+  cwd?: string
+  elevated?: boolean
+  notifyOn?: ScheduledJobNotifyMode
+  runImmediately?: boolean
+}
+
+export interface ScheduledJobItem {
+  id: string
+  name: string
+  description?: string
+  enabled: boolean
+  triggerType: ScheduledJobTriggerType
+  schedule: string
+  scheduleSummary: string
+  actionType: ScheduledJobActionType
+  command: string
+  cwd?: string
+  elevated?: boolean
+  notifyOn: ScheduledJobNotifyMode
+  source: 'user' | 'custom-command'
+  sourceCommandName?: string
+  status: ScheduledJobStatus
+  pid?: number
+  runCount: number
+  nextRunAt?: number | null
+  lastRunAt?: number | null
+  lastDurationMs?: number | null
+  lastExitCode?: number | null
+  lastTriggerReason?: string
+  logLines: string[]
+}
+
 // The currently registered global accelerators, as Electron accelerator strings (e.g.
 // "CommandOrControl+Space") — shown in the bar/terminal tooltips.
 export interface Hotkeys {
@@ -741,6 +812,7 @@ export type CommandName =
   | 'hide'
   | 'system'
   | 'shortcuts'
+  | 'jobs'
 
 export interface CommandDef {
   name: CommandName
@@ -816,13 +888,14 @@ export const COMMANDS: CommandDef[] = [
   { name: 'key', description: 'Inspect keyboard events, key codes, Windows VK codes, and accelerators (alias: /kbd)', excludeFromSearch: true },
   { name: 'show', description: 'Show the persistent command dock on screen', excludeFromSearch: true },
   { name: 'hide', description: 'Hide the persistent command dock from the screen', excludeFromSearch: true },
-  { name: 'shortcuts', description: 'Open the customizable Shortcuts Overlay window (Favorites, PowerToys, Docker, Windows, Dev; alias: /sc)', excludeFromSearch: true }
+  { name: 'shortcuts', description: 'Open the customizable Shortcuts Overlay window (Favorites, PowerToys, Docker, Windows, Dev; alias: /sc)', excludeFromSearch: true },
+  { name: 'jobs', description: 'Manage, schedule, and trigger automated scripts, cron jobs, and lifecycle hooks (alias: /schedule)', excludeFromSearch: true }
 ]
 
 // Commands that can participate in the "search" command's fan-out. Used both to build the
 // SEARCHABLE dispatch table in commands/search.ts and to drive the "Search Commands" toggle
 // screen in ConfigManager.tsx.
-export const SEARCHABLE_COMMAND_NAMES: Exclude<CommandName, 'calc' | 'search' | 'view' | 'term' | 'restart' | 'default' | 'settings' | 'control' | 'release' | 'exit' | 'profile' | 'history' | 'show' | 'hide' | 'system' | 'shortcuts'>[] = [
+export const SEARCHABLE_COMMAND_NAMES: Exclude<CommandName, 'calc' | 'search' | 'view' | 'term' | 'restart' | 'default' | 'settings' | 'control' | 'release' | 'exit' | 'profile' | 'history' | 'show' | 'hide' | 'system' | 'shortcuts' | 'jobs'>[] = [
   'app',
   'case',
   'chmod',
@@ -905,8 +978,8 @@ export const DEFAULT_COMMAND_LAYOUT: CommandLayout = {
       id: 'folder:dev',
       name: 'Developer',
       icon: '⚡',
-      description: 'Git, HTTP, JSON, RegEx, cron, Docker, DNS, and terminal',
-      commands: ['git', 'repo', 'ssh', 'wsl', 'pkg', 'expmod', 'proc', 'svc', 'http', 'json', 'regex', 'cron', 'term', 'custom', 'docker', 'env', 'diff', 'cert', 'curl', 'dns', 'key']
+      description: 'Git, HTTP, JSON, RegEx, cron, scheduled jobs, Docker, DNS, and terminal',
+      commands: ['git', 'repo', 'ssh', 'wsl', 'pkg', 'expmod', 'proc', 'svc', 'http', 'json', 'regex', 'cron', 'jobs', 'term', 'custom', 'docker', 'env', 'diff', 'cert', 'curl', 'dns', 'key']
     },
     {
       id: 'folder:utils',
@@ -984,6 +1057,10 @@ export interface CustomCommand {
   showTerminal?: boolean
   // Optional flag ("ExcludeFromSearch": true in JSON) to omit this custom command from "/search" fan-out.
   excludeFromSearch?: boolean
+  // Optional schedule ("Schedule": "0 9 * * *" or "@startup" / "@unlock" / "@resume" / "@network")
+  // or interval in minutes ("IntervalMinutes": 30) to automatically register as a scheduled job.
+  schedule?: string
+  intervalMinutes?: number
 }
 
 export type ConfigType = 'contacts' | 'snippets' | 'links' | 'teamLinks' | 'settings' | 'peers' | 'sshHosts'

@@ -11,9 +11,19 @@ const ALIASES: Record<string, string> = {
   '@hourly': '0 * * * *'
 }
 
-function parseField(field: string, min: number, max: number): number[] | null {
+export function parseCronField(
+  field: string,
+  min: number,
+  max: number,
+  isDow = false
+): number[] | null {
+  const effectiveMax = isDow ? 7 : max
   const values = new Set<number>()
   const parts = field.split(',')
+
+  const addVal = (v: number): void => {
+    values.add(isDow && v === 7 ? 0 : v)
+  }
 
   for (const part of parts) {
     // */step or min-max/step
@@ -25,11 +35,12 @@ function parseField(field: string, min: number, max: number): number[] | null {
       let end = max
       if (stepMatch[1] !== '*') {
         const [s, e] = stepMatch[1].split('-').map(Number)
+        if (s > e || s < min || e > effectiveMax) return null
         start = s
         end = e
       }
       for (let i = start; i <= end; i += step) {
-        if (i >= min && i <= max) values.add(i)
+        if (i >= min && i <= effectiveMax) addVal(i)
       }
       continue
     }
@@ -39,22 +50,24 @@ function parseField(field: string, min: number, max: number): number[] | null {
     if (rangeMatch) {
       const start = parseInt(rangeMatch[1], 10)
       const end = parseInt(rangeMatch[2], 10)
-      if (start > end || start < min || end > max) return null
-      for (let i = start; i <= end; i++) values.add(i)
+      if (start > end || start < min || end > effectiveMax) return null
+      for (let i = start; i <= end; i++) addVal(i)
       continue
     }
 
     // wildcard *
     if (part === '*') {
-      for (let i = min; i <= max; i++) values.add(i)
+      for (let i = min; i <= max; i++) addVal(i)
       continue
     }
 
     // exact number
-    const num = parseInt(part, 10)
-    if (!isNaN(num) && num >= min && num <= max) {
-      values.add(num)
-      continue
+    if (/^\d+$/.test(part)) {
+      const num = parseInt(part, 10)
+      if (!isNaN(num) && num >= min && num <= effectiveMax) {
+        addVal(num)
+        continue
+      }
     }
 
     return null
@@ -76,12 +89,12 @@ function explainCron(fields: string[]): string {
   return clauses.join(', ')
 }
 
-function getNextExecutions(fields: string[], count = 5): Date[] {
-  const minVals = parseField(fields[0], 0, 59)
-  const hourVals = parseField(fields[1], 0, 23)
-  const domVals = parseField(fields[2], 1, 31)
-  const monthVals = parseField(fields[3], 1, 12)
-  const dowVals = parseField(fields[4], 0, 6) // 0=Sun..6=Sat
+function getNextExecutions(fields: string[], count = 5, fromDate?: Date): Date[] {
+  const minVals = parseCronField(fields[0], 0, 59)
+  const hourVals = parseCronField(fields[1], 0, 23)
+  const domVals = parseCronField(fields[2], 1, 31)
+  const monthVals = parseCronField(fields[3], 1, 12)
+  const dowVals = parseCronField(fields[4], 0, 6, true) // 0=Sun..6=Sat (7 also Sun)
 
   if (!minVals || !hourVals || !domVals || !monthVals || !dowVals) return []
 
@@ -92,7 +105,7 @@ function getNextExecutions(fields: string[], count = 5): Date[] {
   const dowSet = new Set(dowVals)
 
   const dates: Date[] = []
-  const current = new Date()
+  const current = fromDate ? new Date(fromDate.getTime()) : new Date()
   current.setSeconds(0, 0)
   current.setMinutes(current.getMinutes() + 1) // Start looking at next minute
 
@@ -117,6 +130,49 @@ function getNextExecutions(fields: string[], count = 5): Date[] {
   return dates
 }
 
+export function resolveCronFields(raw: string): string[] | null {
+  let q = raw.trim()
+  if (!q) return null
+  if (ALIASES[q.toLowerCase()]) {
+    q = ALIASES[q.toLowerCase()]
+  }
+  q = q
+    .replace(/\bSUN\b/gi, '0')
+    .replace(/\bMON\b/gi, '1')
+    .replace(/\bTUE\b/gi, '2')
+    .replace(/\bWED\b/gi, '3')
+    .replace(/\bTHU\b/gi, '4')
+    .replace(/\bFRI\b/gi, '5')
+    .replace(/\bSAT\b/gi, '6')
+  const fields = q.split(/\s+/)
+  if (fields.length !== 5) return null
+  if (
+    !parseCronField(fields[0], 0, 59) ||
+    !parseCronField(fields[1], 0, 23) ||
+    !parseCronField(fields[2], 1, 31) ||
+    !parseCronField(fields[3], 1, 12) ||
+    !parseCronField(fields[4], 0, 6, true)
+  ) {
+    return null
+  }
+  return fields
+}
+
+export function explainCronExpression(raw: string): string | null {
+  const fields = resolveCronFields(raw)
+  if (!fields) return null
+  const next = getNextExecutions(fields, 1)
+  if (next.length === 0) return null
+  return explainCron(fields)
+}
+
+export function getNextCronRunDate(raw: string, afterDate?: Date): Date | null {
+  const fields = resolveCronFields(raw)
+  if (!fields) return null
+  const next = getNextExecutions(fields, 1, afterDate)
+  return next[0] ?? null
+}
+
 export function search(query: string): SearchResultItem[] {
   let q = query.trim()
 
@@ -127,29 +183,21 @@ export function search(query: string): SearchResultItem[] {
     }
   }
 
-  if (ALIASES[q.toLowerCase()]) {
-    q = ALIASES[q.toLowerCase()]
-  }
+  const fields = resolveCronFields(q)
 
-  // Normalise text input (e.g. MON-FRI -> 1-5)
-  q = q
-    .replace(/\bSUN\b/gi, '0')
-    .replace(/\bMON\b/gi, '1')
-    .replace(/\bTUE\b/gi, '2')
-    .replace(/\bWED\b/gi, '3')
-    .replace(/\bTHU\b/gi, '4')
-    .replace(/\bFRI\b/gi, '5')
-    .replace(/\bSAT\b/gi, '6')
-
-  const fields = q.split(/\s+/)
-
-  if (fields.length !== 5) {
+  if (!fields) {
     return [
       {
         label: 'Enter a 5-part cron expression',
         sublabel: 'Examples: /cron */15 * * * * · /cron 0 9 * * 1-5 · /cron @daily · /cron 0 0 1 * *',
         value: '',
         disabled: true
+      },
+      {
+        label: '⏰ Open Scheduled Jobs Manager (/jobs)',
+        sublabel: 'Manage and schedule recurring scripts, custom commands, and lifecycle hooks',
+        value: '',
+        completion: '/jobs '
       }
     ]
   }
@@ -172,11 +220,19 @@ export function search(query: string): SearchResultItem[] {
   // 1. Explanation
   results.push({
     label: `Schedule: ${explanation}`,
-    sublabel: `Expression: "${query.trim()}"`,
+    sublabel: `Expression: "${query.trim() || q}" · ↵ Copy explanation`,
     value: explanation
   })
 
-  // 2. Next 5 Upcoming Runs
+  // 2. Open Scheduled Jobs
+  results.push({
+    label: `⏰ Manage Scheduled Jobs (/jobs)`,
+    sublabel: `Schedule a script or command with "${query.trim() || q}"`,
+    value: '',
+    completion: '/jobs '
+  })
+
+  // 3. Next 5 Upcoming Runs
   for (let i = 0; i < nextRuns.length; i++) {
     const run = nextRuns[i]
     const dtf = new Intl.DateTimeFormat('en-US', {

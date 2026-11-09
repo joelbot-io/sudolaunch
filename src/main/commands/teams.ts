@@ -10,13 +10,19 @@ function toResultItem(team: TeamLink): SearchResultItem {
   return { label: team.name, sublabel: team.description || team.url, value: team.url }
 }
 
+let cachedTeamLinksRef: TeamLink[] | null = null
+let cachedTeamLinksFuse: Fuse<TeamLink> | null = null
+
 function searchTeamLinks(query: string): SearchResultItem[] {
   const teamLinks = readTeamLinks()
   if (!query) {
     return teamLinks.map(toResultItem)
   }
-  const fuse = new Fuse(teamLinks, { keys: ['name'], threshold: 0.35 })
-  return fuse.search(query).map((r) => toResultItem(r.item))
+  if (cachedTeamLinksRef !== teamLinks || !cachedTeamLinksFuse) {
+    cachedTeamLinksRef = teamLinks
+    cachedTeamLinksFuse = new Fuse(teamLinks, { keys: ['name'], threshold: 0.35 })
+  }
+  return cachedTeamLinksFuse.search(query).map((r) => toResultItem(r.item))
 }
 
 export function search(query: string, options?: { excludeTeamLinks?: boolean }): SearchResultItem[] {

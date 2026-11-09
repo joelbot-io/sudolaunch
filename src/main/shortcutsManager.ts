@@ -47,7 +47,16 @@ const DEFAULT_FAVORITE_IDS: string[] = [
   'docker-ps'
 ]
 
+const PT_SHORTCUTS_CACHE_TTL_MS = 60_000
+let cachedPtRoot: { value: string | null; ts: number } | null = null
+const cachedPtResolvedMap = new Map<string, { fullPath: string; installed: boolean; ts: number }>()
+let cachedSendKeyPathVal: string | null | undefined = undefined
+
 function getPowerToysRoot(): string | null {
+  const now = Date.now()
+  if (cachedPtRoot && now - cachedPtRoot.ts < PT_SHORTCUTS_CACHE_TTL_MS) {
+    return cachedPtRoot.value
+  }
   const candidates = [
     'C:\\Program Files\\PowerToys',
     join(process.env.ProgramFiles ?? 'C:\\Program Files', 'PowerToys'),
@@ -56,14 +65,23 @@ function getPowerToysRoot(): string | null {
   ]
   for (const candidate of candidates) {
     if (candidate && existsSync(candidate)) {
+      cachedPtRoot = { value: candidate, ts: now }
       return candidate
     }
   }
+  cachedPtRoot = { value: null, ts: now }
   return null
 }
 
 function resolvePowerToysExe(ptRoot: string | null, relExe: string): { fullPath: string; installed: boolean } {
   if (!ptRoot) return { fullPath: '', installed: false }
+  const cacheKey = `${ptRoot}::${relExe}`
+  const now = Date.now()
+  const hit = cachedPtResolvedMap.get(cacheKey)
+  if (hit && now - hit.ts < PT_SHORTCUTS_CACHE_TTL_MS) {
+    return { fullPath: hit.fullPath, installed: hit.installed }
+  }
+
   const exeName = basename(relExe)
   const candidates = [
     join(ptRoot, relExe),
@@ -73,18 +91,26 @@ function resolvePowerToysExe(ptRoot: string | null, relExe: string): { fullPath:
   ]
   for (const candidate of candidates) {
     if (existsSync(candidate)) {
+      cachedPtResolvedMap.set(cacheKey, { fullPath: candidate, installed: true, ts: now })
       return { fullPath: candidate, installed: true }
     }
   }
   // If the specific sub-exe moved in a future release, check if PowerToys.exe itself is installed
   const mainPtExe = join(ptRoot, 'PowerToys.exe')
   if (existsSync(mainPtExe)) {
-    return { fullPath: join(ptRoot, relExe), installed: true }
+    const fallbackPath = join(ptRoot, relExe)
+    cachedPtResolvedMap.set(cacheKey, { fullPath: fallbackPath, installed: true, ts: now })
+    return { fullPath: fallbackPath, installed: true }
   }
-  return { fullPath: join(ptRoot, relExe), installed: false }
+  const missingPath = join(ptRoot, relExe)
+  cachedPtResolvedMap.set(cacheKey, { fullPath: missingPath, installed: false, ts: now })
+  return { fullPath: missingPath, installed: false }
 }
 
 function getSendKeyPath(): string | null {
+  if (cachedSendKeyPathVal !== undefined) {
+    return cachedSendKeyPathVal
+  }
   const candidates = [
     process.resourcesPath ? join(process.resourcesPath, 'bin', 'sendkey.exe') : '',
     process.resourcesPath ? join(process.resourcesPath, 'resources', 'bin', 'sendkey.exe') : '',
@@ -96,9 +122,11 @@ function getSendKeyPath(): string | null {
 
   for (const candidate of candidates) {
     if (existsSync(candidate)) {
+      cachedSendKeyPathVal = candidate
       return candidate
     }
   }
+  cachedSendKeyPathVal = null
   return null
 }
 
@@ -808,7 +836,12 @@ const BUILTIN_OTHER_ITEMS: ShortcutOverlayItem[] = [
   }
 ]
 
+let cachedPersistedShortcuts: PersistedShortcutsConfig | null = null
+
 function readPersistedConfig(): PersistedShortcutsConfig {
+  if (cachedPersistedShortcuts) {
+    return cachedPersistedShortcuts
+  }
   const fallback: PersistedShortcutsConfig = {
     customItems: [],
     favoriteIds: [...DEFAULT_FAVORITE_IDS],
@@ -820,22 +853,26 @@ function readPersistedConfig(): PersistedShortcutsConfig {
   try {
     if (!existsSync(SHORTCUTS_CONFIG_PATH)) {
       writeFileSync(SHORTCUTS_CONFIG_PATH, JSON.stringify(fallback, null, 2), 'utf-8')
+      cachedPersistedShortcuts = fallback
       return fallback
     }
     const raw = JSON.parse(readFileSync(SHORTCUTS_CONFIG_PATH, 'utf-8').replace(/^\uFEFF/, ''))
-    return {
+    cachedPersistedShortcuts = {
       customItems: Array.isArray(raw.customItems) ? raw.customItems : [],
       favoriteIds: Array.isArray(raw.favoriteIds) ? raw.favoriteIds : [...DEFAULT_FAVORITE_IDS],
       overrides: raw.overrides && typeof raw.overrides === 'object' ? raw.overrides : {},
       hiddenBuiltInIds: Array.isArray(raw.hiddenBuiltInIds) ? raw.hiddenBuiltInIds : [],
       customTabs: Array.isArray(raw.customTabs) ? raw.customTabs : []
     }
+    return cachedPersistedShortcuts
   } catch {
+    cachedPersistedShortcuts = fallback
     return fallback
   }
 }
 
 function writePersistedConfig(cfg: PersistedShortcutsConfig): void {
+  cachedPersistedShortcuts = cfg
   try {
     writeFileSync(SHORTCUTS_CONFIG_PATH, JSON.stringify(cfg, null, 2), 'utf-8')
   } catch {

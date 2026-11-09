@@ -59,6 +59,11 @@ export function search(query: string): SearchResultItem[] {
       value: '__openSystemPanel::services'
     },
     {
+      label: '⏰ SudoLaunch Scheduled Jobs & Lifecycle Hooks',
+      sublabel: 'Schedule recurring cron scripts, intervals, and startup/unlock/wake/network hooks',
+      value: '__openSystemPanel::jobs'
+    },
+    {
       label: '📅 Scheduled Tasks Inspector',
       sublabel: 'Inspect, run now, enable, or disable user, developer, and third-party Windows Scheduled Tasks',
       value: '__openSystemPanel::tasks'

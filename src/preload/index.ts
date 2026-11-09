@@ -17,6 +17,9 @@ import type {
   GitProjectPreset,
   GitWatcherConfigInput,
   GitWatcherItem,
+  ScheduledJobItem,
+  ScheduledJobInput,
+  ScheduledJobPreset,
   ProfileItem,
   BackupArchiveItem,
   WingetPackageItem,
@@ -583,6 +586,30 @@ const api = {
     const listener = (_event: Electron.IpcRendererEvent, active: boolean): void => callback(active)
     ipcRenderer.on('shortcuts-active', listener)
     return () => ipcRenderer.removeListener('shortcuts-active', listener)
+  },
+  // Scheduled Jobs APIs
+  getScheduledJobs: (): Promise<ScheduledJobItem[]> => ipcRenderer.invoke('schedules-get-all'),
+  getScheduledJobPresets: (): Promise<ScheduledJobPreset[]> =>
+    ipcRenderer.invoke('schedules-get-presets'),
+  saveScheduledJob: (input: ScheduledJobInput): Promise<ScheduledJobItem[]> =>
+    ipcRenderer.invoke('schedules-save', input),
+  deleteScheduledJob: (id: string): Promise<ScheduledJobItem[]> =>
+    ipcRenderer.invoke('schedules-delete', id),
+  toggleScheduledJob: (id: string, enabled?: boolean): Promise<ScheduledJobItem[]> =>
+    ipcRenderer.invoke('schedules-toggle', id, enabled),
+  runScheduledJobNow: (id: string): Promise<ScheduledJobItem[]> =>
+    ipcRenderer.invoke('schedules-run-now', id),
+  stopScheduledJob: (id: string): Promise<ScheduledJobItem[]> =>
+    ipcRenderer.invoke('schedules-stop', id),
+  clearScheduledJobLogs: (id: string): Promise<ScheduledJobItem[]> =>
+    ipcRenderer.invoke('schedules-clear-logs', id),
+  openScheduledJobInTerminal: (id: string): Promise<void> =>
+    ipcRenderer.invoke('schedules-open-terminal', id),
+  onScheduledJobsUpdated: (callback: (jobs: ScheduledJobItem[]) => void): (() => void) => {
+    const listener = (_event: Electron.IpcRendererEvent, jobs: ScheduledJobItem[]): void =>
+      callback(jobs)
+    ipcRenderer.on('scheduled-jobs-updated', listener)
+    return () => ipcRenderer.removeListener('scheduled-jobs-updated', listener)
   }
 }
 

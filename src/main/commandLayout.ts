@@ -12,28 +12,20 @@ import { loadCustomCommands } from './customCommands'
 
 export const COMMAND_LAYOUT_PATH = join(CONFIG_DIR, 'command-layout.json')
 
+let cachedRawLayout: CommandLayout | null = null
+let cachedReconciledLayout: CommandLayout | null = null
+let cachedCustomCmdsRef: ReturnType<typeof loadCustomCommands> | null = null
+
 export function ensureCommandLayout(): void {
   if (!existsSync(COMMAND_LAYOUT_PATH)) {
     writeFileSync(COMMAND_LAYOUT_PATH, JSON.stringify(DEFAULT_COMMAND_LAYOUT, null, 2), 'utf-8')
   }
 }
 
-export function readCommandLayout(): CommandLayout {
-  let layout: CommandLayout
-  try {
-    if (!existsSync(COMMAND_LAYOUT_PATH)) {
-      ensureCommandLayout()
-    }
-    const raw = readFileSync(COMMAND_LAYOUT_PATH, 'utf-8').replace(/^\uFEFF/, '')
-    layout = JSON.parse(raw) as CommandLayout
-  } catch {
-    layout = JSON.parse(JSON.stringify(DEFAULT_COMMAND_LAYOUT))
-  }
-
-  if (!layout || !Array.isArray(layout.rootOrder) || !Array.isArray(layout.folders)) {
-    layout = JSON.parse(JSON.stringify(DEFAULT_COMMAND_LAYOUT))
-  }
-
+export function reconcileCommandLayout(
+  layout: CommandLayout,
+  customCommandNames: string[] = []
+): CommandLayout {
   // Sanitize folders
   const sanitizedFolders: CommandFolder[] = []
   const assignedCommands = new Set<string>()
@@ -77,7 +69,7 @@ export function readCommandLayout(): CommandLayout {
   // Reconcile with all available commands: built-ins and custom commands
   const allKnownCmds = new Set<string>([
     ...COMMANDS.map((c) => c.name),
-    ...loadCustomCommands().map((c) => c.command)
+    ...customCommandNames
   ])
 
   for (const cmd of allKnownCmds) {
@@ -93,7 +85,43 @@ export function readCommandLayout(): CommandLayout {
   }
 }
 
+export function readCommandLayout(): CommandLayout {
+  const customCmds = loadCustomCommands()
+  if (cachedRawLayout && cachedReconciledLayout && cachedCustomCmdsRef === customCmds) {
+    return cachedReconciledLayout
+  }
+
+  let layout: CommandLayout
+  if (cachedRawLayout) {
+    layout = cachedRawLayout
+  } else {
+    try {
+      if (!existsSync(COMMAND_LAYOUT_PATH)) {
+        ensureCommandLayout()
+      }
+      const raw = readFileSync(COMMAND_LAYOUT_PATH, 'utf-8').replace(/^\uFEFF/, '')
+      layout = JSON.parse(raw) as CommandLayout
+    } catch {
+      layout = JSON.parse(JSON.stringify(DEFAULT_COMMAND_LAYOUT))
+    }
+
+    if (!layout || !Array.isArray(layout.rootOrder) || !Array.isArray(layout.folders)) {
+      layout = JSON.parse(JSON.stringify(DEFAULT_COMMAND_LAYOUT))
+    }
+    cachedRawLayout = layout
+  }
+
+  cachedReconciledLayout = reconcileCommandLayout(
+    layout,
+    customCmds.map((c) => c.command)
+  )
+  cachedCustomCmdsRef = customCmds
+  return cachedReconciledLayout
+}
+
 export function writeCommandLayout(layout: CommandLayout): void {
+  cachedRawLayout = layout
+  cachedReconciledLayout = null
   writeFileSync(COMMAND_LAYOUT_PATH, JSON.stringify(layout, null, 2), 'utf-8')
 }
 
@@ -103,6 +131,14 @@ export function watchCommandLayout(onChange: (layout: CommandLayout) => void): v
     ignoreInitial: true,
     awaitWriteFinish: { stabilityThreshold: 150, pollInterval: 50 }
   })
-    .on('change', () => onChange(readCommandLayout()))
-    .on('add', () => onChange(readCommandLayout()))
+    .on('change', () => {
+      cachedRawLayout = null
+      cachedReconciledLayout = null
+      onChange(readCommandLayout())
+    })
+    .on('add', () => {
+      cachedRawLayout = null
+      cachedReconciledLayout = null
+      onChange(readCommandLayout())
+    })
 }

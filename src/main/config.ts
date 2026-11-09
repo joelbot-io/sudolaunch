@@ -1,5 +1,5 @@
 import { app } from 'electron'
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'fs'
+import { existsSync, mkdirSync, promises as fsPromises, readFileSync, writeFileSync } from 'fs'
 import { join } from 'path'
 import { watch as chokidarWatch } from 'chokidar'
 import { DEFAULT_SHELF_ICONS, DEFAULT_SEARCH_EXCLUDED_COMMANDS } from '../shared/types'
@@ -209,44 +209,86 @@ export function readHistory(): HistoryEntry[] {
   return cachedHistory
 }
 
+const pendingWriteTimers = new Map<string, NodeJS.Timeout>()
+const pendingWriteData = new Map<string, unknown>()
+const internalWriteSuppressUntil = new Map<string, number>()
+
+function scheduleJsonWrite(path: string, data: unknown): void {
+  pendingWriteData.set(path, data)
+  internalWriteSuppressUntil.set(path, Date.now() + 800)
+
+  const existing = pendingWriteTimers.get(path)
+  if (existing) clearTimeout(existing)
+
+  const timer = setTimeout(() => {
+    pendingWriteTimers.delete(path)
+    const latest = pendingWriteData.get(path)
+    pendingWriteData.delete(path)
+    if (latest === undefined) return
+    internalWriteSuppressUntil.set(path, Date.now() + 800)
+    const serialized = JSON.stringify(latest, null, 2)
+    fsPromises.writeFile(path, serialized, 'utf-8').catch(() => {
+      // Fallback if async write fails
+    })
+  }, 120)
+
+  pendingWriteTimers.set(path, timer)
+}
+
+export function flushPendingConfigWrites(): void {
+  for (const [path, timer] of pendingWriteTimers.entries()) {
+    clearTimeout(timer)
+    pendingWriteTimers.delete(path)
+    const latest = pendingWriteData.get(path)
+    pendingWriteData.delete(path)
+    if (latest !== undefined) {
+      try {
+        writeFileSync(path, JSON.stringify(latest, null, 2), 'utf-8')
+      } catch {
+        // ignore
+      }
+    }
+  }
+}
+
 export function writeHistory(entries: HistoryEntry[]): void {
   cachedHistory = entries
-  writeFileSync(PATHS.history, JSON.stringify(entries, null, 2), 'utf-8')
+  scheduleJsonWrite(PATHS.history, entries)
 }
 
 export function writeContacts(contacts: Contact[]): void {
   cachedContacts = contacts
-  writeFileSync(PATHS.contacts, JSON.stringify(contacts, null, 2), 'utf-8')
+  scheduleJsonWrite(PATHS.contacts, contacts)
 }
 
 export function writeSnippets(snippets: Snippet[]): void {
   cachedSnippets = snippets
-  writeFileSync(PATHS.snippets, JSON.stringify(snippets, null, 2), 'utf-8')
+  scheduleJsonWrite(PATHS.snippets, snippets)
 }
 
 export function writeLinks(links: Link[]): void {
   cachedLinks = links
-  writeFileSync(PATHS.links, JSON.stringify(links, null, 2), 'utf-8')
+  scheduleJsonWrite(PATHS.links, links)
 }
 
 export function writeTeamLinks(teamLinks: TeamLink[]): void {
   cachedTeamLinks = teamLinks
-  writeFileSync(PATHS.teamLinks, JSON.stringify(teamLinks, null, 2), 'utf-8')
+  scheduleJsonWrite(PATHS.teamLinks, teamLinks)
 }
 
 export function writePeers(peers: SwapPeer[]): void {
   cachedPeers = peers
-  writeFileSync(PATHS.peers, JSON.stringify(peers, null, 2), 'utf-8')
+  scheduleJsonWrite(PATHS.peers, peers)
 }
 
 export function writeSshHosts(sshHosts: SshHost[]): void {
   cachedSshHosts = sshHosts
-  writeFileSync(PATHS.sshHosts, JSON.stringify(sshHosts, null, 2), 'utf-8')
+  scheduleJsonWrite(PATHS.sshHosts, sshHosts)
 }
 
 export function writeSettings(settings: Settings): void {
   cachedSettings = settings
-  writeFileSync(PATHS.settings, JSON.stringify(settings, null, 2), 'utf-8')
+  scheduleJsonWrite(PATHS.settings, settings)
 }
 
 // Generic CRUD used by the "/settings" in-app config editor. Each list-backed config type
@@ -323,20 +365,26 @@ function watchFiles(paths: string[], onChange: (path: string) => void): void {
 }
 
 export function watchConfig(onChange: () => void): void {
-  watchFiles([PATHS.contacts, PATHS.snippets, PATHS.links, PATHS.teamLinks, PATHS.peers, PATHS.sshHosts], () => {
-    cachedContacts = null
-    cachedSnippets = null
-    cachedLinks = null
-    cachedTeamLinks = null
-    cachedPeers = null
-    cachedSshHosts = null
+  watchFiles([PATHS.contacts, PATHS.snippets, PATHS.links, PATHS.teamLinks, PATHS.peers, PATHS.sshHosts], (changedPath) => {
+    const suppressUntil = internalWriteSuppressUntil.get(changedPath) ?? 0
+    if (Date.now() > suppressUntil) {
+      cachedContacts = null
+      cachedSnippets = null
+      cachedLinks = null
+      cachedTeamLinks = null
+      cachedPeers = null
+      cachedSshHosts = null
+    }
     onChange()
   })
 }
 
 export function watchSettings(onChange: (settings: Settings) => void): void {
   watchFiles([PATHS.settings], () => {
-    cachedSettings = null
+    const suppressUntil = internalWriteSuppressUntil.get(PATHS.settings) ?? 0
+    if (Date.now() > suppressUntil && !pendingWriteTimers.has(PATHS.settings)) {
+      cachedSettings = null
+    }
     onChange(readSettings())
   })
 }

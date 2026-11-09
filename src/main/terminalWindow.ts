@@ -13,6 +13,29 @@ let termWindow: BrowserWindow | null = null
 let termExpanded = false
 let termMoveModeActive = false
 let lastBarBounds: Rectangle | null = null
+let hasUnreadActivity = false
+let pendingPtyData = ''
+let ptyFlushTimer: NodeJS.Timeout | null = null
+const PTY_COALESCE_MS = 8
+
+function flushPtyData(): void {
+  ptyFlushTimer = null
+  if (!pendingPtyData) return
+  const chunk = pendingPtyData
+  pendingPtyData = ''
+  if (termWindow && !termWindow.isDestroyed()) {
+    termWindow.webContents.send('term-data', chunk)
+  }
+}
+
+function setUnreadActivity(unread: boolean): void {
+  if (hasUnreadActivity === unread) return
+  hasUnreadActivity = unread
+  if (termWindow && !termWindow.isDestroyed()) {
+    termWindow.webContents.send('term-unread-activity', unread)
+  }
+  dockManager.sendToBar('term-unread-activity', unread)
+}
 
 // Rough monospace cell size used only to size the pty at first spawn, before the
 // renderer's real xterm.js fit measurement arrives via 'term-resize'.
@@ -171,20 +194,27 @@ export function createTerminalWindow(icon: NativeImage): BrowserWindow {
     }
   })
   termWindow.on('closed', () => {
+    if (ptyFlushTimer) {
+      clearTimeout(ptyFlushTimer)
+      ptyFlushTimer = null
+    }
+    pendingPtyData = ''
     termWindow = null
   })
   termWindow.on('focus', () => {
-    termWindow?.webContents.send('term-unread-activity', false)
-    dockManager.sendToBar('term-unread-activity', false)
+    setUnreadActivity(false)
   })
   // Registered once for the window's lifetime — forwards pty output regardless of
   // expand state, so scrollback is never missed while the renderer is mounted but the
-  // panel happens to be visually collapsed.
+  // panel happens to be visually collapsed. Chunks are coalesced over an 8ms window to
+  // avoid saturating IPC during high-throughput terminal output.
   onPtyData((data) => {
-    termWindow?.webContents.send('term-data', data)
+    pendingPtyData += data
+    if (!ptyFlushTimer) {
+      ptyFlushTimer = setTimeout(flushPtyData, PTY_COALESCE_MS)
+    }
     if (!termExpanded && termWindow) {
-      termWindow.webContents.send('term-unread-activity', true)
-      dockManager.sendToBar('term-unread-activity', true)
+      setUnreadActivity(true)
     }
   })
   // The shell can end on its own (the user typing "exit", or a crash) while the panel is
@@ -298,8 +328,7 @@ export function toggleTerminal(): void {
   termExpanded = !termExpanded
   if (termExpanded) {
     dockManager.notifyPanelExpanded()
-    termWindow.webContents.send('term-unread-activity', false)
-    dockManager.sendToBar('term-unread-activity', false)
+    setUnreadActivity(false)
     if (!termWindow.isVisible()) {
       termWindow.setBounds(idleBounds(lastBarBounds))
       termWindow.showInactive()
@@ -316,8 +345,8 @@ export function toggleTerminal(): void {
       termWindow.setBounds(panel)
       termWindow.focus()
       ensurePty(
-        Math.floor(panel.width / CHAR_CELL.width),
-        Math.floor(panel.height / CHAR_CELL.height)
+        Math.max(20, Math.floor((panel.width - 38) / CHAR_CELL.width)),
+        Math.max(5, Math.floor((panel.height - 58) / CHAR_CELL.height))
       )
       termWindow.webContents.send('term-respawned')
     }, 30)
@@ -362,8 +391,8 @@ export function runInTerminal(commandText: string): void {
   // Ensure PTY is initialized in the background
   const panel = expandedBounds(lastBarBounds)
   ensurePty(
-    Math.floor(panel.width / CHAR_CELL.width),
-    Math.floor(panel.height / CHAR_CELL.height)
+    Math.max(20, Math.floor((panel.width - 38) / CHAR_CELL.width)),
+    Math.max(5, Math.floor((panel.height - 58) / CHAR_CELL.height))
   )
 
   // Write command directly to PTY session
@@ -371,7 +400,6 @@ export function runInTerminal(commandText: string): void {
 
   // If the terminal is not expanded, signal unread activity for the glowing indicator
   if (!termExpanded) {
-    termWindow.webContents.send('term-unread-activity', true)
-    dockManager.sendToBar('term-unread-activity', true)
+    setUnreadActivity(true)
   }
 }

@@ -13,6 +13,8 @@
     "bundle:native": "powershell -ExecutionPolicy Bypass -File ./scripts/bundle-repo.ps1 -IncludeNative",
     "bundle:zip": "powershell -ExecutionPolicy Bypass -File ./scripts/bundle-repo.ps1",
     "typecheck": "tsc --noEmit -p tsconfig.node.json && tsc --noEmit -p tsconfig.web.json",
+    "test": "vitest run",
+    "test:watch": "vitest",
     "postinstall": "node ./scripts/postinstall.js",
     "rebuild:native": "electron-rebuild -f -o node-window-manager,extract-file-icon,electron-clipboard-ex,node-pty",
     "profile:backup": "powershell -ExecutionPolicy Bypass -File ./scripts/backup-profile.ps1",
@@ -63,6 +65,7 @@
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "typescript": "^5.7.2",
-    "vite": "^5.4.11"
+    "vite": "^5.4.11",
+    "vitest": "^2.1.9"
   }
 }

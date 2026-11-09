@@ -8,9 +8,13 @@ let notifications: SudoNotification[] = []
 function broadcast(): void {
   for (const win of BrowserWindow.getAllWindows()) {
     try {
-      if (!win.isDestroyed()) {
-        win.webContents.send('notifications-updated', notifications)
+      if (win.isDestroyed()) continue
+      const url = win.webContents.getURL()
+      // Skip terminalWindow and shortcutsWindow which do not display notifications
+      if (url.includes('mode=term') || url.includes('mode=shortcuts')) {
+        continue
       }
+      win.webContents.send('notifications-updated', notifications)
     } catch {
       // window may be closing
     }

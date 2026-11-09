@@ -24,6 +24,10 @@ interface ResolvedSshHost {
 const SSH_CONFIG_CACHE_TTL_MS = 10000
 let cachedSshConfigHosts: ResolvedSshHost[] | null = null
 let cachedSshConfigAt = 0
+let cachedSshConfigExists = false
+let cachedSavedHostsRef: SshHost[] | null = null
+let cachedMergedSshHosts: ResolvedSshHost[] = []
+let cachedMergedSshFuse: Fuse<ResolvedSshHost> | null = null
 
 function expandHome(p: string): string {
   if (p.startsWith('~/') || p.startsWith('~\\')) {
@@ -131,22 +135,36 @@ function parseSshConfigFile(filePath: string, visited = new Set<string>()): Reso
   return hosts
 }
 
-function getAllSshHosts(): ResolvedSshHost[] {
-  const byName = new Map<string, ResolvedSshHost>()
-
-  // 1. Read ~/.ssh/config first (cached briefly to avoid per-keystroke disk I/O)
+function getAllSshHosts(): {
+  hosts: ResolvedSshHost[]
+  fuse: Fuse<ResolvedSshHost>
+  sshConfigExists: boolean
+} {
   const now = Date.now()
+  let configRefreshed = false
   if (!cachedSshConfigHosts || now - cachedSshConfigAt >= SSH_CONFIG_CACHE_TTL_MS) {
     const sshConfigPath = join(homedir(), '.ssh', 'config')
-    cachedSshConfigHosts = parseSshConfigFile(sshConfigPath)
+    cachedSshConfigExists = existsSync(sshConfigPath)
+    cachedSshConfigHosts = cachedSshConfigExists ? parseSshConfigFile(sshConfigPath) : []
     cachedSshConfigAt = now
+    configRefreshed = true
   }
+
+  const saved: SshHost[] = readSshHosts()
+  if (!configRefreshed && cachedSavedHostsRef === saved && cachedMergedSshFuse) {
+    return {
+      hosts: cachedMergedSshHosts,
+      fuse: cachedMergedSshFuse,
+      sshConfigExists: cachedSshConfigExists
+    }
+  }
+
+  const byName = new Map<string, ResolvedSshHost>()
   for (const h of cachedSshConfigHosts) {
     byName.set(h.name.toLowerCase(), h)
   }
 
   // 2. Read saved hosts from ~/.sudolaunch/ssh.json (saved hosts take precedence or enrich)
-  const saved: SshHost[] = readSshHosts()
   for (const s of saved) {
     const name = (s.name || s.host || '').trim()
     const host = (s.host || s.name || '').trim()
@@ -165,10 +183,22 @@ function getAllSshHosts(): ResolvedSshHost[] {
     })
   }
 
-  return Array.from(byName.values()).sort((a, b) => {
+  cachedMergedSshHosts = Array.from(byName.values()).sort((a, b) => {
     if (a.source !== b.source) return a.source === 'saved' ? -1 : 1
     return a.name.localeCompare(b.name)
   })
+  cachedMergedSshFuse = new Fuse(cachedMergedSshHosts, {
+    keys: ['name', 'host', 'user', 'description', 'extraArgs'],
+    threshold: 0.35,
+    ignoreLocation: true
+  })
+  cachedSavedHostsRef = saved
+
+  return {
+    hosts: cachedMergedSshHosts,
+    fuse: cachedMergedSshFuse,
+    sshConfigExists: cachedSshConfigExists
+  }
 }
 
 function buildSshCommand(h: ResolvedSshHost): string {
@@ -324,7 +354,7 @@ function renderHostDrilldown(h: ResolvedSshHost): SearchResultItem[] {
 
 export function search(query: string): SearchResultItem[] {
   const raw = query.trim()
-  const hosts = getAllSshHosts()
+  const { hosts, fuse, sshConfigExists } = getAllSshHosts()
 
   // 1. Check for explicit host drill-down: /ssh @<alias>
   if (raw.startsWith('@')) {
@@ -338,15 +368,7 @@ export function search(query: string): SearchResultItem[] {
   const items: SearchResultItem[] = []
 
   // 2. Filter known hosts
-  const matchedHosts = raw
-    ? new Fuse(hosts, {
-        keys: ['name', 'host', 'user', 'description', 'extraArgs'],
-        threshold: 0.35,
-        ignoreLocation: true
-      })
-        .search(raw)
-        .map((r) => r.item)
-    : hosts
+  const matchedHosts = raw ? fuse.search(raw).map((r) => r.item) : hosts
 
   for (const h of matchedHosts) {
     const sshCmd = buildSshCommand(h)
@@ -407,8 +429,8 @@ export function search(query: string): SearchResultItem[] {
       sublabel: 'Add, edit, or remove saved SSH connections in SudoLaunch Settings',
       value: '__manageSshHosts'
     })
-    const sshConfigPath = join(homedir(), '.ssh', 'config')
-    if (existsSync(sshConfigPath)) {
+    if (sshConfigExists) {
+      const sshConfigPath = join(homedir(), '.ssh', 'config')
       items.push({
         label: '📂 Open ~/.ssh/config in File Explorer',
         sublabel: `${sshConfigPath} · ↵ Reveal SSH config file`,

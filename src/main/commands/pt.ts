@@ -198,7 +198,20 @@ const POWER_TOYS_TOOLS: PowerToyTool[] = [
   }
 ]
 
+const PT_CACHE_TTL_MS = 60_000
+let cachedPtRoot: { value: string | null; ts: number } | null = null
+let cachedToolStatus: {
+  map: Map<string, { fullPath: string; isInstalled: boolean }>
+  ts: number
+} | null = null
+let cachedSendKeyPath: string | null | undefined = undefined
+
 function getPowerToysRoot(): string | null {
+  const now = Date.now()
+  if (cachedPtRoot && now - cachedPtRoot.ts < PT_CACHE_TTL_MS) {
+    return cachedPtRoot.value
+  }
+
   const candidates = [
     'C:\\Program Files\\PowerToys',
     join(process.env.ProgramFiles ?? 'C:\\Program Files', 'PowerToys'),
@@ -206,16 +219,54 @@ function getPowerToysRoot(): string | null {
     join(process.env.LOCALAPPDATA ?? '', 'PowerToys')
   ]
 
+  let found: string | null = null
   for (const candidate of candidates) {
     if (existsSync(candidate)) {
-      return candidate
+      found = candidate
+      break
     }
   }
 
-  return null
+  cachedPtRoot = { value: found, ts: now }
+  return found
+}
+
+function getToolInstallStatusMap(): Map<string, { fullPath: string; isInstalled: boolean }> {
+  const now = Date.now()
+  if (cachedToolStatus && now - cachedToolStatus.ts < PT_CACHE_TTL_MS) {
+    return cachedToolStatus.map
+  }
+
+  const ptRoot = getPowerToysRoot()
+  const hasRootExe = ptRoot ? existsSync(join(ptRoot, 'PowerToys.exe')) : false
+  const map = new Map<string, { fullPath: string; isInstalled: boolean }>()
+
+  for (const tool of POWER_TOYS_TOOLS) {
+    let fullPath = ''
+    let isInstalled = false
+    if (ptRoot) {
+      const exeName = basename(tool.executableRelPath)
+      const candidates = [
+        join(ptRoot, tool.executableRelPath),
+        join(ptRoot, 'WinUI3Apps', exeName),
+        join(ptRoot, exeName)
+      ]
+      const existing = candidates.find((c) => existsSync(c))
+      fullPath = existing ?? join(ptRoot, tool.executableRelPath)
+      isInstalled = Boolean(existing) || hasRootExe
+    }
+    map.set(tool.id, { fullPath, isInstalled })
+  }
+
+  cachedToolStatus = { map, ts: now }
+  return map
 }
 
 function getSendKeyPath(): string | null {
+  if (cachedSendKeyPath !== undefined) {
+    return cachedSendKeyPath
+  }
+
   const candidates = [
     process.resourcesPath ? join(process.resourcesPath, 'bin', 'sendkey.exe') : '',
     process.resourcesPath ? join(process.resourcesPath, 'resources', 'bin', 'sendkey.exe') : '',
@@ -227,10 +278,12 @@ function getSendKeyPath(): string | null {
 
   for (const candidate of candidates) {
     if (existsSync(candidate)) {
+      cachedSendKeyPath = candidate
       return candidate
     }
   }
 
+  cachedSendKeyPath = null
   return null
 }
 
@@ -249,7 +302,6 @@ const fuse = new Fuse(POWER_TOYS_TOOLS, {
 })
 
 export function search(query: string): SearchResultItem[] {
-  const ptRoot = getPowerToysRoot()
   const q = query.trim()
   const tools = q ? fuse.search(q).map((r) => r.item) : POWER_TOYS_TOOLS
 
@@ -264,20 +316,12 @@ export function search(query: string): SearchResultItem[] {
     ]
   }
 
-  return tools.map((tool) => {
-    let fullPath = ''
-    let isInstalled = false
+  const statusMap = getToolInstallStatusMap()
 
-    if (ptRoot) {
-      const exeName = basename(tool.executableRelPath)
-      const candidates = [
-        join(ptRoot, tool.executableRelPath),
-        join(ptRoot, 'WinUI3Apps', exeName),
-        join(ptRoot, exeName)
-      ]
-      fullPath = candidates.find((c) => existsSync(c)) ?? join(ptRoot, tool.executableRelPath)
-      isInstalled = existsSync(fullPath) || existsSync(join(ptRoot, 'PowerToys.exe'))
-    }
+  return tools.map((tool) => {
+    const status = statusMap.get(tool.id)
+    const fullPath = status?.fullPath ?? ''
+    const isInstalled = status?.isInstalled ?? false
 
     const cleanHotkey = extractCleanHotkey(tool.hotkey)
     const hotkeyText = tool.hotkey ? `[${tool.hotkey}]` : '[Direct UI]'

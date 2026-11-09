@@ -36,6 +36,10 @@ function walk(dir: string, out: AppEntry[]): void {
 const CACHE_TTL_MS = 20 * 60 * 1000
 let cachedShortcuts: AppEntry[] | null = null
 let lastCacheTime = 0
+let cachedFilteredRef: AppEntry[] | null = null
+let cachedDisabledKey = ''
+let cachedFilteredShortcuts: AppEntry[] = []
+let cachedShortcutsFuse: Fuse<AppEntry> | null = null
 
 function listShortcuts(): AppEntry[] {
   const now = Date.now()
@@ -58,11 +62,25 @@ export function listApps(): AppEntry[] {
 }
 
 export function search(query: string): SearchResultItem[] {
-  const disabled = new Set(readSettings().disabledApps)
-  const shortcuts = listShortcuts().filter((s) => !disabled.has(s.path))
+  const allShortcuts = listShortcuts()
+  const disabledApps = readSettings().disabledApps
+  const disabledKey = disabledApps.join('\0')
+
+  if (
+    cachedFilteredRef !== allShortcuts ||
+    cachedDisabledKey !== disabledKey ||
+    !cachedShortcutsFuse
+  ) {
+    const disabled = new Set(disabledApps)
+    cachedFilteredShortcuts = allShortcuts.filter((s) => !disabled.has(s.path))
+    cachedShortcutsFuse = new Fuse(cachedFilteredShortcuts, { keys: ['name'], threshold: 0.35 })
+    cachedFilteredRef = allShortcuts
+    cachedDisabledKey = disabledKey
+  }
+
   const matches = query
-    ? new Fuse(shortcuts, { keys: ['name'], threshold: 0.35 }).search(query).map((r) => r.item)
-    : shortcuts.slice(0, 25)
+    ? cachedShortcutsFuse.search(query, { limit: 30 }).map((r) => r.item)
+    : cachedFilteredShortcuts.slice(0, 25)
   return matches.map((s) => ({ label: s.name, sublabel: s.path, value: s.path }))
 }
 

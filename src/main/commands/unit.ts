@@ -170,13 +170,13 @@ export function search(query: string): SearchResultItem[] {
   const dataRes = tryDataConversion(q)
   if (dataRes) return dataRes
 
-  // 2. Mathjs General Unit Conversion
-  const mathRes = tryMathjsUnit(q)
-  if (mathRes) return mathRes
-
-  // 3. Number Radix Conversion
+  // 2. Number Radix Conversion (must run before mathjs so bare numbers/0xFF/0b1010 show Decimal/Hex/Bin/Octal)
   const radixRes = tryRadixConversion(q)
   if (radixRes) return radixRes
+
+  // 3. Mathjs General Unit Conversion
+  const mathRes = tryMathjsUnit(q)
+  if (mathRes) return mathRes
 
   return [
     {

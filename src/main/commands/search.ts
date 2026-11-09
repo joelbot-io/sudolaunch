@@ -152,6 +152,9 @@ function getDirectResult(rawQuery: string): SearchResultItem | null {
   return null
 }
 
+const MAX_RESULTS_PER_PROVIDER = 20
+const MAX_TOTAL_SEARCH_RESULTS = 75
+
 export function search(query: string): SearchResultItem[] {
   if (!query.trim()) return []
   const direct = getDirectResult(query)
@@ -168,6 +171,7 @@ export function search(query: string): SearchResultItem[] {
     results.push(direct)
   }
   for (const c of enabled) {
+    let addedForProvider = 0
     for (const item of c.search(query)) {
       if (item.disabled || item.isDirectory) continue
       results.push({
@@ -177,6 +181,13 @@ export function search(query: string): SearchResultItem[] {
         completion: item.completion,
         executeOnEnter: item.executeOnEnter
       })
+      addedForProvider++
+      if (addedForProvider >= MAX_RESULTS_PER_PROVIDER || results.length >= MAX_TOTAL_SEARCH_RESULTS) {
+        break
+      }
+    }
+    if (results.length >= MAX_TOTAL_SEARCH_RESULTS) {
+      break
     }
   }
   return results

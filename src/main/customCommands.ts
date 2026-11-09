@@ -124,6 +124,14 @@ export function loadCustomCommands(): CustomCommand[] {
       }
       const showTerminal = Boolean(raw.ShowTerminal ?? raw.showTerminal ?? raw.OpenTerminal ?? raw.openTerminal)
       const excludeFromSearch = Boolean(raw.ExcludeFromSearch ?? raw.excludeFromSearch)
+      const rawSchedule =
+        typeof raw.Schedule === 'string'
+          ? raw.Schedule.trim()
+          : typeof raw.schedule === 'string'
+            ? raw.schedule.trim()
+            : undefined
+      const rawInterval = Number(raw.IntervalMinutes ?? raw.intervalMinutes)
+      const intervalMinutes = !isNaN(rawInterval) && rawInterval > 0 ? rawInterval : undefined
       out.push({
         command,
         action: hasAction ? raw.Action : undefined,
@@ -131,7 +139,9 @@ export function loadCustomCommands(): CustomCommand[] {
         label: typeof raw.Label === 'string' ? raw.Label : undefined,
         parameters: normalizeParams(raw.Parameters),
         showTerminal,
-        excludeFromSearch
+        excludeFromSearch,
+        schedule: rawSchedule || undefined,
+        intervalMinutes
       })
     } catch (err) {
       console.warn(`Failed to parse custom command file ${fullPath}:`, err)

@@ -20,8 +20,9 @@ export default function Terminal(): JSX.Element {
   const [summonColor, setSummonColor] = useState<string | null>(null)
   const [summonGlow, setSummonGlow] = useState<string | null>(null)
   const [dockGlowColor, setDockGlowColor] = useState<string>('')
+  const [dockLayout, setDockLayout] = useState<'horizontal' | 'circle' | 'shelf'>('shelf')
   const [dockFading, setDockFading] = useState(false)
-  const { setGrowOrigin, setGrowPhase, growClassNames, growStyle, onGrowEnd } =
+  const { growPhase, setGrowOrigin, setGrowPhase, growClassNames, growStyle, onGrowEnd } =
     useGrowAnimation()
   const [shimmerInfo, setShimmerInfo] = useState<{
     corner: 'tl' | 'tr' | 'br' | 'bl'
@@ -36,6 +37,7 @@ export default function Terminal(): JSX.Element {
       window.api.getSettings?.().then((s) => {
         if (s?.terminalHotkey) setTermHotkey(formatAccelerator(s.terminalHotkey))
         if (typeof s?.dockGlowColor === 'string') setDockGlowColor(s.dockGlowColor.trim())
+        if (s?.dockLayout) setDockLayout(s.dockLayout)
       })
     }
     loadSettings()
@@ -61,13 +63,29 @@ export default function Terminal(): JSX.Element {
     termRef.current = term
     fitRef.current = fit
 
+    let fitRafId: number | null = null
+    const syncFit = (shouldFocus = false): void => {
+      if (fitRafId !== null) cancelAnimationFrame(fitRafId)
+      fitRafId = requestAnimationFrame(() => {
+        fitRafId = null
+        if (!containerRef.current || containerRef.current.clientWidth < 200 || containerRef.current.clientHeight < 100) {
+          return
+        }
+        fitRef.current?.fit()
+        if (term.cols >= 20 && term.rows >= 5) {
+          window.api.termResize(term.cols, term.rows)
+        }
+        term.scrollToBottom()
+        if (shouldFocus) {
+          term.focus()
+        }
+      })
+    }
+
     const resizeObserver = new ResizeObserver((entries) => {
       for (const entry of entries) {
         if (entry.contentRect.width >= 200 && entry.contentRect.height >= 100) {
-          fitRef.current?.fit()
-          if (term.cols >= 20 && term.rows >= 5) {
-            window.api.termResize(term.cols, term.rows)
-          }
+          syncFit(false)
         }
       }
     })
@@ -123,15 +141,8 @@ export default function Terminal(): JSX.Element {
     const unsubExited = window.api.onTermExited(() => setSessionEnded(true))
     const unsubRespawned = window.api.onTermRespawned(() => {
       setSessionEnded(false)
-      setTimeout(() => {
-        if (containerRef.current && containerRef.current.clientWidth >= 200) {
-          fitRef.current?.fit()
-          if (term.cols >= 20 && term.rows >= 5) {
-            window.api.termResize(term.cols, term.rows)
-            term.focus()
-          }
-        }
-      }, 50)
+      setTimeout(() => syncFit(true), 60)
+      setTimeout(() => syncFit(true), 160)
     })
     const unsubMoveMode = window.api.onTermMoveModeChanged((active) => setMoveMode(active))
     const unsubUnread = window.api.onTermUnreadActivity?.((unread) => {
@@ -155,6 +166,7 @@ export default function Terminal(): JSX.Element {
     })
 
     return () => {
+      if (fitRafId !== null) cancelAnimationFrame(fitRafId)
       resizeObserver.disconnect()
       keyDisposable.dispose()
       dataDisposable.dispose()
@@ -184,16 +196,17 @@ export default function Terminal(): JSX.Element {
     pendingInputRef.current = ''
 
     const doFit = (): void => {
-      if (!containerRef.current || containerRef.current.clientWidth < 200) return
+      if (!containerRef.current || containerRef.current.clientWidth < 200 || containerRef.current.clientHeight < 100) return
       fitRef.current?.fit()
       const term = termRef.current
       if (!term || term.cols < 20 || term.rows < 5) return
       window.api.termResize(term.cols, term.rows)
+      term.scrollToBottom()
       term.focus()
     }
 
-    const timer1 = setTimeout(doFit, 50)
-    const timer2 = setTimeout(doFit, 200)
+    const timer1 = setTimeout(doFit, 95)
+    const timer2 = setTimeout(doFit, 240)
     return () => {
       clearTimeout(timer1)
       clearTimeout(timer2)
@@ -201,7 +214,21 @@ export default function Terminal(): JSX.Element {
   }, [expanded])
 
   useEffect(() => {
-    if (expanded) {
+    if (!expanded || growPhase === 'pending' || growPhase === 'collapsing') return
+    const timer = setTimeout(() => {
+      if (!containerRef.current || containerRef.current.clientWidth < 200 || containerRef.current.clientHeight < 100) return
+      fitRef.current?.fit()
+      const term = termRef.current
+      if (!term || term.cols < 20 || term.rows < 5) return
+      window.api.termResize(term.cols, term.rows)
+      term.scrollToBottom()
+      term.focus()
+    }, 20)
+    return () => clearTimeout(timer)
+  }, [expanded, growPhase])
+
+  useEffect(() => {
+    if (expanded || dockLayout !== 'horizontal') {
       setShimmerInfo(null)
       return
     }
@@ -251,7 +278,7 @@ export default function Terminal(): JSX.Element {
       clearTimeout(timerId)
       clearTimeout(resetId)
     }
-  }, [expanded])
+  }, [expanded, dockLayout])
 
   useEffect(() => {
     if (!moveMode) return
@@ -357,7 +384,9 @@ export default function Terminal(): JSX.Element {
           </svg>
         </button>
       </div>
-      <div ref={containerRef} className="term-body" />
+      <div className="term-body">
+        <div ref={containerRef} className="term-viewport-host" />
+      </div>
     </div>
   )
 }

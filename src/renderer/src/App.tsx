@@ -1,12 +1,23 @@
-import CommandPalette from './CommandPalette'
-import Terminal from './Terminal'
-import NotificationPanel from './NotificationPanel'
-import ShortcutsOverlay from './ShortcutsOverlay'
+import { lazy, Suspense } from 'react'
 import { windowMode } from './windowMode'
 
+const CommandPalette = lazy(() => import('./CommandPalette'))
+const Terminal = lazy(() => import('./Terminal'))
+const NotificationPanel = lazy(() => import('./NotificationPanel'))
+const ShortcutsOverlay = lazy(() => import('./ShortcutsOverlay'))
+
 export default function App(): JSX.Element {
-  if (windowMode === 'term') return <Terminal />
-  if (windowMode === 'notify') return <NotificationPanel />
-  if (windowMode === 'shortcuts') return <ShortcutsOverlay />
-  return <CommandPalette />
+  return (
+    <Suspense fallback={null}>
+      {windowMode === 'term' ? (
+        <Terminal />
+      ) : windowMode === 'notify' ? (
+        <NotificationPanel />
+      ) : windowMode === 'shortcuts' ? (
+        <ShortcutsOverlay />
+      ) : (
+        <CommandPalette />
+      )}
+    </Suspense>
+  )
 }

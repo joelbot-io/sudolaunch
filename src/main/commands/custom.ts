@@ -3,14 +3,14 @@ import type { CustomCommand, SearchResultItem } from '../../shared/types'
 import { loadCustomCommands, notifyMissingParams, executeCustomAction } from '../customCommands'
 import { browseFolder, resolveFolderRoot, runScript, SCRIPT_EXTENSIONS } from '../folderBrowse'
 
-function splitNameAndArgs(query: string): { name: string; argsStr: string } {
+export function splitNameAndArgs(query: string): { name: string; argsStr: string } {
   const idx = query.indexOf(' ')
   return idx === -1 ? { name: query, argsStr: '' } : { name: query.slice(0, idx), argsStr: query.slice(idx + 1) }
 }
 
 // Parses "key=value key2='quoted value'" into a plain map. Quotes (single or double)
 // let a value contain spaces; unquoted values run until the next whitespace.
-function parseArgs(argsStr: string): Record<string, string> {
+export function parseArgs(argsStr: string): Record<string, string> {
   const out: Record<string, string> = {}
   const re = /(\w+)=("[^"]*"|'[^']*'|\S+)/g
   let m: RegExpExecArray | null
@@ -24,7 +24,7 @@ function parseArgs(argsStr: string): Record<string, string> {
   return out
 }
 
-function substitute(action: string, values: Record<string, string>): string {
+export function substitute(action: string, values: Record<string, string>): string {
   let result = action
   for (const [key, value] of Object.entries(values)) {
     result = result.split(`{${key}}`).join(value)
@@ -32,9 +32,21 @@ function substitute(action: string, values: Record<string, string>): string {
   return result
 }
 
-function browseResults(commands: CustomCommand[], filter: string): SearchResultItem[] {
+let cachedAllCommandsRef: CustomCommand[] | null = null
+let cachedAllCommandsFuse: Fuse<CustomCommand> | null = null
+let cachedUniversalCommandsRef: CustomCommand[] | null = null
+let cachedUniversalCommands: CustomCommand[] = []
+let cachedUniversalCommandsFuse: Fuse<CustomCommand> | null = null
+
+function browseResults(
+  commands: CustomCommand[],
+  filter: string,
+  fuseInstance: Fuse<CustomCommand> | null
+): SearchResultItem[] {
   const matches = filter
-    ? new Fuse(commands, { keys: ['command', 'label'], threshold: 0.35 }).search(filter).map((r) => r.item)
+    ? (fuseInstance ?? new Fuse(commands, { keys: ['command', 'label'], threshold: 0.35 }))
+        .search(filter)
+        .map((r) => r.item)
     : commands
   return matches.map((c) => {
     const detail = c.folder !== undefined ? `Browse ${c.folder}` : (c.action ?? '')
@@ -51,11 +63,33 @@ function browseResults(commands: CustomCommand[], filter: string): SearchResultI
 
 export function search(query: string, options?: { fromUniversalSearch?: boolean }): SearchResultItem[] {
   const allCommands = loadCustomCommands()
-  const commands = options?.fromUniversalSearch ? allCommands.filter((c) => !c.excludeFromSearch) : allCommands
+  let commands: CustomCommand[]
+  let fuseInstance: Fuse<CustomCommand> | null
+
+  if (options?.fromUniversalSearch) {
+    if (cachedUniversalCommandsRef !== allCommands || !cachedUniversalCommandsFuse) {
+      cachedUniversalCommandsRef = allCommands
+      cachedUniversalCommands = allCommands.filter((c) => !c.excludeFromSearch)
+      cachedUniversalCommandsFuse = new Fuse(cachedUniversalCommands, {
+        keys: ['command', 'label'],
+        threshold: 0.35
+      })
+    }
+    commands = cachedUniversalCommands
+    fuseInstance = cachedUniversalCommandsFuse
+  } else {
+    if (cachedAllCommandsRef !== allCommands || !cachedAllCommandsFuse) {
+      cachedAllCommandsRef = allCommands
+      cachedAllCommandsFuse = new Fuse(allCommands, { keys: ['command', 'label'], threshold: 0.35 })
+    }
+    commands = allCommands
+    fuseInstance = cachedAllCommandsFuse
+  }
+
   const { name, argsStr } = splitNameAndArgs(query)
   const exact = commands.find((c) => c.command === name)
   if (!exact) {
-    return browseResults(commands, name)
+    return browseResults(commands, name, fuseInstance)
   }
 
   if (exact.folder !== undefined) {

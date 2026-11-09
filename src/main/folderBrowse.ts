@@ -47,7 +47,10 @@ export function resolveFolderRoot(folder: string): string | null {
 }
 
 const FOLDER_CACHE_TTL_MS = 4000
-const cachedDirEntries = new Map<string, { at: number; children: Entry[] | null }>()
+const cachedDirEntries = new Map<
+  string,
+  { at: number; children: Entry[] | null; fuse: Fuse<Entry> | null }
+>()
 
 export function browseFolder(root: string, query: string, extensions: string[]): SearchResultItem[] {
   const { dirPart, filterPart } = splitQuery(normalizeQuery(query))
@@ -60,9 +63,11 @@ export function browseFolder(root: string, query: string, extensions: string[]):
   const now = Date.now()
   const cached = cachedDirEntries.get(cacheKey)
   let children: Entry[] | null = null
+  let fuse: Fuse<Entry> | null = null
 
   if (cached && now - cached.at < FOLDER_CACHE_TTL_MS) {
     children = cached.children
+    fuse = cached.fuse
   } else {
     let dirStat
     try {
@@ -71,7 +76,7 @@ export function browseFolder(root: string, query: string, extensions: string[]):
       dirStat = null
     }
     if (!dirStat?.isDirectory()) {
-      cachedDirEntries.set(cacheKey, { at: now, children: null })
+      cachedDirEntries.set(cacheKey, { at: now, children: null, fuse: null })
       return [{ label: 'Invalid path', value: '', disabled: true }]
     }
 
@@ -101,7 +106,8 @@ export function browseFolder(root: string, query: string, extensions: string[]):
       a.isDirectory === b.isDirectory ? a.name.localeCompare(b.name) : a.isDirectory ? -1 : 1
     )
     children = built
-    cachedDirEntries.set(cacheKey, { at: now, children })
+    fuse = new Fuse(built, { keys: ['name'], threshold: 0.35 })
+    cachedDirEntries.set(cacheKey, { at: now, children, fuse })
   }
 
   if (!children) {
@@ -109,7 +115,7 @@ export function browseFolder(root: string, query: string, extensions: string[]):
   }
 
   const matches = filterPart
-    ? new Fuse(children, { keys: ['name'], threshold: 0.35 }).search(filterPart).map((r) => r.item)
+    ? (fuse ?? new Fuse(children, { keys: ['name'], threshold: 0.35 })).search(filterPart).map((r) => r.item)
     : children
 
   const results: SearchResultItem[] = matches.map((c) => ({

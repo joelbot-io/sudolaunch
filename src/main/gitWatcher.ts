@@ -82,30 +82,37 @@ function buildSnapshot(): GitWatcherItem[] {
   }))
 }
 
+function sendWatcherUpdateToRelevantWindows(payload: GitWatcherItem[]): void {
+  for (const win of BrowserWindow.getAllWindows()) {
+    try {
+      if (win.isDestroyed()) continue
+      const url = win.webContents.getURL()
+      // Only mainWindow (mode=popup / default) and barWindow (mode=bar) consume git-watchers-updated;
+      // skip terminalWindow, notifyWindow, and shortcutsWindow.
+      if (url.includes('mode=term') || url.includes('mode=notify') || url.includes('mode=shortcuts')) {
+        continue
+      }
+      win.webContents.send('git-watchers-updated', payload)
+    } catch {
+      // window may be closing
+    }
+  }
+}
+
 function scheduleBroadcast(immediate = false): void {
   if (immediate) {
     if (broadcastTimer) {
       clearTimeout(broadcastTimer)
       broadcastTimer = null
     }
-    const payload = buildSnapshot()
-    for (const win of BrowserWindow.getAllWindows()) {
-      if (!win.isDestroyed()) {
-        win.webContents.send('git-watchers-updated', payload)
-      }
-    }
+    sendWatcherUpdateToRelevantWindows(buildSnapshot())
     return
   }
 
   if (broadcastTimer) return
   broadcastTimer = setTimeout(() => {
     broadcastTimer = null
-    const payload = buildSnapshot()
-    for (const win of BrowserWindow.getAllWindows()) {
-      if (!win.isDestroyed()) {
-        win.webContents.send('git-watchers-updated', payload)
-      }
-    }
+    sendWatcherUpdateToRelevantWindows(buildSnapshot())
   }, 85)
 }
 

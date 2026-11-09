@@ -33,8 +33,12 @@ type Record_ = Record<string, unknown>
 const LOOKUP_CACHE_TTL_MS = 4000
 let cachedTablesRoot = ''
 let cachedTablesList: string[] = []
+let cachedTablesFuse: Fuse<string> | null = null
 let cachedTablesAt = 0
-const cachedTableData = new Map<string, { at: number; records: Record_[] }>()
+const cachedTableData = new Map<
+  string,
+  { at: number; records: Record_[]; fuse: Fuse<{ index: number; text: string }> }
+>()
 
 function listTables(root: string): string[] {
   const now = Date.now()
@@ -52,24 +56,37 @@ function listTables(root: string): string[] {
   cachedTablesList = names
     .filter((n) => extname(n).toLowerCase() === '.json')
     .map((n) => basename(n, extname(n)))
+  cachedTablesFuse = new Fuse(cachedTablesList, { threshold: 0.35 })
   return cachedTablesList
 }
 
-function loadTable(root: string, table: string): Record_[] {
+function loadTableEntry(
+  root: string,
+  table: string
+): { records: Record_[]; fuse: Fuse<{ index: number; text: string }> } {
   const key = `${root}::${table}`
   const now = Date.now()
   const hit = cachedTableData.get(key)
   if (hit && now - hit.at < LOOKUP_CACHE_TTL_MS) {
-    return hit.records
+    return hit
   }
   try {
     const raw = readFileSync(join(root, `${table}.json`), 'utf-8').replace(/^\uFEFF/, '')
     const parsed = JSON.parse(raw)
-    const records = Array.isArray(parsed) ? parsed : []
-    cachedTableData.set(key, { at: now, records })
-    return records
+    const records: Record_[] = Array.isArray(parsed) ? parsed : []
+    const haystack = records.map((r, i) => ({
+      index: i,
+      text: stringFieldsOf(r)
+        .map(([, v]) => v)
+        .join(' ')
+    }))
+    const fuse = new Fuse(haystack, { keys: ['text'], threshold: 0.35 })
+    const entry = { at: now, records, fuse }
+    cachedTableData.set(key, entry)
+    return entry
   } catch {
-    return []
+    const emptyFuse = new Fuse<{ index: number; text: string }>([], { keys: ['text'], threshold: 0.35 })
+    return { records: [], fuse: emptyFuse }
   }
 }
 
@@ -125,11 +142,12 @@ export function search(query: string): SearchResultItem[] {
   const { table, rest } = splitTableAndQuery(query)
 
   if (!tables.includes(table)) {
-    const matches = table ? new Fuse(tables, { threshold: 0.35 }).search(table).map((r) => r.item) : tables
+    const fuse = cachedTablesFuse ?? new Fuse(tables, { threshold: 0.35 })
+    const matches = table ? fuse.search(table).map((r) => r.item) : tables
     return matches.map((t) => ({ label: t, value: '', completion: `/lookup ${t} ` }))
   }
 
-  const records = loadTable(root, table)
+  const { records, fuse: recordFuse } = loadTableEntry(root, table)
 
   // "#<index>" (from a record's completion, see toRecordItem) drills into that record's
   // fields instead of continuing to search records.
@@ -146,8 +164,7 @@ export function search(query: string): SearchResultItem[] {
 
   // Search the flattened string-field values (Fuse has no "every key of an arbitrary
   // object" pattern), then map matches back to their record's toRecordItem.
-  const haystack = records.map((r, i) => ({ index: i, text: stringFieldsOf(r).map(([, v]) => v).join(' ') }))
-  const matched = new Fuse(haystack, { keys: ['text'], threshold: 0.35 }).search(rest).map((r) => r.item.index)
+  const matched = recordFuse.search(rest).map((r) => r.item.index)
   return matched.map((i) => toRecordItem(records[i], i, table))
 }
 

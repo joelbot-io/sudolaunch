@@ -72,31 +72,65 @@ export function resolveRepoCwd(): string {
   return resolve(__dirname, '../../..')
 }
 
+const cachedRepoRoots = new Map<string, string>()
+const REPOS_JSON_CACHE_TTL_MS = 10_000
+let cachedLookupRepos: {
+  at: number
+  items: Array<{ name: string; path: string; key: string; branch?: string }>
+} | null = null
+
+export function parseGitPorcelainStatus(statusOut: string): {
+  branch: string
+  ahead: number
+  behind: number
+  dirty: boolean
+} {
+  const lines = statusOut.split(/\r?\n/).filter(Boolean)
+
+  let branch = 'HEAD'
+  let ahead = 0
+  let behind = 0
+  if (lines.length > 0 && lines[0].startsWith('##')) {
+    const header = lines[0].slice(2).trim()
+    const bracketIdx = header.indexOf('[')
+    const branchPart = (bracketIdx === -1 ? header : header.slice(0, bracketIdx)).trim()
+    if (branchPart.startsWith('No commits yet on ')) {
+      branch = branchPart.slice('No commits yet on '.length).trim() || 'HEAD'
+    } else if (branchPart.startsWith('Initial commit on ')) {
+      branch = branchPart.slice('Initial commit on '.length).trim() || 'HEAD'
+    } else if (branchPart.includes('HEAD (no branch)')) {
+      branch = 'HEAD'
+    } else {
+      branch = branchPart.split('...')[0].trim() || 'HEAD'
+    }
+
+    const match = header.match(/\[(?:ahead (\d+))?[,\s]*(?:behind (\d+))?\]/)
+    if (match) {
+      if (match[1]) ahead = parseInt(match[1], 10)
+      if (match[2]) behind = parseInt(match[2], 10)
+    }
+  }
+
+  // Any line not starting with '##' is a modified/untracked file
+  const dirty = lines.some((l) => !l.startsWith('##'))
+
+  return { branch: branch || 'HEAD', ahead, behind, dirty }
+}
+
 export async function getGitRepoStatus(): Promise<GitRepoStatus> {
   const cwd = resolveRepoCwd()
   try {
-    const isInside = await runGit(['rev-parse', '--is-inside-work-tree'], cwd)
-    if (isInside !== 'true') {
-      return { isRepo: false, branch: '', dirty: false, ahead: 0, behind: 0, repoPath: cwd }
-    }
-
-    const branch = await runGit(['rev-parse', '--abbrev-ref', 'HEAD'], cwd)
+    // A single `git status --porcelain=v1 -b` call tells us whether `cwd` is inside a
+    // work tree (exits non-zero if not), the current branch, ahead/behind counts, and
+    // whether any tracked/untracked files are dirty — avoiding 3 extra git.exe spawns.
     const statusOut = await runGit(['status', '--porcelain=v1', '-b'], cwd)
-    const lines = statusOut.split('\n').filter(Boolean)
+    const { branch, ahead, behind, dirty } = parseGitPorcelainStatus(statusOut)
 
-    let ahead = 0
-    let behind = 0
-    if (lines.length > 0 && lines[0].startsWith('##')) {
-      const match = lines[0].match(/\[(?:ahead (\d+))?[,\s]*(?:behind (\d+))?\]/)
-      if (match) {
-        if (match[1]) ahead = parseInt(match[1], 10)
-        if (match[2]) behind = parseInt(match[2], 10)
-      }
+    let repoRoot = cachedRepoRoots.get(cwd)
+    if (!repoRoot) {
+      repoRoot = (await runGit(['rev-parse', '--show-toplevel'], cwd)) || cwd
+      cachedRepoRoots.set(cwd, repoRoot)
     }
-
-    // Any line not starting with '##' is a modified/untracked file
-    const dirty = lines.some((l) => !l.startsWith('##'))
-    const repoRoot = await runGit(['rev-parse', '--show-toplevel'], cwd)
 
     return {
       isRepo: true,
@@ -204,29 +238,42 @@ export async function getKnownGitRepos(): Promise<KnownRepoItem[]> {
     }
   }
 
-  // 3. Discovered repositories from ~/.sudolaunch/lookup/repos.json
-  const lookupPath = join(CONFIG_DIR, 'lookup', 'repos.json')
-  if (existsSync(lookupPath)) {
-    try {
-      const data = JSON.parse(readFileSync(lookupPath, 'utf-8'))
-      if (Array.isArray(data)) {
-        for (const item of data) {
-          if (item.Path && existsSync(item.Path)) {
-            const p = resolve(item.Path)
-            const key = p.toLowerCase()
-            if (!reposMap.has(key)) {
-              reposMap.set(key, {
+  // 3. Discovered repositories from ~/.sudolaunch/lookup/repos.json (cached for 10s)
+  const now = Date.now()
+  if (!cachedLookupRepos || now - cachedLookupRepos.at >= REPOS_JSON_CACHE_TTL_MS) {
+    const parsedItems: Array<{ name: string; path: string; key: string; branch?: string }> = []
+    const lookupPath = join(CONFIG_DIR, 'lookup', 'repos.json')
+    if (existsSync(lookupPath)) {
+      try {
+        const data = JSON.parse(readFileSync(lookupPath, 'utf-8'))
+        if (Array.isArray(data)) {
+          for (const item of data) {
+            if (item.Path && existsSync(item.Path)) {
+              const p = resolve(item.Path)
+              parsedItems.push({
                 name: item.Repository || basename(p),
                 path: p,
-                branch: item.Branch,
-                isCurrent: key === activePath
+                key: p.toLowerCase(),
+                branch: item.Branch
               })
             }
           }
         }
+      } catch {
+        // ignore parse error
       }
-    } catch {
-      // ignore parse error
+    }
+    cachedLookupRepos = { at: now, items: parsedItems }
+  }
+
+  for (const item of cachedLookupRepos.items) {
+    if (!reposMap.has(item.key)) {
+      reposMap.set(item.key, {
+        name: item.name,
+        path: item.path,
+        branch: item.branch,
+        isCurrent: item.key === activePath
+      })
     }
   }
 

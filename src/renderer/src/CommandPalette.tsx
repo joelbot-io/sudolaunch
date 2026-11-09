@@ -83,6 +83,7 @@ const COMMAND_ICONS: Record<string, string> = {
   pt: '🧰',
   focus: '🪟',
   timer: '⏱️',
+  jobs: '⏰',
   ip: '🖧',
   port: '🔌',
   chmod: '🛡️',
@@ -367,8 +368,7 @@ export default function CommandPalette(): JSX.Element {
   }, [])
 
   const refreshSettings = useCallback(() => {
-    window.api.getConfigEntries('settings').then((list) => {
-      const settings = list[0]
+    const applySettingsObj = (settings: Record<string, unknown> | undefined | null): void => {
       if (!settings) return
       if (typeof settings.historyEnabled === 'boolean') {
         const enabled = settings.historyEnabled
@@ -390,6 +390,9 @@ export default function CommandPalette(): JSX.Element {
       if (Array.isArray(settings.shelfIcons) && settings.shelfIcons.length > 0) {
         setShelfIcons(settings.shelfIcons as ShelfModuleId[])
       }
+      if (typeof settings.autoReturnDelaySec === 'number') {
+        setAutoReturnDelaySec(settings.autoReturnDelaySec)
+      }
       if (typeof settings.dockGlowColor === 'string') {
         setDockGlowColor(settings.dockGlowColor.trim())
       }
@@ -405,33 +408,24 @@ export default function CommandPalette(): JSX.Element {
         if (key) map[key] = cmdName
       }
       setShortcuts(map)
-    })
-    window.api.getSettings?.().then((s) => {
-      if (typeof s?.defaultCommand === 'string') {
-        setDefaultCommand(s.defaultCommand)
-      }
-      if (s?.dockLayout) setDockLayout(s.dockLayout)
-      if (Array.isArray(s?.shelfIcons) && s.shelfIcons.length > 0) {
-        setShelfIcons(s.shelfIcons as ShelfModuleId[])
-      }
-      if (typeof s?.autoReturnDelaySec === 'number') {
-        setAutoReturnDelaySec(s.autoReturnDelaySec)
-      }
-      if (typeof s?.dockGlowColor === 'string') {
-        setDockGlowColor(s.dockGlowColor.trim())
-      }
-      if (typeof s?.dockGlowStyle === 'string') {
-        setDockGlowStyle(s.dockGlowStyle as 'breathing' | 'steady' | 'stealth')
-      }
-    })
+    }
+
+    if (window.api.getSettings) {
+      window.api.getSettings().then((s) => applySettingsObj(s as unknown as Record<string, unknown>))
+    } else {
+      window.api.getConfigEntries('settings').then((list) => applySettingsObj(list[0]))
+    }
+
     window.api.getNotifications?.().then((items) => {
       setNotifyCount(items.filter((n) => !n.read).length)
     })
   }, [])
 
-  const refreshGit = useCallback(() => {
+  const refreshGit = useCallback((includeBranches = windowMode !== 'bar') => {
     window.api.getGitRepoStatus?.().then(setGitStatus)
-    window.api.getGitBranches?.().then(setGitBranches)
+    if (includeBranches) {
+      window.api.getGitBranches?.().then(setGitBranches)
+    }
     window.api.getGitWatchers?.().then((list) => {
       if (Array.isArray(list)) {
         setGitWatchersCount(list.filter((w) => w.enabled).length)
@@ -496,8 +490,6 @@ export default function CommandPalette(): JSX.Element {
             } else {
               setSettingsTarget(null)
               setActiveModuleView(null)
-              refreshHistory()
-              refreshSettings()
               setValue((val) => (val === '' || val === '/' ? getDefaultValue() : val))
               if (windowMode === 'bar') setBarActive(true)
             }
@@ -549,7 +541,7 @@ export default function CommandPalette(): JSX.Element {
         } else if (mode === 'focus') {
           window.api.getFocusTimerState?.().then(setFocusState)
         } else if (mode === 'git') {
-          refreshGit()
+          refreshGit(true)
         } else if (mode === 'profile') {
           // profile ready
         } else if (mode === 'system') {
@@ -892,7 +884,7 @@ export default function CommandPalette(): JSX.Element {
   }, [isSettingsMode, activeModuleView, focusSearchInput])
 
   useEffect(() => {
-    if (windowMode !== 'bar' || barActive) {
+    if (windowMode !== 'bar' || barActive || dockGlowStyle === 'stealth' || shelfCollapsed) {
       setShimmerInfo(null)
       return
     }
@@ -942,7 +934,7 @@ export default function CommandPalette(): JSX.Element {
       clearTimeout(timerId)
       clearTimeout(resetId)
     }
-  }, [windowMode, barActive])
+  }, [windowMode, barActive, dockGlowStyle, shelfCollapsed])
 
   // Shelf mode: collapse the icon row to a thin glowing pill after sitting idle at rest
   // for autoReturnDelaySec. Only armed while actually at rest — not while a shelf panel
@@ -1187,7 +1179,8 @@ export default function CommandPalette(): JSX.Element {
       proc: ['ps'],
       pkg: ['winget'],
       system: ['sys'],
-      shortcuts: ['sc', 'hotkeys']
+      shortcuts: ['sc', 'hotkeys'],
+      jobs: ['schedule', 'schedules']
     }
 
     const visibleBuiltins = COMMANDS.filter((c) => !hiddenCommands.has(c.name))
@@ -1375,7 +1368,7 @@ export default function CommandPalette(): JSX.Element {
             setActiveModuleView('profile')
             return
           }
-          if (command === 'system') {
+          if (command === 'system' || r.value.startsWith('__openSystemPanel::')) {
             if (r.value.startsWith('__openSystemPanel::')) {
               const sub = r.value.split('::')[1] as WingetSubTab
               setSystemSubTab(sub || 'updates')

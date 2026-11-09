@@ -17,6 +17,9 @@ import type {
   GitProjectPreset,
   GitWatcherConfigInput,
   GitWatcherItem,
+  ScheduledJobItem,
+  ScheduledJobInput,
+  ScheduledJobPreset,
   ProfileItem,
   BackupArchiveItem,
   WingetPackageItem,
@@ -325,6 +328,17 @@ declare global {
       onShortcutsCollapsing?: (callback: (origin: GrowOrigin) => void) => () => void
       onShortcutsSelectTab?: (callback: (tabId: string) => void) => () => void
       onShortcutsActive?: (callback: (active: boolean) => void) => () => void
+      // Scheduled Jobs APIs
+      getScheduledJobs?: () => Promise<ScheduledJobItem[]>
+      getScheduledJobPresets?: () => Promise<ScheduledJobPreset[]>
+      saveScheduledJob?: (input: ScheduledJobInput) => Promise<ScheduledJobItem[]>
+      deleteScheduledJob?: (id: string) => Promise<ScheduledJobItem[]>
+      toggleScheduledJob?: (id: string, enabled?: boolean) => Promise<ScheduledJobItem[]>
+      runScheduledJobNow?: (id: string) => Promise<ScheduledJobItem[]>
+      stopScheduledJob?: (id: string) => Promise<ScheduledJobItem[]>
+      clearScheduledJobLogs?: (id: string) => Promise<ScheduledJobItem[]>
+      openScheduledJobInTerminal?: (id: string) => Promise<void>
+      onScheduledJobsUpdated?: (callback: (jobs: ScheduledJobItem[]) => void) => () => void
     }
   }
 }

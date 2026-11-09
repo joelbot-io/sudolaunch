@@ -21,7 +21,8 @@ import {
   watchSettings,
   getConfigEntries,
   saveConfigEntry,
-  deleteConfigEntry
+  deleteConfigEntry,
+  flushPendingConfigWrites
 } from './config'
 import { getHistory, deleteHistoryEntry, clearHistory } from './history'
 import { search, execute, evaluateExpression, listApps } from './commands'
@@ -69,6 +70,12 @@ import { registerGitStatusIpc } from './gitStatus'
 import { stopAllGitWatchers } from './gitWatcher'
 import { registerWingetIpc } from './wingetManager'
 import { registerSystemManagerIpc } from './systemManager'
+import {
+  initSchedulerDaemon,
+  registerSchedulesIpc,
+  stopAllScheduledJobs,
+  syncCustomCommandSchedules
+} from './schedulesManager'
 import {
   executeProfileAction,
   listProfiles,
@@ -677,6 +684,7 @@ function getPaletteSizeForMode(targetMode: string): { width: number; height: num
     registerGitStatusIpc()
     registerWingetIpc()
     registerSystemManagerIpc()
+    registerSchedulesIpc()
     ipcMain.handle('profile-execute', (_event, action: string) => executeProfileAction(action))
     ipcMain.handle('profile-list', () => listProfiles())
     ipcMain.handle('profile-switch', (_event, id: string) => switchProfile(id))
@@ -711,6 +719,7 @@ function getPaletteSizeForMode(targetMode: string): { width: number; height: num
     applyAutoStart(initialSettings.autoStart)
     setBarVisible(initialSettings.barEnabled)
     initSwap()
+    initSchedulerDaemon()
 
     screen.on('display-metrics-changed', () => repositionBarForDisplayChange())
 
@@ -719,39 +728,63 @@ function getPaletteSizeForMode(targetMode: string): { width: number; height: num
       dockManager.broadcast('config-changed')
     })
 
+    let lastHotkey = initialSettings.hotkey
+    let lastTerminalHotkey = initialSettings.terminalHotkey
+    let lastAutoStart = initialSettings.autoStart
     let lastBarEnabled = initialSettings.barEnabled
+    let lastSwapEnabled = initialSettings.swapEnabled !== false
+    let lastSwapPort = initialSettings.swapPort
     let lastDockLayout = initialSettings.dockLayout ?? 'shelf'
     let lastHomePos = initialSettings.dockHomePosition ?? 'middle'
     let lastCustomCoords = JSON.stringify(initialSettings.dockHomeCustomCoordinates ?? { x: 50, y: 80 })
+    let lastShelfIcons = JSON.stringify(initialSettings.shelfIcons ?? [])
 
     watchSettings((settings) => {
-      paletteHotkey.register(settings.hotkey)
-      terminalHotkey.register(settings.terminalHotkey)
-      applyAutoStart(settings.autoStart)
+      if (settings.hotkey !== lastHotkey) {
+        lastHotkey = settings.hotkey
+        paletteHotkey.register(settings.hotkey)
+      }
+      if (settings.terminalHotkey !== lastTerminalHotkey) {
+        lastTerminalHotkey = settings.terminalHotkey
+        terminalHotkey.register(settings.terminalHotkey)
+      }
+      if (settings.autoStart !== lastAutoStart) {
+        lastAutoStart = settings.autoStart
+        applyAutoStart(settings.autoStart)
+      }
       if (settings.barEnabled !== lastBarEnabled) {
         lastBarEnabled = settings.barEnabled
         setBarVisible(settings.barEnabled)
       }
-      if (settings.swapEnabled !== false) {
+      const currentSwapEnabled = settings.swapEnabled !== false
+      if (
+        currentSwapEnabled &&
+        (currentSwapEnabled !== lastSwapEnabled || settings.swapPort !== lastSwapPort)
+      ) {
         startSwapServer(settings.swapPort).catch((err) => console.error('[SwapServer] Failed to start:', err))
       }
+      lastSwapEnabled = currentSwapEnabled
+      lastSwapPort = settings.swapPort
 
       const currentLayout = settings.dockLayout ?? 'shelf'
       const currentHomePos = settings.dockHomePosition ?? 'middle'
       const currentCustomCoords = JSON.stringify(settings.dockHomeCustomCoordinates ?? { x: 50, y: 80 })
+      const currentShelfIcons = JSON.stringify(settings.shelfIcons ?? [])
 
       const layoutChanged = currentLayout !== lastDockLayout
       const homePosChanged = currentHomePos !== lastHomePos || currentCustomCoords !== lastCustomCoords
+      const shelfIconsChanged = currentShelfIcons !== lastShelfIcons
 
       lastDockLayout = currentLayout
       lastHomePos = currentHomePos
       lastCustomCoords = currentCustomCoords
+      lastShelfIcons = currentShelfIcons
 
       if (layoutChanged) {
         dockManager.setLayout(currentLayout, false)
       } else if (homePosChanged) {
         dockManager.resetPositions()
-      } else {
+      } else if (shelfIconsChanged) {
         repositionBarForShelfIcons()
         repositionBarForDisplayChange()
         repositionTerminal()
@@ -763,6 +796,7 @@ function getPaletteSizeForMode(targetMode: string): { width: number; height: num
     })
 
     watchCustomCommands(() => {
+      syncCustomCommandSchedules()
       mainWindow?.webContents.send('custom-commands-changed')
       sendToBar('custom-commands-changed')
     })
@@ -789,8 +823,10 @@ function getPaletteSizeForMode(targetMode: string): { width: number; height: num
   })
 
   app.on('will-quit', () => {
+    flushPendingConfigWrites()
     globalShortcut.unregisterAll()
     killPty()
     shutdownSwap()
     stopAllGitWatchers().catch(() => { })
+    stopAllScheduledJobs().catch(() => { })
   })
