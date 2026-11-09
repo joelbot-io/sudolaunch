@@ -201,6 +201,7 @@ export default function CommandPalette(): JSX.Element {
   const [activeModuleView, setActiveModuleView] = useState<'focus' | 'git' | 'profile' | 'system' | null>(null)
   const [systemSubTab, setSystemSubTab] = useState<WingetSubTab>('updates')
   const [wingetUpdatesCount, setWingetUpdatesCount] = useState(0)
+  const [scheduledJobsCount, setScheduledJobsCount] = useState(0)
   const [shortcutsActive, setShortcutsActive] = useState(false)
   const [termUnread, setTermUnread] = useState(false)
   const [notifyCount, setNotifyCount] = useState(0)
@@ -226,8 +227,14 @@ export default function CommandPalette(): JSX.Element {
   const orbitIdleTimeoutRef = useRef<NodeJS.Timeout | null>(null)
 
   useEffect(() => {
-    window.api.setPaletteModule?.(settingsTarget !== null ? 'settings' : activeModuleView)
-  }, [activeModuleView, settingsTarget])
+    const mod =
+      settingsTarget !== null
+        ? 'settings'
+        : activeModuleView === 'system' && systemSubTab === 'jobs'
+          ? 'jobs'
+          : activeModuleView
+    window.api.setPaletteModule?.(mod)
+  }, [activeModuleView, systemSubTab, settingsTarget])
 
   const markOrbitActivity = useCallback(() => {
     setIsOrbitIdle(false)
@@ -453,6 +460,11 @@ export default function CommandPalette(): JSX.Element {
     refreshCustomCommands()
     refreshLayout()
     refreshGit()
+    window.api.getScheduledJobs?.().then((jobs) => {
+      if (Array.isArray(jobs)) {
+        setScheduledJobsCount(jobs.filter((j) => j.enabled).length)
+      }
+    })
     window.api.getFocusTimerState?.().then(setFocusState)
     window.api.getDockIsHome?.().then((isHome) => {
       setIsDockAtHome(isHome)
@@ -486,6 +498,10 @@ export default function CommandPalette(): JSX.Element {
             } else if (mode === 'system') {
               setSettingsTarget(null)
               setSystemSubTab('updates')
+              setActiveModuleView('system')
+            } else if (mode === 'jobs') {
+              setSettingsTarget(null)
+              setSystemSubTab('jobs')
               setActiveModuleView('system')
             } else {
               setSettingsTarget(null)
@@ -544,8 +560,8 @@ export default function CommandPalette(): JSX.Element {
           refreshGit(true)
         } else if (mode === 'profile') {
           // profile ready
-        } else if (mode === 'system') {
-          // system ready
+        } else if (mode === 'system' || mode === 'jobs') {
+          // system / jobs ready
         } else {
           refreshHistory()
           refreshSettings()
@@ -678,6 +694,11 @@ export default function CommandPalette(): JSX.Element {
       window.api.onGitWatchersUpdated?.((list) => {
         if (Array.isArray(list)) {
           setGitWatchersCount(list.filter((w) => w.enabled).length)
+        }
+      }),
+      window.api.onScheduledJobsUpdated?.((jobs) => {
+        if (Array.isArray(jobs)) {
+          setScheduledJobsCount(jobs.filter((j) => j.enabled).length)
         }
       })
     ]
@@ -1958,6 +1979,11 @@ export default function CommandPalette(): JSX.Element {
                   key="system"
                   type="button"
                   className={`shelf-icon shelf-icon-system ${shelfPaletteActive && activeShelfModule === 'system' ? 'is-active' : ''}`}
+                  title={
+                    wingetUpdatesCount > 0
+                      ? `System Updates & Management [🧰] (${wingetUpdatesCount} package updates)`
+                      : 'System Updates & Management [🧰] (/system)'
+                  }
                   onClick={() => {
                     window.api.barActivate('system')
                   }}
@@ -1981,6 +2007,46 @@ export default function CommandPalette(): JSX.Element {
                   {wingetUpdatesCount > 0 && (
                     <span className="shelf-badge-indicator" style={{ background: '#3b82f6' }}>
                       {wingetUpdatesCount > 99 ? '99+' : wingetUpdatesCount}
+                    </span>
+                  )}
+                </button>
+                )
+                case 'jobs':
+                return (
+                <button
+                  key="jobs"
+                  type="button"
+                  className={`shelf-icon shelf-icon-jobs ${shelfPaletteActive && activeShelfModule === 'jobs' ? 'is-active' : ''}`}
+                  title={
+                    scheduledJobsCount > 0
+                      ? `Cron & Scheduled Jobs [⏰] (${scheduledJobsCount} active)`
+                      : 'Cron & Scheduled Jobs [⏰] (/jobs)'
+                  }
+                  onClick={() => {
+                    window.api.barActivate('jobs')
+                  }}
+                >
+                  <span className="shelf-icon-glyph">
+                    <svg
+                      width="18"
+                      height="18"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    >
+                      <rect x="3" y="4" width="18" height="18" rx="2" ry="2" />
+                      <line x1="16" y1="2" x2="16" y2="6" />
+                      <line x1="8" y1="2" x2="8" y2="6" />
+                      <line x1="3" y1="10" x2="21" y2="10" />
+                      <polyline points="12 14 12 16.5 14 18" />
+                    </svg>
+                  </span>
+                  {scheduledJobsCount > 0 && (
+                    <span className="shelf-badge-indicator" style={{ background: '#10b981' }}>
+                      {scheduledJobsCount > 99 ? '99+' : scheduledJobsCount}
                     </span>
                   )}
                 </button>
@@ -2256,6 +2322,30 @@ export default function CommandPalette(): JSX.Element {
                 </svg>
                 )
             onClick = () => window.api.barActivate('system')
+                break
+                case 'jobs':
+                title =
+              scheduledJobsCount > 0
+                ? `Cron & Scheduled Jobs [⏰] (${scheduledJobsCount} active)`
+                : 'Cron & Scheduled Jobs [⏰] (/jobs)'
+                isModuleActive = shelfPaletteActive && activeShelfModule === 'jobs'
+            if (scheduledJobsCount > 0) {
+                  badgeContent = (
+                    <span className="circle-orbit-badge" style={{ background: '#10b981' }}>
+                      {scheduledJobsCount > 9 ? '9+' : scheduledJobsCount}
+                    </span>
+                  )
+                }
+                iconContent = (
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <rect x="3" y="4" width="18" height="18" rx="2" ry="2" />
+                  <line x1="16" y1="2" x2="16" y2="6" />
+                  <line x1="8" y1="2" x2="8" y2="6" />
+                  <line x1="3" y1="10" x2="21" y2="10" />
+                  <polyline points="12 14 12 16.5 14 18" />
+                </svg>
+                )
+            onClick = () => window.api.barActivate('jobs')
                 break
                 case 'shortcuts':
                 title = 'Shortcuts Overlay [⌨️] (/shortcuts)'

@@ -342,7 +342,7 @@ export class DockGeometry {
     const icons: ShelfModuleId[] =
       shelfIcons && shelfIcons.length > 0
         ? shelfIcons
-        : ['term', 'bar', 'notify', 'shortcuts', 'settings', 'focus', 'git', 'profile', 'system']
+        : ['term', 'bar', 'notify', 'shortcuts', 'settings', 'focus', 'git', 'profile', 'system', 'jobs']
     const normalizedTarget: ShelfModuleId = target === 'terminal' ? 'term' : target
     const count = icons.length
     const isAlreadyShelf =
@@ -383,7 +383,7 @@ export class DockGeometry {
     const icons: ShelfModuleId[] =
       shelfIcons && shelfIcons.length > 0
         ? shelfIcons
-        : ['term', 'bar', 'notify', 'shortcuts', 'settings', 'focus', 'git', 'profile', 'system']
+        : ['term', 'bar', 'notify', 'shortcuts', 'settings', 'focus', 'git', 'profile', 'system', 'jobs']
     const normalizedTarget: ShelfModuleId = target === 'terminal' ? 'term' : target
 
     const orbitModuleList: ShelfModuleId[] = [

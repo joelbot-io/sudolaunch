@@ -85,7 +85,7 @@ const DEFAULT_COMMAND_ROW_DESCRIPTION = 'Choose which command appears first in s
 const DOCK_SLOTS_ROW_LABEL = 'Dock Slots & Modules'
 const DOCK_SLOTS_ROW_DESCRIPTION = 'Choose which icons appear on the shelf dock and customize their order'
 const DOCK_SLOTS_ACTION_COUNT = 2
-const ALL_SHELF_MODULES: ShelfModuleId[] = ['term', 'bar', 'notify', 'settings', 'focus', 'git', 'profile', 'system']
+const ALL_SHELF_MODULES: ShelfModuleId[] = ['term', 'bar', 'notify', 'shortcuts', 'settings', 'focus', 'git', 'profile', 'system', 'jobs']
 
 const COMMAND_LAYOUT_ROW_LABEL = 'Command Layout'
 const COMMAND_LAYOUT_ROW_DESCRIPTION = 'Rearrange commands, organize into subfolders, and configure display order'

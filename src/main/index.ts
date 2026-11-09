@@ -365,13 +365,13 @@ function revealPaletteWindow(targetMode?: string): void {
 
 function getPaletteSizeForMode(targetMode: string): { width: number; height: number } {
   if (targetMode === 'focus') return DockGeometry.FOCUS_PANEL_SIZE
-  if (targetMode === 'system') return DockGeometry.SYSTEM_PANEL_SIZE
-    if (targetMode === 'git') return DockGeometry.GIT_PANEL_SIZE
-    if (targetMode === 'profile' || targetMode === 'settings') {
-      return DockGeometry.MODULE_PANEL_SIZE
-    }
-    return DockGeometry.BAR_ACTIVE_SIZE
+  if (targetMode === 'system' || targetMode === 'jobs') return DockGeometry.SYSTEM_PANEL_SIZE
+  if (targetMode === 'git') return DockGeometry.GIT_PANEL_SIZE
+  if (targetMode === 'profile' || targetMode === 'settings') {
+    return DockGeometry.MODULE_PANEL_SIZE
   }
+  return DockGeometry.BAR_ACTIVE_SIZE
+}
 
   export function toggleShelfPalette(mode?: string): void {
     if (!mainWindow) return

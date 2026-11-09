@@ -191,7 +191,15 @@ export function readSettings(): Settings {
         loaded.shelfIcons[2] === 'bar' &&
         loaded.shelfIcons[3] === 'focus' &&
         loaded.shelfIcons[4] === 'git' &&
-        loaded.shelfIcons[5] === 'system'))
+        loaded.shelfIcons[5] === 'system') ||
+      (loaded.shelfIcons.length === 7 &&
+        loaded.shelfIcons[0] === 'term' &&
+        loaded.shelfIcons[1] === 'notify' &&
+        loaded.shelfIcons[2] === 'bar' &&
+        loaded.shelfIcons[3] === 'shortcuts' &&
+        loaded.shelfIcons[4] === 'focus' &&
+        loaded.shelfIcons[5] === 'git' &&
+        loaded.shelfIcons[6] === 'system'))
   ) {
     loaded.shelfIcons = [...DEFAULT_SHELF_ICONS]
   }

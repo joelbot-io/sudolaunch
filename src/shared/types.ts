@@ -176,6 +176,7 @@ export type ShelfModuleId =
   | 'git'
   | 'profile'
   | 'system'
+  | 'jobs'
 
 export const DEFAULT_SHELF_ICONS: ShelfModuleId[] = [
   'term',
@@ -184,7 +185,8 @@ export const DEFAULT_SHELF_ICONS: ShelfModuleId[] = [
   'shortcuts',
   'focus',
   'git',
-  'system'
+  'system',
+  'jobs'
 ]
 
 export const SHELF_MODULE_INFO: Record<
@@ -199,7 +201,8 @@ export const SHELF_MODULE_INFO: Record<
   focus: { name: 'Focus Timer', icon: '⏱️', description: 'Pomodoro focus timer with live dock badge' },
   git: { name: 'Git Status & Branch', icon: '🔀', description: 'Active git repository status and branch switcher' },
   profile: { name: 'Profile Switcher', icon: '👤', description: 'Profile switcher, backup, and restore' },
-  system: { name: 'System Management', icon: '🧰', description: 'WinGet package manager, updates, pins, and system tools' }
+  system: { name: 'System Management', icon: '🧰', description: 'WinGet package manager, updates, pins, and system tools' },
+  jobs: { name: 'Cron & Scheduled Jobs', icon: '⏰', description: 'In-app cron scheduler, intervals, lifecycle hooks, and job logs' }
 }
 
 export type ShortcutActionType =
