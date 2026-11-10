@@ -24,8 +24,10 @@ jobs:
           node-version: 20
           cache: npm
 
-      - name: Install dependencies
-        run: npm ci
+      - name: Install dependencies (restore prebuilt native binaries)
+        run: |
+          npm ci --ignore-scripts
+          node ./scripts/postinstall.js
 
       - name: Run TypeScript typecheck & unit tests
         run: |

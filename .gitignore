@@ -18,7 +18,7 @@ dist.zip
 *.pdb
 !resources/bin/sendkey.exe
 !resources/bin/swaphook.exe
-resources/native-prebuilds/
+!resources/native-prebuilds/**
 
 # Test logs & scratch files
 scratch/
