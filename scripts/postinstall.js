@@ -11,6 +11,29 @@ const iconTarget = path.join(rootDir, 'node_modules', 'extract-file-icon', 'buil
 
 let restored = false
 
+function copyDirSafe(sourceDir, targetDir) {
+  if (!fs.existsSync(sourceDir)) return
+  fs.mkdirSync(targetDir, { recursive: true })
+  for (const file of fs.readdirSync(sourceDir)) {
+    const srcFile = path.join(sourceDir, file)
+    const dstFile = path.join(targetDir, file)
+    try {
+      fs.copyFileSync(srcFile, dstFile)
+    } catch (err) {
+      // If a running SudoLaunch instance has the identical .node/.dll/.exe locked (EBUSY/EPERM),
+      // keep the existing target file if it already exists and has the same byte size.
+      if ((err.code === 'EBUSY' || err.code === 'EPERM') && fs.existsSync(dstFile)) {
+        const srcStat = fs.statSync(srcFile)
+        const dstStat = fs.statSync(dstFile)
+        if (srcStat.size === dstStat.size) {
+          continue
+        }
+      }
+      throw err
+    }
+  }
+}
+
 // Check if prebuilt native binaries exist for Windows x64
 if (process.platform === 'win32' && fs.existsSync(prebuildDir)) {
   try {
@@ -18,26 +41,9 @@ if (process.platform === 'win32' && fs.existsSync(prebuildDir)) {
     const wmSource = path.join(prebuildDir, 'node-window-manager')
     const iconSource = path.join(prebuildDir, 'extract-file-icon')
 
-    if (fs.existsSync(ptySource)) {
-      fs.mkdirSync(ptyTarget, { recursive: true })
-      for (const file of fs.readdirSync(ptySource)) {
-        fs.copyFileSync(path.join(ptySource, file), path.join(ptyTarget, file))
-      }
-    }
-
-    if (fs.existsSync(wmSource)) {
-      fs.mkdirSync(wmTarget, { recursive: true })
-      for (const file of fs.readdirSync(wmSource)) {
-        fs.copyFileSync(path.join(wmSource, file), path.join(wmTarget, file))
-      }
-    }
-
-    if (fs.existsSync(iconSource)) {
-      fs.mkdirSync(iconTarget, { recursive: true })
-      for (const file of fs.readdirSync(iconSource)) {
-        fs.copyFileSync(path.join(iconSource, file), path.join(iconTarget, file))
-      }
-    }
+    copyDirSafe(ptySource, ptyTarget)
+    copyDirSafe(wmSource, wmTarget)
+    copyDirSafe(iconSource, iconTarget)
 
     if (
       fs.existsSync(path.join(ptyTarget, 'pty.node')) &&
