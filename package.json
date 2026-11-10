@@ -2,13 +2,23 @@
   "name": "sudolaunch",
   "private": true,
   "version": "0.1.0",
+  "license": "Apache-2.0",
   "author": "SudoLaunch",
-  "description": "Global-hotkey command palette for Windows: quick Teams chat/call, email, snippets, links, app launch, and calc.",
+  "description": "Global-hotkey command palette, modular desktop dock, drop-down PowerShell terminal, in-app cron scheduler, and workstation management suite for Windows.",
+  "homepage": "https://github.com/joelbot-io/sudolaunch#readme",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/joelbot-io/sudolaunch.git"
+  },
+  "bugs": {
+    "url": "https://github.com/joelbot-io/sudolaunch/issues"
+  },
   "main": "./out/main/index.js",
   "scripts": {
     "dev": "electron-vite dev",
     "build": "electron-vite build",
-    "build:win": "electron-vite build && electron-builder --win",
+    "build:win": "electron-vite build && electron-builder --win --publish never",
+    "release:win": "electron-vite build && electron-builder --win --publish always",
     "bundle": "powershell -ExecutionPolicy Bypass -File ./scripts/bundle-repo.ps1",
     "bundle:native": "powershell -ExecutionPolicy Bypass -File ./scripts/bundle-repo.ps1 -IncludeNative",
     "bundle:zip": "powershell -ExecutionPolicy Bypass -File ./scripts/bundle-repo.ps1",

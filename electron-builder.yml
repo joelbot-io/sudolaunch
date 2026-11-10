@@ -1,5 +1,9 @@
 appId: com.sudolaunch.app
 productName: SudoLaunch
+publish:
+  provider: github
+  owner: joelbot-io
+  repo: sudolaunch
 directories:
   output: dist
   buildResources: build

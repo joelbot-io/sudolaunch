@@ -7,6 +7,8 @@ A global-hotkey command palette, persistent command bar, and drop-down terminal 
 - [Commands](#commands)
 - [Execution Modes & Elevation (`Ctrl+Enter`)](#execution-modes--elevation-ctrlenter)
 - [System Management Control Center (`/system` & `🧰` Dock Module)](#system-management-control-center-system--dock-module)
+- [In-App Cron & Scheduled Jobs (`/jobs` & `⏰` Dock Module)](#in-app-cron--scheduled-jobs-jobs--dock-module)
+- [Git Repository Switcher & File Watchers (`/repo` & `🔀` Dock Module)](#git-repository-switcher--file-watchers-repo--dock-module)
 - [Customizable Shortcuts Overlay (`/shortcuts` & `⌨️` Dock Module)](#customizable-shortcuts-overlay-shortcuts--dock-module)
 - [Modular Dock, Layouts & Notifications](#modular-dock-layouts--notifications)
 - [Focus & Pomodoro Timer Popout](#focus--pomodoro-timer-popout)
@@ -22,10 +24,11 @@ A global-hotkey command palette, persistent command bar, and drop-down terminal 
 - [Requirements](#requirements)
 - [Setup](#setup)
 - [Development](#development)
-- [Typecheck](#typecheck)
-- [Build & Packaging](#build--packaging)
+- [Testing & Typecheck](#testing--typecheck)
+- [Build, Packaging & GitHub Releases](#build-packaging--github-releases)
 - [Auto-start](#auto-start)
 - [Profile Backup & Maintenance](#profile-backup--maintenance)
+- [License](#license)
 
 ## Commands
 
@@ -33,7 +36,8 @@ A global-hotkey command palette, persistent command bar, and drop-down terminal 
 |---|---|
 | `/search <query>` | Universal multi-source search across contacts, snippets, apps, windows, custom commands, and GIFs (excludes internal Teams links) |
 | `/app <query>` | Fuzzy-search Start Menu shortcuts and installed applications, launch (cached in-memory with a 10-minute TTL for fast typing) |
-| `/system [tab]` | Open the System Management Control Center — 6-category workstation suite covering WinGet & Windows Update, Dev Runtimes, PATH Doctor & Persistent Env Vars, Services & Scheduled Tasks, Ports, Hosts & DNS, Disk, SMART & Power/Repair, and Defender, BitLocker & Event Logs (alias: `/sys`) |
+| `/system [tab]` | Open the System Management Control Center — 7-category workstation suite covering WinGet & Windows Update, Cron & Scheduled Jobs, Dev Runtimes, PATH Doctor & Persistent Env Vars, Services & Scheduled Tasks, Ports, Hosts & DNS, Disk, SMART & Power/Repair, and Defender, BitLocker & Event Logs (alias: `/sys`) |
+| `/jobs [query]` | Manage, trigger, and inspect in-app scheduled scripts, cron jobs, and event triggers (`startup`, `unlock`, `resume`, `network-change`; aliases: `/sched`, `/schedule`) |
 | `/shortcuts [tab]` | Open the floating Customizable Shortcuts Overlay — tabbed keyboard shortcut deck for Favorites, PowerToys, Docker, Windows, Dev & Git, and Custom tabs with click-to-execute keystroke simulation and actions (aliases: `/sc`, `/hotkeys`) |
 | `/pkg [query]` | Inspect developer runtimes (Node, Python, Git, Go, Rust, .NET, Docker) and run quick WinGet package actions (alias: `/winget`) |
 | `/svc [query]` | Browse, filter (`running`/`stopped`), start, stop, and restart Windows Services with automatic UAC elevation |
@@ -41,7 +45,7 @@ A global-hotkey command palette, persistent command bar, and drop-down terminal 
 | `/wsl [distro]` | Launch WSL Linux distributions in SudoLaunch Terminal or open their root filesystem in File Explorer |
 | `/ssh [host]` | Connect to SSH hosts from `~/.ssh/config` or saved connections in `sshHosts.json` |
 | `/docker [query]` | Manage Docker containers, inspect status/ports, stream logs, and prune images |
-| `/repo` | Open active Git repository status, branch switcher, and recent repository selector panel (hotkey: `F9`) |
+| `/repo` | Open active Git repository status, branch switcher, live file watchers, and recent repository selector panel (hotkey: `F9`) |
 | `/expmod [query]` | Explore installed PowerShell & Python modules, exported cmdlets/functions, and inline help |
 | `/env [query]` | Search environment variables, inspect User/Machine `PATH` directories, and parse `.env` files |
 | `/cert <host>` | Inspect SSL/TLS certificates, expiry dates, SANs, and cipher suites for any HTTPS host (alias: `/ssl`) |
@@ -119,7 +123,7 @@ SudoLaunch provides seamless execution controls right from the palette footer:
 
 ## System Management Control Center (`/system` & `🧰` Dock Module)
 
-Click the `🧰` icon on the Shelf / Orbit Dock or run `/system` (alias: `/sys`) to open the **System Management Control Center** — an integrated workstation management suite with 6 top-level categories:
+Click the `🧰` icon on the Shelf / Orbit Dock or run `/system` (alias: `/sys`) to open the **System Management Control Center** — an integrated workstation management suite with 7 top-level categories:
 
 ### 1. 🪽 WinGet & Package Updates
 - **Updates Available (`winget upgrade --include-pinned`)**:
@@ -195,6 +199,39 @@ Click the `🧰` icon on the Shelf / Orbit Dock or run `/system` (alias: `/sys`)
   - Manage **Defender Folder Exclusions** (`ExclusionPath`) to speed up heavy compiler/Node/Rust workspace builds (`Add-MpPreference` / `Remove-MpPreference`), inspect **BitLocker Volume Encryption** status & protection state across drives, and audit members of the local **`Administrators`** group.
 - **🚨 Event Log & Application Crash Triage (`/system events`)**:
   - Queries recent `Critical` and `Error` entries from the Windows **`Application`** and **`System`** logs (`Get-WinEvent`), surfacing `.NET Runtime` exceptions, `Application Error` (Event ID `1000` faulting module crashes), `Service Control Manager` failures, and `DistributedCOM` errors with expandable stack traces and one-click clipboard copy.
+
+## In-App Cron & Scheduled Jobs (`/jobs` & `⏰` Dock Module)
+
+Click the `⏰` icon on the Shelf / Orbit Dock, select the **⏰ Cron & Jobs** tab next to **🪽 WinGet & Updates** in the System Management Control Center, or run `/jobs` (aliases: `/sched`, `/schedule`) to manage lightweight, zero-polling background automation without touching Windows Task Scheduler:
+
+- **6 Trigger Modes**:
+  - **⏰ Cron Expression (`cron`)**: Standard 5-field cron expressions (`minute hour day-of-month month day-of-week`, e.g. `0 9 * * 1-5` or `*/15 * * * *`) with live plain-English explanations (`explainCronExpression`) and next-run timestamp previews (`getNextCronRunDate`).
+  - **🔄 Fixed Interval (`interval`)**: Run every $N$ minutes (`intervalMinutes`).
+  - **🚀 App Startup (`startup`)**: Run once automatically after SudoLaunch initializes on login.
+  - **🔓 Workstation Unlock (`unlock`)**: Triggered by Electron `powerMonitor` `unlock-screen` events.
+  - **⚡ System Resume (`resume`)**: Triggered when waking from sleep/hibernation (`powerMonitor` `resume`).
+  - **🌐 Network Change (`network-change`)**: Triggered when primary IPv4/network connectivity changes (debounced).
+- **4 Execution Actions**:
+  - **📜 Script File (`script`)**: Execute `.ps1`, `.py`, `.cmd`, or `.bat` scripts with automatic interpreter resolution (`powershell.exe`, `python`, `cmd.exe`), custom arguments, and working directory (`cwd`).
+  - **⚡ Inline PowerShell (`powershell`)**: Run arbitrary PowerShell pipelines in the background (`runHidden`) or visibly inside the persistent SudoLaunch Terminal (`showTerminal: true`).
+  - **⌘ SudoLaunch Custom Command (`custom-command`)**: Trigger any `~/.sudolaunch/commands/*.json` command on a schedule.
+  - **🔧 Built-In Maintenance Script (`builtin-script`)**: One-click presets for SudoLaunch's `scripts/*.ps1` maintenance suite (`backup-profile.ps1`, `clean-history.ps1`, `scan-git-repos.ps1`, `validate-profile.ps1`, etc.).
+- **Declarative Schedule Fields in Custom Commands (`commands/*.json`)**:
+  - Add `"Schedule": "0 9 * * 1-5"` or `"IntervalMinutes": 60` directly to any `~/.sudolaunch/commands/<name>.json` file — SudoLaunch automatically registers and syncs a `command-sync` job for it via Chokidar.
+- **Zero-Polling Single-Timer Engine & Guardrails**:
+  - Computes the exact millisecond delta to the earliest upcoming `nextRunAt` across all enabled jobs and arms a single `setTimeout` (no background CPU spin).
+  - Supports **Prevent Overlap (`preventOverlap`)**, **Execution Timeout (`timeoutSec`)**, **Notification Modes (`always`, `on-failure`, `silent`)**, and per-job **stdout/stderr & exit code history** persisted in `~/.sudolaunch/schedules.json`.
+
+## Git Repository Switcher & File Watchers (`/repo` & `🔀` Dock Module)
+
+Click the `🔀` icon on the Shelf / Orbit Dock, press `F9`, or run `/repo` to manage active Git workspaces and automated file watchers:
+
+- **Instant Branch Switcher & Dirty Status**:
+  - Displays current branch, dirty modified/untracked file count (`*`), and ahead/behind commit counts via a single unified `git status --porcelain=v1 -b` query.
+  - Fuzzy-filter local branches, create new branches (`+ New`), or run one-click **⬇️ Pull**, **⬆️ Push**, and **🔄 Fetch** actions.
+- **👁️ Live File Watchers & Auto-Rebuild Triggers (`git-watchers.json`)**:
+  - Configure per-repository Chokidar file watchers with custom glob patterns (e.g. `src/**/*.{ts,tsx}`, `*.go`, `*.py`), ignore globs, debounce intervals (`debounceMs`), and cooldowns (`cooldownMs`).
+  - Automatically discovers `npm run <script>` presets from the repo's `package.json` (`build`, `test`, `typecheck`, `lint`) plus Git sync recipes, and executes them in the background or SudoLaunch Terminal whenever matching files are saved.
 
 ## Customizable Shortcuts Overlay (`/shortcuts` & `⌨️` Dock Module)
 
@@ -331,15 +368,16 @@ Toggle active keyboard and mouse control between multiple SudoLaunch instances a
 
 ## Command bar
 
-Alongside the hotkey popup, a frosted-glass icon dock sits on screen (`[ >_ ] [ 🔔 ] [ / ] [ ⏱️ ] [ 🔀 ] [ 🧰 ] [ ⌨️ ]` — bottom-center Shelf mode by default) and stays docked on screen — it's on by default and doesn't hide when you click away.
+Alongside the hotkey popup, a frosted-glass icon dock sits on screen (`[ >_ ] [ 🔔 ] [ / ] [ ⏱️ ] [ 🔀 ] [ 🧰 ] [ ⏰ ] [ ⌨️ ]` — bottom-center Shelf mode by default) and stays docked on screen — it's on by default and doesn't hide when you click away.
 
 - **Configurable Dock Modules**:
   - `>_` toggles the persistent drop-down PowerShell terminal.
   - `🔔` toggles the floating notification center with active unread counter badge.
   - `/` toggles the centered command palette.
   - `⏱️` toggles the Focus & Pomodoro countdown timer panel.
-  - `🔀` toggles the active Git repository status & branch switcher (`F9`).
+  - `🔀` toggles the active Git repository status, branch switcher & file watchers (`F9`).
   - `🧰` toggles the System Management Control Center (`/system`).
+  - `⏰` toggles the In-App Cron & Scheduled Jobs panel (`/jobs`).
   - `⌨️` toggles the Customizable Shortcuts Overlay (`/shortcuts`).
   - `👤` toggles the Profile Switcher & Backup Archive manager (`/profile`).
   - `⚙️` opens Settings & Configuration (`/settings`).
@@ -383,7 +421,7 @@ Type `/settings` (or `/config`) into the command palette to open the interactive
 - **SSH Hosts (`/settings sshHosts`)**: Add, edit, or delete saved SSH host connections (`name`, `host`, `user`, `port`, `identityFile`, `extraArgs`) for `/ssh`.
 - **Settings (`/settings edit`)**: Configure global hotkeys, dock layout (`shelf`, `circle`, `horizontal`), dock glow color & style, home position anchor, monitor, history tracking & limit, auto-start on login, mouse input toggle, default command, single-character shortcuts (`/t`, `/f`, `/s`), and the GIF/lookup folder paths.
 - **Interactive Toggle Screens**:
-  - **Shelf / Dock Modules**: Choose and reorder which module icons (`term`, `notify`, `bar`, `focus`, `git`, `system`, `shortcuts`, `profile`, `settings`) appear on the dock.
+  - **Shelf / Dock Modules**: Choose and reorder which module icons (`term`, `notify`, `bar`, `focus`, `git`, `system`, `jobs`, `shortcuts`, `profile`, `settings`) appear on the dock.
   - **App Visibility**: Choose which Windows applications appear in `/app`.
   - **Search Commands**: Choose which commands participate in `/search` fan-out.
   - **Command Visibility**: Choose which commands appear in palette suggestions.
@@ -403,6 +441,8 @@ Configuration files are stored in `%USERPROFILE%\.sudolaunch\`. On first run, Su
 - `peers.json` — Peer machines and pinned TLS fingerprints for `/control` input sharing
 - `sshHosts.json` — Saved SSH connections merged alongside `~/.ssh/config` for `/ssh`
 - `pinned-services.json` — User-pinned favorite Windows Services for `/system` (Services tab)
+- `schedules.json` — In-app scheduled jobs, cron expressions, event triggers, and execution logs for `/jobs` (`⏰` Cron & Jobs tab)
+- `git-watchers.json` — Per-repository live file watcher rules and auto-build commands for `/repo` (`🔀` Git tab)
 - `shortcuts.json` — User-starred favorites, custom tabs, custom shortcuts, and built-in shortcut overrides for `/shortcuts` (`⌨️` Shortcuts Overlay)
 - `settings.json` — App preferences (`hotkey`, `terminalHotkey`, `historyEnabled`, `historyLimit`, `autoStart`, `disableMouseInput`, `defaultCommand`, `disabledApps`, `teamsShortcut`, `favShortcut`, `snippetShortcut`, `searchExcludedCommands`, `hiddenCommands`, `gifFolder`, `lookupFolder`, `barEnabled`, `dockLayout`, `dockHomePosition`, `dockGlowColor`, `dockGlowStyle`, `shelfIcons`, `monitor`, `terminalWidth`, `shortcutsWindowPosition`, `shortcutsWindowSize`, `shortcutsStayOpen`, `shortcutsGrayscale`)
 - `history.json` — App-managed execution history of recent commands
@@ -504,23 +544,39 @@ npm run dev
 
 Starts `electron-vite` in development mode with HMR for the renderer and auto-rebuild for the main process.
 
-## Typecheck
+## Testing & Typecheck
 
 ```sh
+# Run the Vitest unit test suite (cron parser/scheduler, custom command parser, dock geometry, command layout)
+npm test
+
+# Run Vitest in interactive watch mode
+npm run test:watch
+
+# Run TypeScript typecheck across Node (main/preload) and Web (renderer)
 npm run typecheck
 ```
 
-## Build & Packaging
+## Build, Packaging & GitHub Releases
 
 ### Build Commands
 
 | Command | Action | Output Directory | Output Artifacts |
 |---|---|---|---|
 | `npm run build` | Compiles TypeScript and bundles main, preload, and renderer processes via `electron-vite` | `out/` | `out/main/index.js`<br>`out/preload/index.js`<br>`out/renderer/` (HTML, JS, CSS) |
-| `npm run build:win` | Bundles the application (`npm run build`) and creates a Windows installer & standalone binaries via `electron-builder` | `dist/` | `dist/SudoLaunch-<version>-setup.exe`<br>`dist/win-unpacked/` |
+| `npm run build:win` | Bundles the application (`npm run build`) and creates a local Windows NSIS installer via `electron-builder --win --publish never` | `dist/` | `dist/SudoLaunch-<version>-setup.exe`<br>`dist/win-unpacked/` |
+| `npm run release:win` | Bundles the application and publishes the Windows NSIS installer + `latest.yml` auto-update manifest to GitHub Releases (`GH_TOKEN` required) | `dist/` | `dist/SudoLaunch-<version>-setup.exe`<br>`dist/latest.yml` |
+| `npm test` | Runs the Vitest unit test suite (`tests/*.test.ts`) | — | Test summary (26 tests across 4 suites) |
 | `npm run typecheck` | Runs TypeScript type checking across node (main/preload) and web (renderer) without emitting output | — | Terminal diagnostic output (0 errors expected) |
 | `npm run postinstall` | Rebuilds native C++ modules (`node-window-manager`, `electron-clipboard-ex`, `node-pty`) for Electron ABI | `node_modules/` | Native `.node` binaries |
 | `npm run profile:repair-env` | Diagnostic script that verifies environment tools, clears security locks, recompiles C# binaries, and rebuilds native addons | `resources/bin/` | `resources/bin/sendkey.exe`<br>`resources/bin/swaphook.exe` |
+
+### Automated GitHub Actions CI & Releases
+
+The repository includes two GitHub Actions workflows in `.github/workflows/`:
+
+- **`.github/workflows/ci.yml`**: Runs automatically on every push and pull request to `main` (`windows-latest`), verifying `npm run typecheck`, `npm test`, and `npm run build`.
+- **`.github/workflows/release.yml`**: Triggers automatically when you push a version tag matching `v*` (e.g. `git tag v0.1.0 && git push origin v0.1.0`) or manually via `workflow_dispatch`. It runs typechecks and tests, compiles `sendkey.exe` and `swaphook.exe`, builds the Windows NSIS installer (`SudoLaunch-<version>-setup.exe`), and publishes the release assets + `electron-updater` metadata (`latest.yml`) directly to GitHub Releases.
 
 ### Output Directories
 
@@ -751,4 +807,9 @@ npm run profile:autostart
 npm run profile:manage
 ```
 Displays an interactive numeric menu covering all 21 maintenance and developer operations.
+
+## License
+
+Licensed under the [Apache License, Version 2.0](LICENSE).
+
 

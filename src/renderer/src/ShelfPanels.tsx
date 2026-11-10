@@ -1251,7 +1251,7 @@ export function GitStatusPanel({
                         setFormRepoPath(e.target.value)
                         loadPresetsForPath(e.target.value)
                       }}
-                      placeholder="a:\dev\repo\..."
+                      placeholder="C:\Projects\my-app"
                     />
                     {knownRepos.length > 0 && (
                       <select

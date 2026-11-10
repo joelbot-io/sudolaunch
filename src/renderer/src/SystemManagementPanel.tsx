@@ -5962,7 +5962,7 @@ export function SystemManagementPanel({
                     type="text"
                     className="winget-search-input"
                     style={{ flex: 1 }}
-                    placeholder="Add developer workspace folder exclusion (e.g. A:\dev\repo) via UAC..."
+                    placeholder="Add developer workspace folder exclusion (e.g. C:\Projects) via UAC..."
                     value={newExclusionPath}
                     onChange={(e) => setNewExclusionPath(e.target.value)}
                   />

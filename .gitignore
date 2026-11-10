@@ -13,12 +13,12 @@ dist.zip
 .vite/
 
 # Compiled binaries & artifacts
-resources/bin/*.exe
-!resources/bin/sendkey.exe
-resources/native-prebuilds/
 *.exe
 *.dll
 *.pdb
+!resources/bin/sendkey.exe
+!resources/bin/swaphook.exe
+resources/native-prebuilds/
 
 # Test logs & scratch files
 scratch/
@@ -32,6 +32,7 @@ warp_filter_test.txt
 Thumbs.db
 .vscode/
 .idea/
+.claude/
 *.suo
 *.user
 
