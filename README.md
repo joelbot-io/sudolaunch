@@ -1,5 +1,7 @@
 # SudoLaunch
 
+> **📖 [Live Documentation & Interactive Command Explorer →](https://joelbot-io.github.io/sudolaunch/)** · **⬇️ [Latest Windows Releases →](https://github.com/joelbot-io/sudolaunch/releases)**
+
 A global-hotkey command palette, persistent command bar, and drop-down terminal for Windows. Press `Ctrl+Space` (configurable) to summon a centered, searchable palette covering Teams chats and channels, email, snippets, links, app launching, script browsing, window switching, custom PowerShell commands, animated GIFs, JSON table lookups, and an extensive suite of instant developer utilities (timezones, hashing, regex, Git recipes, HTTP codes, QR codes, unit/color converters, and text manipulation). Always dark themed, independent of the Windows system theme setting.
 
 ## Contents

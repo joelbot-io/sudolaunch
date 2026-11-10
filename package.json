@@ -5,7 +5,7 @@
   "license": "Apache-2.0",
   "author": "SudoLaunch",
   "description": "Global-hotkey command palette, modular desktop dock, drop-down PowerShell terminal, in-app cron scheduler, and workstation management suite for Windows.",
-  "homepage": "https://github.com/joelbot-io/sudolaunch#readme",
+  "homepage": "https://joelbot-io.github.io/sudolaunch/",
   "repository": {
     "type": "git",
     "url": "https://github.com/joelbot-io/sudolaunch.git"

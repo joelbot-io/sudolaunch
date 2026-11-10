@@ -1,0 +1,390 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>SudoLaunch — Windows Developer Command Palette, Dock & Workstation Suite</title>
+  <meta name="description" content="Global-hotkey command palette, modular frosted-glass desktop dock, persistent drop-down PowerShell terminal, in-app cron scheduler, and workstation management suite for Windows." />
+  <link rel="icon" type="image/svg+xml" href="./logo.svg" />
+  <link rel="stylesheet" href="./styles.css" />
+</head>
+<body>
+  <!-- Sticky Topbar -->
+  <header class="topbar">
+    <a href="#" class="brand">
+      <img src="./logo.svg" alt="SudoLaunch Logo" />
+      <span>SudoLaunch</span>
+      <span class="brand-badge">v0.1.0 · Windows 10/11</span>
+    </a>
+    <div class="topbar-actions">
+      <a href="#commands" class="btn">⌘ Command Explorer</a>
+      <a href="https://github.com/joelbot-io/sudolaunch" target="_blank" rel="noopener" class="btn">GitHub Repo</a>
+      <a href="https://github.com/joelbot-io/sudolaunch/releases" target="_blank" rel="noopener" class="btn btn-primary">⬇ Download Installer</a>
+    </div>
+  </header>
+
+  <div class="layout">
+    <!-- Sticky Sidebar Navigation -->
+    <aside class="sidebar">
+      <div class="nav-group">
+        <div class="nav-group-title">Getting Started</div>
+        <a href="#overview" class="nav-link active">⚡ Overview & Highlights</a>
+        <a href="#commands" class="nav-link">⌘ Command Explorer</a>
+        <a href="#execution" class="nav-link">🛡️ Execution & UAC Sudo</a>
+      </div>
+      <div class="nav-group">
+        <div class="nav-group-title">Workstation Modules</div>
+        <a href="#system" class="nav-link">🧰 System Control Center</a>
+        <a href="#scheduler" class="nav-link">⏰ Cron & Scheduled Jobs</a>
+        <a href="#git" class="nav-link">🔀 Git & File Watchers</a>
+        <a href="#shortcuts" class="nav-link">⌨️ Shortcuts Overlay</a>
+        <a href="#dock" class="nav-link">🪐 Modular Dock & Orbit</a>
+        <a href="#terminal" class="nav-link">>_ Drop-Down Terminal</a>
+        <a href="#control" class="nav-link">⇄ Network Input Sharing</a>
+      </div>
+      <div class="nav-group">
+        <div class="nav-group-title">Customization & Dev</div>
+        <a href="#custom-commands" class="nav-link">📜 Custom Commands</a>
+        <a href="#config" class="nav-link">⚙️ Configuration & Profile</a>
+        <a href="#build" class="nav-link">🚀 Build, Test & Releases</a>
+      </div>
+    </aside>
+
+    <!-- Main Documentation Content -->
+    <main class="content">
+      <!-- Hero Banner -->
+      <section class="hero" id="overview">
+        <div class="hero-top">
+          <img src="./logo.svg" alt="SudoLaunch" class="hero-logo" />
+          <div>
+            <h1>SudoLaunch</h1>
+            <p class="hero-tagline">
+              A global-hotkey command palette, modular frosted-glass desktop dock, persistent drop-down PowerShell terminal, in-app cron scheduler, and workstation management suite for Windows.
+            </p>
+          </div>
+        </div>
+
+        <div class="hero-badges">
+          <span class="pill"><kbd>Ctrl+Space</kbd> Global Palette</span>
+          <span class="pill"><kbd>Ctrl+Alt+T</kbd> / <kbd>F1</kbd> Drop-Down Terminal</span>
+          <span class="pill"><kbd>Ctrl+Enter</kbd> Elevated "Sudo" Run</span>
+          <span class="pill"><kbd>F9</kbd> Git Branch & Watcher Panel</span>
+          <span class="pill">56+ Built-In Commands</span>
+          <span class="pill">Apache-2.0 License</span>
+        </div>
+
+        <p style="font-size:0.9rem; color: var(--text-secondary); margin-bottom: 8px;">
+          Interactive Shelf Dock Preview (click any module to jump to its documentation):
+        </p>
+        <div class="dock-preview">
+          <a href="#terminal" class="dock-icon" title="Persistent PowerShell Terminal (>_)">&gt;_</a>
+          <a href="#dock" class="dock-icon" title="Acrylic Notification Center">🔔</a>
+          <a href="#commands" class="dock-icon" title="Command Palette (/)">/</a>
+          <a href="#dock" class="dock-icon" title="Focus & Pomodoro Timer">⏱️</a>
+          <a href="#git" class="dock-icon" title="Git Branch Switcher & File Watchers">🔀</a>
+          <a href="#system" class="dock-icon" title="System Management Control Center">🧰</a>
+          <a href="#scheduler" class="dock-icon" title="In-App Cron & Scheduled Jobs">⏰</a>
+          <a href="#shortcuts" class="dock-icon" title="Customizable Shortcuts Overlay">⌨️</a>
+          <a href="#config" class="dock-icon" title="Profile Switcher & Backup">👤</a>
+          <a href="#config" class="dock-icon" title="Settings & Configuration">⚙️</a>
+        </div>
+      </section>
+
+      <!-- Interactive Command Explorer -->
+      <section class="doc-section" id="commands">
+        <h2>
+          <span>⌘ Interactive Command Explorer</span>
+          <span id="cmd-count" class="brand-badge" style="margin-left:auto;">56 commands</span>
+        </h2>
+        <p>
+          Press <kbd>/</kbd> anywhere on this page to filter all built-in SudoLaunch palette commands by name, alias, or capability.
+        </p>
+
+        <div class="palette-search-box">
+          <div class="palette-input-wrapper">
+            <span class="palette-prefix">&gt;_</span>
+            <input
+              type="text"
+              id="cmd-search"
+              class="palette-input"
+              placeholder="Filter commands (e.g. /jobs, /system, winget, cron, docker, hash, ssh)..."
+              autocomplete="off"
+            />
+          </div>
+          <div class="filter-chips">
+            <button type="button" class="chip active" data-cat="all">All Commands</button>
+            <button type="button" class="chip" data-cat="system">🧰 System & DevOps</button>
+            <button type="button" class="chip" data-cat="scheduler">⏰ Scheduler & Git</button>
+            <button type="button" class="chip" data-cat="search">🔍 Productivity & Search</button>
+            <button type="button" class="chip" data-cat="devtools">🛠️ Developer Tools</button>
+            <button type="button" class="chip" data-cat="dock">🪐 Dock, Terminal & Control</button>
+          </div>
+        </div>
+
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th style="width: 210px;">Command</th>
+                <th style="width: 140px;">Aliases / Hotkey</th>
+                <th>Behavior & Capabilities</th>
+              </tr>
+            </thead>
+            <tbody id="cmd-table-body"></tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- Execution Modes & Elevation -->
+      <section class="doc-section" id="execution">
+        <h2>🛡️ Execution Modes & UAC Elevation (<code>Ctrl+Enter</code>)</h2>
+        <p>
+          SudoLaunch provides instant keyboard control over whether commands execute in your interactive PowerShell session or with full Windows Administrator privileges:
+        </p>
+        <div class="card-grid">
+          <div class="feature-card">
+            <h4><kbd>Enter</kbd> Visible Terminal Execution</h4>
+            <p>
+              Runs custom PowerShell commands and scripts visibly inside SudoLaunch's persistent PowerShell session (<code>node-pty</code> + <code>xterm.js</code>) with full ANSI color and scrollback.
+            </p>
+          </div>
+          <div class="feature-card">
+            <h4><kbd>Ctrl+Enter</kbd> Elevated "Sudo" Mode</h4>
+            <p>
+              Elevates any command via Windows User Account Control (UAC) using <code>Start-Process powershell.exe -Verb RunAs</code> with a safely Base64-encoded <code>-EncodedCommand</code> payload.
+            </p>
+          </div>
+          <div class="feature-card">
+            <h4>🔍 Unprefixed Universal Search</h4>
+            <p>
+              Typing without a leading slash (e.g. <code>chrome</code>, <code>docker</code>) automatically fans out across contacts, snippets, installed apps, open windows, and custom commands.
+            </p>
+          </div>
+        </div>
+      </section>
+
+      <!-- System Management Control Center -->
+      <section class="doc-section" id="system">
+        <h2>🧰 System Management Control Center (<code>/system</code>)</h2>
+        <p>
+          Click the <code>🧰</code> icon on the Dock or run <code>/system</code> (alias: <code>/sys</code>) to open the 7-category workstation management suite:
+        </p>
+        <div class="card-grid">
+          <div class="feature-card">
+            <h4>1. 🪽 WinGet & Windows Update</h4>
+            <p>
+              Inspect outdated packages, batch upgrade/pin/uninstall, browse <code>winget show</code> version drawers, check global <code>npm</code>/<code>pip</code>/<code>WSL</code> updates, export JSON snapshots, and check all 4 Windows Pending Reboot registry keys + KB hotfixes.
+            </p>
+          </div>
+          <div class="feature-card">
+            <h4>2. ⏰ Cron & Scheduled Jobs</h4>
+            <p>
+              Dedicated top-level tab right next to System Updates for scheduling PowerShell/Python scripts, custom commands, and maintenance routines via 5-field cron expressions or system events.
+            </p>
+          </div>
+          <div class="feature-card">
+            <h4>3. 🛠️ Runtimes, PATH & Env Vars</h4>
+            <p>
+              Audits 12 developer toolchains (<code>node</code>, <code>python</code>, <code>uv</code>, <code>go</code>, <code>pwsh</code>, <code>git</code>, <code>dotnet</code>, <code>rustc</code>, <code>docker</code>) with <code>where.exe</code> PATH shadowing detection, broken PATH doctor, and a Registry Environment Variable editor with secret masking.
+            </p>
+          </div>
+          <div class="feature-card">
+            <h4>4. ⚙️ Services, Startup & Tasks</h4>
+            <p>
+              Pin favorite Windows Services (<code>Docker</code>, <code>ssh-agent</code>, <code>WslService</code>) with UAC Start/Stop/Restart, inspect login startup entries, and manage Windows Task Scheduler jobs.
+            </p>
+          </div>
+          <div class="feature-card">
+            <h4>5. 🔌 Ports, Hosts & Quick DNS</h4>
+            <p>
+              Inspect listening TCP ports with one-click firewall rules or PID kill, toggle <code>C:\Windows\System32\drivers\etc\hosts</code> mappings in-place, and switch adapter DNS between Cloudflare (<code>1.1.1.1</code>), Google (<code>8.8.8.8</code>), Quad9 (<code>9.9.9.9</code>), or DHCP.
+            </p>
+          </div>
+          <div class="feature-card">
+            <h4>6. 🧹 Cache, SMART & Power/Repair</h4>
+            <p>
+              Reclaim space across WinGet, npm, Go, pip, uv, CrashDumps, and Temp caches; inspect NVMe/SSD SMART health; switch Windows power plans; and run <code>wsl --shutdown</code>, <code>sfc /scannow</code>, or DISM repairs.
+            </p>
+          </div>
+          <div class="feature-card">
+            <h4>7. 🛡️ Defender, BitLocker & Events</h4>
+            <p>
+              Audit Windows Defender status, manage workspace folder exclusions (<code>ExclusionPath</code>) via UAC, inspect BitLocker volume protection, and triage Windows Event Log <code>Critical</code>/<code>Error</code> stack traces.
+            </p>
+          </div>
+        </div>
+      </section>
+
+      <!-- In-App Cron & Scheduled Jobs -->
+      <section class="doc-section" id="scheduler">
+        <h2>⏰ In-App Cron & Scheduled Jobs (<code>/jobs</code> & <code>⏰</code> Dock Module)</h2>
+        <p>
+          Click the <code>⏰</code> icon on the Dock, select the <strong>⏰ Cron & Jobs</strong> tab in the System Management window, or run <code>/jobs</code> (aliases: <code>/sched</code>, <code>/schedule</code>) to run automated background jobs without touching Windows Task Scheduler.
+        </p>
+        <ul>
+          <li><strong>Zero-Polling Single-Timer Engine</strong>: Calculates the exact millisecond delta to the earliest upcoming <code>nextRunAt</code> across all active schedules and arms a single <code>setTimeout</code> — zero background CPU polling.</li>
+          <li><strong>6 Trigger Types</strong>:
+            <ul>
+              <li><code>cron</code>: Standard 5-field cron expressions (e.g. <code>0 9 * * 1-5</code>, <code>*/15 * * * *</code>) with live plain-English explanations and next-run previews.</li>
+              <li><code>interval</code>: Fixed repeating interval in minutes.</li>
+              <li><code>startup</code>: Runs once automatically after SudoLaunch starts.</li>
+              <li><code>unlock</code> / <code>resume</code> / <code>network-change</code>: Event-driven triggers powered by Electron's <code>powerMonitor</code> and network interface monitoring.</li>
+            </ul>
+          </li>
+          <li><strong>4 Action Types</strong>: Run any <code>.ps1</code> / <code>.py</code> / <code>.cmd</code> script file, inline PowerShell snippet, SudoLaunch custom command, or built-in profile maintenance script (e.g. automatic daily profile backups).</li>
+          <li><strong>Declarative Sync in Custom Commands</strong>: Add <code>"Schedule": "0 9 * * 1-5"</code> or <code>"IntervalMinutes": 60</code> directly inside any <code>~/.sudolaunch/commands/*.json</code> file to automatically register and sync a scheduled job.</li>
+        </ul>
+      </section>
+
+      <!-- Git Branch Switcher & File Watchers -->
+      <section class="doc-section" id="git">
+        <h2>🔀 Git Repository Switcher & File Watchers (<code>/repo</code> & <code>F9</code>)</h2>
+        <p>
+          Press <kbd>F9</kbd>, click the <code>🔀</code> Dock icon, or run <code>/repo</code> to manage active Git repositories and live file watchers:
+        </p>
+        <ul>
+          <li><strong>Single-Spawn Status & Branch Switcher</strong>: Queries branch name, dirty file count (<code>*</code>), and ahead/behind counts in a single fast <code>git status --porcelain=v1 -b</code> call, with instant branch switching, branch creation, Pull, Push, and Fetch.</li>
+          <li><strong>Live Chokidar File Watchers (<code>git-watchers.json</code>)</strong>: Attach glob watchers (e.g. <code>src/**/*.{ts,tsx}</code>) with configurable debounce and cooldown timers to automatically trigger <code>npm run</code> scripts or Git sync commands when files are saved.</li>
+        </ul>
+      </section>
+
+      <!-- Customizable Shortcuts Overlay -->
+      <section class="doc-section" id="shortcuts">
+        <h2>⌨️ Customizable Shortcuts Overlay (<code>/shortcuts</code> & <code>⌨️</code> Dock Module)</h2>
+        <p>
+          Click the <code>⌨️</code> Dock icon or run <code>/shortcuts</code> (aliases: <code>/sc</code>, <code>/hotkeys</code>) to toggle a draggable, resizable, always-on-top frosted-glass shortcut deck:
+        </p>
+        <ul>
+          <li><strong>6 Built-In Tabs + Unlimited Custom Tabs</strong>: <strong>⭐ Favorites</strong>, <strong>🧰 PowerToys</strong> (20+ tools), <strong>🐳 Docker</strong> (19 CLI actions + live Container Control Center), <strong>🪟 Windows</strong>, <strong>💻 Dev & Git</strong>, and <strong>⚡ Custom</strong>.</li>
+          <li><strong>6 Click-to-Execute Action Modes</strong>: Hardware keystroke injection via <code>resources/bin/sendkey.exe</code>, PowerToys direct launch, SudoLaunch Terminal execution, background/elevated PowerShell, URL/app launch, or SudoLaunch palette commands.</li>
+          <li><strong>Live Key Recorder (<code>🎹 Record Keys</code>)</strong>: Create custom shortcuts or override built-in cards by pressing any key combination directly in the modal.</li>
+        </ul>
+      </section>
+
+      <!-- Modular Dock & Notifications -->
+      <section class="doc-section" id="dock">
+        <h2>🪐 Modular Dock Layouts, Focus Timer & Notifications</h2>
+        <div class="card-grid">
+          <div class="feature-card">
+            <h4>🛸 Shelf Pill Tray Mode</h4>
+            <p>
+              Floating frosted-glass pill tray with an ambient breathing glow bar along the top edge, collapsible idle state, and instant module popouts.
+            </p>
+          </div>
+          <div class="feature-card">
+            <h4>🪐 Radial Orbit Mode</h4>
+            <p>
+              Revolving planetary orbit around a central beacon that displays your live Focus Timer countdown (<code>MM:SS</code>) and pauses rotation automatically on cursor hover.
+            </p>
+          </div>
+          <div class="feature-card">
+            <h4>🔔 Acrylic Notification Drawer</h4>
+            <p>
+              Color-coded execution alerts (Emerald success, Crimson error, Cyan info) with collapsible monospace <code>stdout</code>/<code>stderr</code> accordions and unread badges.
+            </p>
+          </div>
+        </div>
+      </section>
+
+      <!-- Terminal & Input Sharing -->
+      <section class="doc-section" id="terminal">
+        <h2>&gt;_ Persistent Drop-Down PowerShell Terminal (<code>/term</code>)</h2>
+        <p>
+          Powered by <code>node-pty</code> + <code>xterm.js</code> with 8ms frame-coalesced rendering for zero-flicker high-throughput output:
+        </p>
+        <ul>
+          <li><strong>Global Triggers</strong>: Press <kbd>Ctrl+Alt+T</kbd> (configurable), <kbd>Ctrl+Win+/</kbd>, or <kbd>F1</kbd> from any application to drop down your persistent PowerShell console.</li>
+          <li><strong>Direct Execution</strong>: Run <code>/term &lt;command&gt;</code> from the palette to expand the console and execute immediately while preserving shell state and history.</li>
+        </ul>
+      </section>
+
+      <section class="doc-section" id="control">
+        <h2>⇄ Network Input Sharing (<code>/control</code>)</h2>
+        <p>
+          Share your local keyboard and mouse across multiple Windows machines running SudoLaunch over mutual TLS (mTLS):
+        </p>
+        <ul>
+          <li><strong>Pinned TLS Fingerprints</strong>: Every machine generates a persistent self-signed identity certificate in <code>~/.sudolaunch/control-identity.{key,crt}</code>. Connections are only accepted when the peer's SHA-256 certificate fingerprint matches <code>peers.json</code>.</li>
+          <li><strong>Instant Safety Escape</strong>: Press <kbd>ScrollLock</kbd>, <kbd>Pause/Break</kbd>, or <kbd>Ctrl+Alt+S</kbd> at any time to immediately release remote capture and return control to your host PC.</li>
+        </ul>
+      </section>
+
+      <!-- Custom Commands -->
+      <section class="doc-section" id="custom-commands">
+        <h2>📜 Custom Commands & Script Browsers</h2>
+        <p>
+          Drop JSON files into <code>%USERPROFILE%\.sudolaunch\commands\</code> to register custom <code>/&lt;name&gt;</code> commands with named parameters, optional cron schedules, or interactive <code>.ps1</code> / <code>.py</code> folder browsers:
+        </p>
+        <div class="code-block">
+          <div class="code-header">
+            <span>~/.sudolaunch/commands/deploy.json</span>
+            <button type="button" class="copy-btn">Copy</button>
+          </div>
+          <pre><code>{
+  "Command": "deploy",
+  "Action": "Write-Host 'Deploying {env}...'; ./scripts/deploy.ps1 -Env {env}",
+  "Label": "Deploy Environment",
+  "ShowTerminal": true,
+  "Schedule": "0 9 * * 1-5",
+  "Parameters": [
+    { "Name": "env", "Description": "Target environment (staging, prod)" }
+  ]
+}</code></pre>
+        </div>
+      </section>
+
+      <!-- Configuration Files -->
+      <section class="doc-section" id="config">
+        <h2>⚙️ Configuration Files & Profile Maintenance</h2>
+        <p>
+          All user data lives in <code>%USERPROFILE%\.sudolaunch\</code> and is watched live via Chokidar for zero-restart editing:
+        </p>
+        <ul>
+          <li><code>settings.json</code> — Global hotkeys, dock layout/glow, home anchor, and module order</li>
+          <li><code>schedules.json</code> — In-app scheduled jobs, cron triggers, and execution logs</li>
+          <li><code>git-watchers.json</code> — Per-repository live Chokidar file watcher rules</li>
+          <li><code>shortcuts.json</code> — Custom shortcut tabs, starred favorites, and key overrides</li>
+          <li><code>command-layout.json</code> — Palette root order and nested command subfolders</li>
+          <li><code>contacts.json</code>, <code>snippets.json</code>, <code>links.json</code>, <code>teamLinks.json</code>, <code>peers.json</code>, <code>sshHosts.json</code></li>
+        </ul>
+      </section>
+
+      <!-- Build, Test & Releases -->
+      <section class="doc-section" id="build">
+        <h2>🚀 Setup, Testing & Building Releases</h2>
+        <div class="code-block">
+          <div class="code-header">
+            <span>PowerShell — Development, Unit Tests & Packaging</span>
+            <button type="button" class="copy-btn">Copy</button>
+          </div>
+          <pre><code># 1. Install dependencies (automatically restores prebuilt Windows x64 native modules)
+npm install
+
+# 2. Launch in development mode with HMR
+npm run dev
+
+# 3. Run TypeScript typechecking & Vitest unit test suite (26 tests)
+npm run typecheck
+npm test
+
+# 4. Build standalone Windows NSIS installer locally (-> dist/SudoLaunch-0.1.0-setup.exe)
+npm run build:win</code></pre>
+        </div>
+        <div class="callout">
+          <strong>Automated GitHub Releases:</strong> Pushing a version tag matching <code>v*</code> (e.g. <code>git tag v0.1.0 && git push origin v0.1.0</code>) triggers <code>.github/workflows/release.yml</code> to run all tests, compile native helpers, package the Windows NSIS installer, and publish the release assets to GitHub Releases.
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <footer class="footer">
+    <p>
+      <strong>SudoLaunch</strong> · Licensed under the <a href="https://github.com/joelbot-io/sudolaunch/blob/main/LICENSE" target="_blank" rel="noopener">Apache License 2.0</a> ·
+      <a href="https://github.com/joelbot-io/sudolaunch" target="_blank" rel="noopener">GitHub Repository</a>
+    </p>
+  </footer>
+
+  <script src="./app.js"></script>
+</body>
+</html>
+
