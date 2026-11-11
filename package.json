@@ -1,7 +1,7 @@
 {
   "name": "sudolaunch",
   "private": true,
-  "version": "0.1.0",
+  "version": "0.1.1",
   "license": "Apache-2.0",
   "author": "SudoLaunch",
   "description": "Global-hotkey command palette, modular desktop dock, drop-down PowerShell terminal, in-app cron scheduler, and workstation management suite for Windows.",
