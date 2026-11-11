@@ -30,6 +30,8 @@ import { getAppIconPath } from './icon'
 import { ensureCommandsDir, loadCustomCommands, watchCustomCommands } from './customCommands'
 import { ensureGifDir } from './commands/gif'
 import { ensureLookupDir } from './commands/lookup'
+import { ensureTextualDir } from './commands/textual'
+import { registerTextualWindowIpc, closeAllTextualWindows } from './textualWindow'
 import {
   createTerminalWindow,
   registerTerminalIpc,
@@ -685,6 +687,7 @@ function getPaletteSizeForMode(targetMode: string): { width: number; height: num
     registerWingetIpc()
     registerSystemManagerIpc()
     registerSchedulesIpc()
+    registerTextualWindowIpc()
     ipcMain.handle('profile-execute', (_event, action: string) => executeProfileAction(action))
     ipcMain.handle('profile-list', () => listProfiles())
     ipcMain.handle('profile-switch', (_event, id: string) => switchProfile(id))
@@ -702,6 +705,7 @@ function getPaletteSizeForMode(targetMode: string): { width: number; height: num
     ensureCommandLayout()
     ensureGifDir()
     ensureLookupDir()
+    ensureTextualDir()
     registerIpcHandlers()
     mainWindow = createWindow()
     dockManager.registerShelfPaletteToggle((mode?: string) => toggleShelfPalette(mode))
@@ -826,6 +830,7 @@ function getPaletteSizeForMode(targetMode: string): { width: number; height: num
     flushPendingConfigWrites()
     globalShortcut.unregisterAll()
     killPty()
+    closeAllTextualWindows()
     shutdownSwap()
     stopAllGitWatchers().catch(() => { })
     stopAllScheduledJobs().catch(() => { })

@@ -62,6 +62,12 @@ const SETTINGS_ACTIONS: SettingsAction[] = [
     keywords: ['ssh', 'ssh hosts', 'servers', 'remote', 'terminal', 'keys', 'bastion', 'tunnel']
   },
   {
+    label: 'Textual TUI Apps',
+    sublabel: 'Saved Python Textual TUI apps for /textual (/tui) alongside ~/.sudolaunch/textual/',
+    value: '__textualApps',
+    keywords: ['textual', 'tui', 'python', 'apps', 'terminal', 'ui', 'dashboard', 'uv']
+  },
+  {
     label: 'Swap Peers',
     sublabel: 'Computers configured for input sharing via /control',
     value: '__peers',

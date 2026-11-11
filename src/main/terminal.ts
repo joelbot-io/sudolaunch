@@ -10,11 +10,18 @@ let exitListeners: Array<(code: number) => void> = []
 export function ensurePty(cols: number, rows: number): void {
   if (ptyProcess) return
   ptyProcess = pty.spawn('powershell.exe', ['-NoLogo'], {
-    name: 'xterm-color',
+    name: 'xterm-256color',
     cols,
     rows,
     cwd: process.env.USERPROFILE,
-    env: process.env as Record<string, string>
+    env: {
+      ...(process.env as Record<string, string>),
+      TERM: 'xterm-256color',
+      COLORTERM: 'truecolor',
+      TERM_PROGRAM: 'SudoLaunch',
+      PYTHONUTF8: '1',
+      PYTHONIOENCODING: 'utf-8'
+    }
   })
   ptyProcess.onData((data) => {
     for (const listener of dataListeners) listener(data)

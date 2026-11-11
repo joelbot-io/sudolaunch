@@ -10,6 +10,7 @@ const COMMANDS_CATALOG = [
   { cmd: '/proc [query]', alias: '/ps', cat: 'system', desc: 'Inspect running processes by RAM/CPU and terminate hung tasks (Ctrl+Enter elevated)' },
   { cmd: '/port [port]', alias: '', cat: 'system', desc: 'Inspect active listening TCP ports and running processes; Enter kills the blocking process or copies PID' },
   { cmd: '/wsl [distro]', alias: '', cat: 'system', desc: 'Launch WSL Linux distributions in SudoLaunch Terminal or open their root filesystem in File Explorer' },
+  { cmd: '/textual [app|path]', alias: '/tui', cat: 'devtools', desc: 'Launch Python Textual TUI apps in the embedded terminal (Enter), a temporary SudoLaunch TUI popout window (Ctrl+Enter), or external Windows Terminal / --dev hot-reload (Tab)' },
   { cmd: '/ssh [host]', alias: '', cat: 'system', desc: 'Connect to SSH hosts from ~/.ssh/config or saved connections in sshHosts.json' },
   { cmd: '/docker [query]', alias: '', cat: 'system', desc: 'Manage Docker containers, inspect status/ports, stream logs, and prune images' },
   { cmd: '/env [query]', alias: '', cat: 'system', desc: 'Search environment variables, inspect User/Machine PATH directories, and parse .env files' },

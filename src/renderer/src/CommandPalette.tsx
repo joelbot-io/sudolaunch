@@ -84,6 +84,7 @@ const COMMAND_ICONS: Record<string, string> = {
   focus: '🪟',
   timer: '⏱️',
   jobs: '⏰',
+  textual: '🐍',
   ip: '🖧',
   port: '🔌',
   chmod: '🛡️',
@@ -151,6 +152,7 @@ function parseInput(
   if (name === 'hide') return { command: 'hide', query: rest }
   if (name === 'google') return { command: 'g', query: rest }
   if (name === 'powertoys') return { command: 'pt', query: rest }
+  if (name === 'textual' || name === 'tui') return { command: 'textual', query: rest }
   if (name === 'exit' || name === 'quit') return { command: 'exit', query: rest }
   if (customNames.has(name)) return { command: 'custom', query: `${name} ${rest}`.trim() }
   const command = COMMANDS.find((c) => c.name === name)?.name ?? shortcuts[name] ?? null
@@ -1415,6 +1417,10 @@ export default function CommandPalette(): JSX.Element {
             setSettingsTarget('sshHosts')
             return
           }
+          if (command === 'textual' && r.value === '__manageTextualApps') {
+            setSettingsTarget('textualApps')
+            return
+          }
           runCommand(command, r, elevated)
         }
       }))
@@ -1439,6 +1445,21 @@ export default function CommandPalette(): JSX.Element {
   // actually supports one of those, instead of always claiming "Tab Complete".
   const activeItem = items[activeIndex]
   const isHistoryActive = activeItem?.key.startsWith('history-')
+  const isTextualLaunchActive = useMemo(() => {
+    if (command === 'textual') {
+      if (!activeItem) return true
+      return activeItem.key.startsWith('__app::')
+    }
+    if (command === 'search' && activeItem?.key.startsWith('textual::__app::')) {
+      return true
+    }
+    if (command === 'custom') {
+      const cmdName = query.split(' ')[0]
+      const matchedCustom = customCommands.find((c) => c.command === cmdName)
+      if (matchedCustom?.textual) return true
+    }
+    return false
+  }, [command, activeItem, query, customCommands])
   const tabHintLabel =
     activeItem?.completion !== undefined
       ? 'Complete'
@@ -2777,14 +2798,22 @@ export default function CommandPalette(): JSX.Element {
                       <kbd className="palette-kbd">↵</kbd>{' '}
                       {command === 'calc'
                         ? 'Copy'
-                        : command === 'custom' || command === 'term'
-                          ? 'Run in Terminal'
-                          : 'Select'}
+                        : isTextualLaunchActive
+                          ? 'Embedded Terminal'
+                          : command === 'custom' || command === 'term'
+                            ? 'Run in Terminal'
+                            : 'Select'}
                     </span>
-                    {(command === 'custom' || command === 'term') && (
+                    {isTextualLaunchActive ? (
                       <span className="palette-footer-hint">
-                        <kbd className="palette-kbd">Ctrl+↵</kbd> Run Elevated
+                        <kbd className="palette-kbd">Ctrl+↵</kbd> Separate Window
                       </span>
+                    ) : (
+                      (command === 'custom' || command === 'term') && (
+                        <span className="palette-footer-hint">
+                          <kbd className="palette-kbd">Ctrl+↵</kbd> Run Elevated
+                        </span>
+                      )
                     )}
                     {command === 'teams' && (
                       <span className="palette-footer-hint">

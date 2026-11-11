@@ -403,3 +403,26 @@ export function runInTerminal(commandText: string): void {
     setUnreadActivity(true)
   }
 }
+
+/**
+ * Expands and focuses the embedded SudoLaunch terminal, waits for xterm.js FitAddon
+ * to sync full-panel cols/rows (and for the palette blur/hide handshake to settle),
+ * and dispatches an interactive TUI command (such as a Python Textual app).
+ */
+export function launchInEmbeddedTerminal(commandText: string): void {
+  if (!termWindow) return
+  const wasExpanded = termExpanded
+  openTerminal()
+
+  const delayMs = wasExpanded ? 45 : 155
+  setTimeout(() => {
+    if (!termWindow || termWindow.isDestroyed()) return
+    const panel = expandedBounds(lastBarBounds)
+    ensurePty(
+      Math.max(20, Math.floor((panel.width - 38) / CHAR_CELL.width)),
+      Math.max(5, Math.floor((panel.height - 58) / CHAR_CELL.height))
+    )
+    termWindow.focus()
+    writeToPty(commandText + '\r')
+  }, delayMs)
+}

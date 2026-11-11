@@ -42,6 +42,7 @@ import * as key from './key'
 import * as expmod from './expmod'
 import * as ssh from './ssh'
 import * as clip from './clip'
+import * as textual from './textual'
 
 const DEFAULT_EXCLUDED_BY_DEF = new Set<CommandName>(
   COMMANDS.filter((c) => c.excludeFromSearch).map((c) => c.name)
@@ -51,7 +52,7 @@ interface Searchable {
   name: CommandName
   excludeFromSearch?: boolean
   search: (query: string) => SearchResultItem[]
-  execute: (item: SearchResultItem) => Promise<void>
+  execute: (item: SearchResultItem, query?: string, elevated?: boolean) => Promise<void>
 }
 
 // Imports each command module directly (same as commands/index.ts) rather than going
@@ -95,7 +96,8 @@ const RAW_SEARCHABLE: Searchable[] = [
   { name: 'expmod', excludeFromSearch: true, search: expmod.searchSync, execute: expmod.execute },
   { name: 'ssh', search: ssh.search, execute: ssh.execute },
   { name: 'clip', excludeFromSearch: true, search: clip.search, execute: clip.execute },
-  { name: 'key', excludeFromSearch: true, search: key.search, execute: key.execute }
+  { name: 'key', excludeFromSearch: true, search: key.search, execute: key.execute },
+  { name: 'textual', search: (query) => textual.search(query, { fromUniversalSearch: true }), execute: textual.execute }
 ]
 
 const SEARCHABLE: Searchable[] = RAW_SEARCHABLE.map((entry) => ({
@@ -193,7 +195,7 @@ export function search(query: string): SearchResultItem[] {
   return results
 }
 
-export async function execute(item: SearchResultItem): Promise<void> {
+export async function execute(item: SearchResultItem, query?: string, elevated?: boolean): Promise<void> {
   if (item.value.startsWith('__direct_url__::')) {
     const rawUrl = item.value.slice('__direct_url__::'.length)
     const targetUrl = /^https?:\/\//i.test(rawUrl) ? rawUrl : `https://${rawUrl}`
@@ -213,5 +215,5 @@ export async function execute(item: SearchResultItem): Promise<void> {
     throw new Error('Unknown search result source')
   }
   const originalValue = item.value.slice(source.name.length + 2)
-  await source.execute({ ...item, value: originalValue })
+  await source.execute({ ...item, value: originalValue }, query, elevated)
 }

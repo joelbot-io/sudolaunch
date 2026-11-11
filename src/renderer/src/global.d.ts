@@ -49,7 +49,8 @@ import type {
   SystemSecurityPosture,
   SystemEventLogItem,
   ShortcutOverlayItem,
-  ShortcutsOverlayData
+  ShortcutsOverlayData,
+  TextualWindowInitInfo
 } from '../../shared/types'
 
 declare global {
@@ -339,6 +340,20 @@ declare global {
       clearScheduledJobLogs?: (id: string) => Promise<ScheduledJobItem[]>
       openScheduledJobInTerminal?: (id: string) => Promise<void>
       onScheduledJobsUpdated?: (callback: (jobs: ScheduledJobItem[]) => void) => () => void
+      // Floating Textual TUI window APIs
+      textualWinInit?: (
+        sessionId: string,
+        cols: number,
+        rows: number
+      ) => Promise<TextualWindowInitInfo | null>
+      textualWinInput?: (sessionId: string, data: string) => void
+      textualWinResize?: (sessionId: string, cols: number, rows: number) => void
+      textualWinRestart?: (sessionId: string, cols: number, rows: number) => Promise<boolean>
+      textualWinTogglePin?: (sessionId: string) => Promise<boolean>
+      textualWinMaximize?: (sessionId: string) => void
+      textualWinClose?: (sessionId: string) => void
+      onTextualWinData?: (callback: (data: string) => void) => () => void
+      onTextualWinExit?: (callback: (exitCode: number) => void) => () => void
     }
   }
 }

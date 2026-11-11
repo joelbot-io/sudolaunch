@@ -18,6 +18,7 @@ A global-hotkey command palette, persistent command bar, and drop-down terminal 
 - [Input Sharing (`/control`)](#input-sharing-control)
 - [Command bar](#command-bar)
 - [Terminal](#terminal)
+- [Python Textual TUI Apps (`/textual` & `/tui`)](#python-textual-tui-apps-textual--tui)
 - [Lookup tables](#lookup-tables)
 - [In-App Configuration (`/settings`)](#in-app-configuration-settings)
 - [Configuration Files](#configuration-files)
@@ -45,6 +46,7 @@ A global-hotkey command palette, persistent command bar, and drop-down terminal 
 | `/svc [query]` | Browse, filter (`running`/`stopped`), start, stop, and restart Windows Services with automatic UAC elevation |
 | `/proc [query]` | Inspect running processes by RAM/CPU and terminate hung tasks (alias: `/ps`, `Ctrl+Enter` elevated) |
 | `/wsl [distro]` | Launch WSL Linux distributions in SudoLaunch Terminal or open their root filesystem in File Explorer |
+| `/textual [app\|path]` | Launch Python Textual TUI apps in the embedded terminal (`Enter`), a temporary SudoLaunch TUI popout window (`Ctrl+Enter`), or external Windows Terminal (`Tab`, alias: `/tui`) |
 | `/ssh [host]` | Connect to SSH hosts from `~/.ssh/config` or saved connections in `sshHosts.json` |
 | `/docker [query]` | Manage Docker containers, inspect status/ports, stream logs, and prune images |
 | `/repo` | Open active Git repository status, branch switcher, live file watchers, and recent repository selector panel (hotkey: `F9`) |
@@ -402,6 +404,20 @@ A real, interactive PowerShell session (powered by `node-pty` + `xterm.js`) is i
   - **Fast fixed hotkeys**: `Ctrl+Win+/` and `F1` (swallows F1 across apps to serve as an instant global terminal trigger).
 - **Persistent Session**: The underlying PowerShell process is spawned lazily on first open and kept alive in the background with `-NoLogo` startup. Collapsing preserves running commands, shell state, and scrollback.
 
+## Python Textual TUI Apps (`/textual` & `/tui`)
+
+Launch interactive full-screen [Python Textual](https://textual.textualize.io/) TUI applications with full 24-bit truecolor (`COLORTERM=truecolor`), Unicode (`PYTHONUTF8=1`), mouse click/scroll support, and alternate-screen `Escape` pass-through:
+
+- **Execution Modes**:
+  - **Embedded Terminal (<kbd>Enter</kbd> — Default)**: Expands SudoLaunch's persistent `xterm.js` terminal and launches the app inside it. While Textual's alternate screen buffer is active, pressing <kbd>Escape</kbd> is forwarded directly to Textual widgets/modals rather than collapsing the terminal.
+  - **Temporary SudoLaunch TUI Window (<kbd>Ctrl+Enter</kbd>)**: Opens a dedicated, resizable frosted-glass SudoLaunch TUI popout window (`node-pty` + `xterm.js`) with Pin Always-on-Top (`📌`), Restart (`↻`), and Maximize controls. Clean exits (`q` / `exitCode === 0`) auto-close the window immediately; non-zero crashes hold the window open so you can inspect tracebacks or press <kbd>R</kbd> to restart.
+  - **External Windows Terminal & `--dev` Hot-Reload (<kbd>Tab</kbd>)**: Press <kbd>Tab</kbd> on any Textual app to open its action menu, including **Launch in External Windows Terminal (`wt.exe`)** and **Run with Textual Hot-Reload (`textual run --dev`)** for live `.tcss` CSS editing.
+- **3 Ways to Add Apps**:
+  1. **Drop-In Folder (`~/.sudolaunch/textual/`)**: Drop standalone `.py` scripts or 1-level project folders (`app.py` / `main.py` / `tui.py`) into `%USERPROFILE%\.sudolaunch\textual\` (seeded on first run with `example_pulse_tui.py`). Optional header comments (`# Title:`, `# Description:`, `# Args:`, `# Window: embedded|window|external`, and PEP 723 `# /// script` blocks) are parsed automatically.
+  2. **Saved External Projects (`/settings textual` or `textualApps.json`)**: Register TUI apps located anywhere on disk with custom arguments, working directory, Python runner override, and default launch mode.
+  3. **Custom Commands & Folder Browsers**: Add `"Textual": "C:\\path\\to\\app.py"` (or `"Textual": true` on a `"Folder"` browser command, plus optional `"DefaultWindow": "embedded" | "window" | "external"`) to any `commands/*.json` file to bind a dedicated `/<command>` shortcut. `.py` files importing `textual` inside folder browsers also route through the Textual launcher automatically (`Enter` embedded, `Ctrl+Enter` separate window).
+- **Automatic Python Runner Resolution**: Automatically detects project `.venv\Scripts\python.exe` / `venv\Scripts\python.exe` (or shared `~/.sudolaunch/textual/.venv`), `uv run` (for PEP 723 inline dependencies or `uv.lock` projects when `uv` is installed), or system `python.exe` / `py.exe`.
+
 ## Lookup tables
 
 `/lookup` searches flat JSON "tables" dropped into your lookup folder (`lookup\` by default) — no per-table configuration needed:
@@ -421,6 +437,7 @@ Type `/settings` (or `/config`) into the command palette to open the interactive
 - **Edit Teams Links (`/settings team-links`)**: Manually add, edit, or delete direct deep links to Microsoft Teams channels and teams (`name`, `url`, `description`).
 - **Swap Peers (`/settings peers`)**: Configure peer computers and expected TLS certificate fingerprints for `/control`.
 - **SSH Hosts (`/settings sshHosts`)**: Add, edit, or delete saved SSH host connections (`name`, `host`, `user`, `port`, `identityFile`, `extraArgs`) for `/ssh`.
+- **Textual TUI Apps (`/settings textual`)**: Register external Python Textual scripts/projects (`name`, `scriptPath`, `args`, `cwd`, `pythonPath`, `defaultMode`, `description`) for `/textual`.
 - **Settings (`/settings edit`)**: Configure global hotkeys, dock layout (`shelf`, `circle`, `horizontal`), dock glow color & style, home position anchor, monitor, history tracking & limit, auto-start on login, mouse input toggle, default command, single-character shortcuts (`/t`, `/f`, `/s`), and the GIF/lookup folder paths.
 - **Interactive Toggle Screens**:
   - **Shelf / Dock Modules**: Choose and reorder which module icons (`term`, `notify`, `bar`, `focus`, `git`, `system`, `jobs`, `shortcuts`, `profile`, `settings`) appear on the dock.
@@ -442,6 +459,8 @@ Configuration files are stored in `%USERPROFILE%\.sudolaunch\`. On first run, Su
 - `teamLinks.json` — Direct channel/team deep links for `/teams` (`[{ "name", "url", "description" }]`)
 - `peers.json` — Peer machines and pinned TLS fingerprints for `/control` input sharing
 - `sshHosts.json` — Saved SSH connections merged alongside `~/.ssh/config` for `/ssh`
+- `textualApps.json` — Saved external Python Textual TUI applications and launch preferences for `/textual` (`/tui`)
+- `textual\` — Auto-discovered drop-in folder for `.py` Textual apps and TUI project subfolders (seeded with `example_pulse_tui.py`)
 - `pinned-services.json` — User-pinned favorite Windows Services for `/system` (Services tab)
 - `schedules.json` — In-app scheduled jobs, cron expressions, event triggers, and execution logs for `/jobs` (`⏰` Cron & Jobs tab)
 - `git-watchers.json` — Per-repository live file watcher rules and auto-build commands for `/repo` (`🔀` Git tab)

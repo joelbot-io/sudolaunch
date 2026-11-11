@@ -49,6 +49,27 @@ export interface SshHost {
   extra?: string
 }
 
+export type TextualLaunchMode = 'embedded' | 'window' | 'external'
+
+export interface TextualAppEntry {
+  name: string
+  scriptPath: string
+  args?: string
+  cwd?: string
+  pythonPath?: string
+  defaultMode?: string
+  description?: string
+}
+
+export interface TextualWindowInitInfo {
+  sessionId: string
+  title: string
+  subtitle: string
+  commandDisplay: string
+  cwd: string
+  pinned: boolean
+}
+
 export interface HistoryEntry {
   command: CommandName
   query: string
@@ -94,6 +115,9 @@ export interface Settings {
   // ~/.sudolaunch. Defaults to "lookup" — i.e. ~/.sudolaunch/lookup, auto-created on
   // startup — same convention as gifFolder.
   lookupFolder: string
+  // Folder the "textual" (/tui) command auto-discovers Python Textual apps from, relative
+  // to ~/.sudolaunch. Defaults to "textual" (~/.sudolaunch/textual).
+  textualFolder?: string
   // Whether the persistent, always-visible command bar (docked top-center) is shown.
   // Deliberately not exposed as a Settings form field — toggled only via the "/view"
   // command (see main/commands/view.ts), by design.
@@ -816,6 +840,7 @@ export type CommandName =
   | 'system'
   | 'shortcuts'
   | 'jobs'
+  | 'textual'
 
 export interface CommandDef {
   name: CommandName
@@ -892,7 +917,8 @@ export const COMMANDS: CommandDef[] = [
   { name: 'show', description: 'Show the persistent command dock on screen', excludeFromSearch: true },
   { name: 'hide', description: 'Hide the persistent command dock from the screen', excludeFromSearch: true },
   { name: 'shortcuts', description: 'Open the customizable Shortcuts Overlay window (Favorites, PowerToys, Docker, Windows, Dev; alias: /sc)', excludeFromSearch: true },
-  { name: 'jobs', description: 'Manage, schedule, and trigger automated scripts, cron jobs, and lifecycle hooks (alias: /schedule)', excludeFromSearch: true }
+  { name: 'jobs', description: 'Manage, schedule, and trigger automated scripts, cron jobs, and lifecycle hooks (alias: /schedule)', excludeFromSearch: true },
+  { name: 'textual', description: 'Launch Python Textual TUI apps in embedded terminal or temporary window (alias: /tui)' }
 ]
 
 // Commands that can participate in the "search" command's fan-out. Used both to build the
@@ -937,7 +963,8 @@ export const SEARCHABLE_COMMAND_NAMES: Exclude<CommandName, 'calc' | 'search' | 
   'expmod',
   'ssh',
   'clip',
-  'key'
+  'key',
+  'textual'
 ]
 
 const SEARCHABLE_SET = new Set<CommandName>(SEARCHABLE_COMMAND_NAMES)
@@ -981,8 +1008,8 @@ export const DEFAULT_COMMAND_LAYOUT: CommandLayout = {
       id: 'folder:dev',
       name: 'Developer',
       icon: '⚡',
-      description: 'Git, HTTP, JSON, RegEx, cron, scheduled jobs, Docker, DNS, and terminal',
-      commands: ['git', 'repo', 'ssh', 'wsl', 'pkg', 'expmod', 'proc', 'svc', 'http', 'json', 'regex', 'cron', 'jobs', 'term', 'custom', 'docker', 'env', 'diff', 'cert', 'curl', 'dns', 'key']
+      description: 'Git, HTTP, JSON, RegEx, cron, scheduled jobs, Textual TUIs, Docker, DNS, and terminal',
+      commands: ['git', 'repo', 'ssh', 'wsl', 'pkg', 'expmod', 'textual', 'proc', 'svc', 'http', 'json', 'regex', 'cron', 'jobs', 'term', 'custom', 'docker', 'env', 'diff', 'cert', 'curl', 'dns', 'key']
     },
     {
       id: 'folder:utils',
@@ -1064,9 +1091,22 @@ export interface CustomCommand {
   // or interval in minutes ("IntervalMinutes": 30) to automatically register as a scheduled job.
   schedule?: string
   intervalMinutes?: number
+  // Optional Python Textual TUI app target ("Textual": "path/to/app.py" or true) and default
+  // launch mode ("DefaultWindow": "embedded" | "window" | "external"). Enter opens in the
+  // default mode (embedded terminal by default); Ctrl+Enter opens in a separate TUI window.
+  textual?: string | boolean
+  defaultWindow?: TextualLaunchMode
 }
 
-export type ConfigType = 'contacts' | 'snippets' | 'links' | 'teamLinks' | 'settings' | 'peers' | 'sshHosts'
+export type ConfigType =
+  | 'contacts'
+  | 'snippets'
+  | 'links'
+  | 'teamLinks'
+  | 'settings'
+  | 'peers'
+  | 'sshHosts'
+  | 'textualApps'
 
 export type ConfigEntry = Record<string, string | number | boolean | string[]>
 
@@ -1170,6 +1210,22 @@ export const CONFIG_TYPES: ConfigTypeDef[] = [
     ]
   },
   {
+    type: 'textualApps',
+    label: 'Textual TUI Apps',
+    description: 'Saved Python Textual TUI apps for /textual (/tui) alongside ~/.sudolaunch/textual/',
+    titleField: 'name',
+    subtitleField: 'scriptPath',
+    fields: [
+      { key: 'name', label: 'App Name', type: 'text' },
+      { key: 'scriptPath', label: 'Script or Project Path (e.g. C:\\Projects\\my-tui\\app.py)', type: 'text' },
+      { key: 'args', label: 'Arguments (optional)', type: 'text' },
+      { key: 'cwd', label: 'Working Directory (optional, defaults to script folder)', type: 'text' },
+      { key: 'pythonPath', label: 'Runner Override (optional: auto, uv, textual, or python.exe path)', type: 'text' },
+      { key: 'defaultMode', label: 'Default Mode (embedded, window, or external — default: embedded)', type: 'text' },
+      { key: 'description', label: 'Description / Notes', type: 'text' }
+    ]
+  },
+  {
     type: 'settings',
     label: 'Settings',
     description: 'Hotkey, history limit, auto-start, and command shortcuts',
@@ -1188,6 +1244,7 @@ export const CONFIG_TYPES: ConfigTypeDef[] = [
       { key: 'snippetShortcut', label: 'Snippet shortcut (e.g. s)', type: 'text' },
       { key: 'gifFolder', label: 'GIF folder (relative to ~/.sudolaunch, e.g. "gif")', type: 'text' },
       { key: 'lookupFolder', label: 'Lookup folder (relative to ~/.sudolaunch, e.g. "lookup")', type: 'text' },
+      { key: 'textualFolder', label: 'Textual apps folder (relative to ~/.sudolaunch, default "textual")', type: 'text' },
       { key: 'swapEnabled', label: 'Enable Input Sharing (/control)', type: 'boolean' },
       { key: 'swapMachineId', label: 'This Machine # (e.g. 1)', type: 'number' },
       { key: 'swapPort', label: 'Swap Port (default 41234)', type: 'number' },

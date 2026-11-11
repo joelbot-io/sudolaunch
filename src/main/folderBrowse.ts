@@ -4,6 +4,7 @@ import { extname, join, resolve, sep, basename } from 'path'
 import { CONFIG_DIR } from './config'
 import { runInTerminal, openTerminal } from './terminalWindow'
 import { runElevated } from './elevation'
+import { isPythonTextualFile, launchTextualSpec, resolveTextualLaunchSpec } from './textualManager'
 import type { SearchResultItem } from '../shared/types'
 
 // Backs any custom command whose JSON defines "Folder" instead of "Action" — one
@@ -147,7 +148,13 @@ export function resolveFileWithin(root: string, relPath: string): string | null 
   return absPath && stat?.isFile() ? absPath : null
 }
 
-export function runScript(root: string, relPath: string, elevated?: boolean, showTerminal?: boolean): void {
+export function runScript(
+  root: string,
+  relPath: string,
+  elevated?: boolean,
+  showTerminal?: boolean,
+  forceTextual?: boolean
+): void {
   const absPath = resolveFileWithin(root, relPath)
   if (!absPath) {
     throw new Error('Script no longer exists or is outside the configured folder')
@@ -155,6 +162,15 @@ export function runScript(root: string, relPath: string, elevated?: boolean, sho
 
   const ext = extname(absPath).toLowerCase()
   const scriptName = basename(absPath)
+
+  // Python Textual apps default to opening inside SudoLaunch's embedded terminal on Enter,
+  // and launch in a separate temporary SudoLaunch TUI window on Ctrl+Enter.
+  if (ext === '.py' && (forceTextual || isPythonTextualFile(absPath))) {
+    const spec = resolveTextualLaunchSpec({ scriptPath: absPath })
+    launchTextualSpec(spec, elevated ? 'window' : 'embedded')
+    return
+  }
+
   let cmdStr = ''
   if (ext === '.ps1') {
     cmdStr = `& '${absPath.replace(/'/g, "''")}'`

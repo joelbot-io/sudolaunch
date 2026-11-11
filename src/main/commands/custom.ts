@@ -49,7 +49,12 @@ function browseResults(
         .map((r) => r.item)
     : commands
   return matches.map((c) => {
-    const detail = c.folder !== undefined ? `Browse ${c.folder}` : (c.action ?? '')
+    const detail =
+      c.folder !== undefined
+        ? `Browse ${c.folder}`
+        : typeof c.textual === 'string'
+          ? `🐍 Textual TUI (${c.textual})`
+          : (c.action ?? '')
     return {
       label: `/${c.command}`,
       sublabel: c.label ? `${c.label} — ${detail}` : detail,
@@ -110,10 +115,15 @@ export function search(query: string, options?: { fromUniversalSearch?: boolean 
   const missing = exact.parameters.filter((p) => !(p.name in filled))
 
   if (missing.length === 0) {
+    const rawTarget = typeof exact.textual === 'string' ? exact.textual : exact.action!
+    const substituted = substitute(rawTarget, filled)
+    const isTextual = Boolean(exact.textual)
     return [
       {
-        label: `Run ${exact.label ?? '/' + exact.command}`,
-        sublabel: substitute(exact.action!, filled),
+        label: `${isTextual ? '🐍 Launch' : 'Run'} ${exact.label ?? '/' + exact.command}`,
+        sublabel: isTextual
+          ? `${substituted} · ↵ ${exact.defaultWindow === 'window' ? 'Separate TUI Window' : 'Embedded Terminal'} · Ctrl+↵ Separate Window`
+          : substituted,
         value: `${exact.command} ${argsStr}`.trim()
       }
     ]
@@ -140,7 +150,7 @@ export async function execute(item: SearchResultItem, _query?: string, elevated?
     if (!root) {
       throw new Error('Folder must be inside ~/.sudolaunch')
     }
-    runScript(root, argsStr, elevated, cmd.showTerminal)
+    runScript(root, argsStr, elevated, cmd.showTerminal, Boolean(cmd.textual))
     return
   }
 
@@ -151,5 +161,6 @@ export async function execute(item: SearchResultItem, _query?: string, elevated?
     return
   }
 
-  executeCustomAction(cmd, substitute(cmd.action!, filled), elevated)
+  const rawTarget = typeof cmd.textual === 'string' ? cmd.textual : cmd.action!
+  executeCustomAction(cmd, substitute(rawTarget, filled), elevated)
 }

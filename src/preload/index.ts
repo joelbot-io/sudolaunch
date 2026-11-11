@@ -49,7 +49,8 @@ import type {
   SystemSecurityPosture,
   SystemEventLogItem,
   ShortcutOverlayItem,
-  ShortcutsOverlayData
+  ShortcutsOverlayData,
+  TextualWindowInitInfo
 } from '../shared/types'
 
 const api = {
@@ -610,6 +611,36 @@ const api = {
       callback(jobs)
     ipcRenderer.on('scheduled-jobs-updated', listener)
     return () => ipcRenderer.removeListener('scheduled-jobs-updated', listener)
+  },
+  // Floating Textual TUI window APIs
+  textualWinInit: (
+    sessionId: string,
+    cols: number,
+    rows: number
+  ): Promise<TextualWindowInitInfo | null> =>
+    ipcRenderer.invoke('textual-win-init', sessionId, cols, rows),
+  textualWinInput: (sessionId: string, data: string): void =>
+    ipcRenderer.send('textual-win-input', sessionId, data),
+  textualWinResize: (sessionId: string, cols: number, rows: number): void =>
+    ipcRenderer.send('textual-win-resize', sessionId, cols, rows),
+  textualWinRestart: (sessionId: string, cols: number, rows: number): Promise<boolean> =>
+    ipcRenderer.invoke('textual-win-restart', sessionId, cols, rows),
+  textualWinTogglePin: (sessionId: string): Promise<boolean> =>
+    ipcRenderer.invoke('textual-win-toggle-pin', sessionId),
+  textualWinMaximize: (sessionId: string): void =>
+    ipcRenderer.send('textual-win-maximize', sessionId),
+  textualWinClose: (sessionId: string): void =>
+    ipcRenderer.send('textual-win-close', sessionId),
+  onTextualWinData: (callback: (data: string) => void): (() => void) => {
+    const listener = (_event: Electron.IpcRendererEvent, data: string): void => callback(data)
+    ipcRenderer.on('textual-win-data', listener)
+    return () => ipcRenderer.removeListener('textual-win-data', listener)
+  },
+  onTextualWinExit: (callback: (exitCode: number) => void): (() => void) => {
+    const listener = (_event: Electron.IpcRendererEvent, exitCode: number): void =>
+      callback(exitCode)
+    ipcRenderer.on('textual-win-exit', listener)
+    return () => ipcRenderer.removeListener('textual-win-exit', listener)
   }
 }
 

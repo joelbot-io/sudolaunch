@@ -13,7 +13,8 @@ import type {
   ConfigType,
   ConfigEntry,
   SwapPeer,
-  SshHost
+  SshHost,
+  TextualAppEntry
 } from '../shared/types'
 
 export const CONFIG_DIR = join(app.getPath('home'), '.sudolaunch')
@@ -27,6 +28,7 @@ const PATHS = {
   teamLinks: join(CONFIG_DIR, 'teamLinks.json'),
   peers: join(CONFIG_DIR, 'peers.json'),
   sshHosts: join(CONFIG_DIR, 'ssh.json'),
+  textualApps: join(CONFIG_DIR, 'textualApps.json'),
   history: join(CONFIG_DIR, 'history.json'),
   settings: join(CONFIG_DIR, 'settings.json')
 }
@@ -47,6 +49,7 @@ export const DEFAULT_SETTINGS: Settings = {
   hiddenCommands: [],
   gifFolder: '',
   lookupFolder: '',
+  textualFolder: 'textual',
   dockLayout: 'shelf',
   barEnabled: true,
   barPosition: null,
@@ -88,6 +91,7 @@ let cachedLinks: Link[] | null = null
 let cachedTeamLinks: TeamLink[] | null = null
 let cachedPeers: SwapPeer[] | null = null
 let cachedSshHosts: SshHost[] | null = null
+let cachedTextualApps: TextualAppEntry[] | null = null
 let cachedSettings: Settings | null = null
 let cachedHistory: HistoryEntry[] | null = null
 
@@ -98,6 +102,7 @@ export function invalidateConfigCache(): void {
   cachedTeamLinks = null
   cachedPeers = null
   cachedSshHosts = null
+  cachedTextualApps = null
   cachedSettings = null
   cachedHistory = null
 }
@@ -118,6 +123,7 @@ export function ensureConfigDir(): void {
   seedFile(PATHS.teamLinks, [] as TeamLink[])
   seedFile(PATHS.peers, SEED_PEERS)
   seedFile(PATHS.sshHosts, [] as SshHost[])
+  seedFile(PATHS.textualApps, [] as TextualAppEntry[])
   seedFile(PATHS.history, [] as HistoryEntry[])
   seedFile(PATHS.settings, DEFAULT_SETTINGS)
 }
@@ -171,6 +177,13 @@ export function readSshHosts(): SshHost[] {
     cachedSshHosts = readJson<SshHost[]>(PATHS.sshHosts, [])
   }
   return cachedSshHosts
+}
+
+export function readTextualApps(): TextualAppEntry[] {
+  if (!cachedTextualApps) {
+    cachedTextualApps = readJson<TextualAppEntry[]>(PATHS.textualApps, [])
+  }
+  return cachedTextualApps
 }
 
 export function readSettings(): Settings {
@@ -294,6 +307,11 @@ export function writeSshHosts(sshHosts: SshHost[]): void {
   scheduleJsonWrite(PATHS.sshHosts, sshHosts)
 }
 
+export function writeTextualApps(textualApps: TextualAppEntry[]): void {
+  cachedTextualApps = textualApps
+  scheduleJsonWrite(PATHS.textualApps, textualApps)
+}
+
 export function writeSettings(settings: Settings): void {
   cachedSettings = settings
   scheduleJsonWrite(PATHS.settings, settings)
@@ -316,6 +334,8 @@ export function getConfigEntries(type: ConfigType): ConfigEntry[] {
       return [...readPeers()] as unknown as ConfigEntry[]
     case 'sshHosts':
       return [...readSshHosts()] as unknown as ConfigEntry[]
+    case 'textualApps':
+      return [...readTextualApps()] as unknown as ConfigEntry[]
     case 'settings':
       return [{ ...readSettings() } as unknown as ConfigEntry]
   }
@@ -335,6 +355,8 @@ function writeConfigList(type: Exclude<ConfigType, 'settings'>, list: ConfigEntr
       return writePeers(list as unknown as SwapPeer[])
     case 'sshHosts':
       return writeSshHosts(list as unknown as SshHost[])
+    case 'textualApps':
+      return writeTextualApps(list as unknown as TextualAppEntry[])
   }
 }
 
@@ -373,18 +395,22 @@ function watchFiles(paths: string[], onChange: (path: string) => void): void {
 }
 
 export function watchConfig(onChange: () => void): void {
-  watchFiles([PATHS.contacts, PATHS.snippets, PATHS.links, PATHS.teamLinks, PATHS.peers, PATHS.sshHosts], (changedPath) => {
-    const suppressUntil = internalWriteSuppressUntil.get(changedPath) ?? 0
-    if (Date.now() > suppressUntil) {
-      cachedContacts = null
-      cachedSnippets = null
-      cachedLinks = null
-      cachedTeamLinks = null
-      cachedPeers = null
-      cachedSshHosts = null
+  watchFiles(
+    [PATHS.contacts, PATHS.snippets, PATHS.links, PATHS.teamLinks, PATHS.peers, PATHS.sshHosts, PATHS.textualApps],
+    (changedPath) => {
+      const suppressUntil = internalWriteSuppressUntil.get(changedPath) ?? 0
+      if (Date.now() > suppressUntil) {
+        cachedContacts = null
+        cachedSnippets = null
+        cachedLinks = null
+        cachedTeamLinks = null
+        cachedPeers = null
+        cachedSshHosts = null
+        cachedTextualApps = null
+      }
+      onChange()
     }
-    onChange()
-  })
+  )
 }
 
 export function watchSettings(onChange: (settings: Settings) => void): void {

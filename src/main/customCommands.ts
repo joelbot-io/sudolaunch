@@ -4,8 +4,10 @@ import { join } from 'path'
 import { watch as chokidarWatch } from 'chokidar'
 import { CONFIG_DIR } from './config'
 import { addNotification } from './notifications'
-import { runInTerminal, openTerminal } from './terminalWindow'
+import { runInTerminal, openTerminal, launchInEmbeddedTerminal } from './terminalWindow'
 import { runElevated } from './elevation'
+import { launchTextualSpec, normalizeLaunchMode, resolveTextualLaunchSpec } from './textualManager'
+import { openTextualWindow } from './textualWindow'
 import type { CustomCommand, CustomCommandParam } from '../shared/types'
 
 export const COMMANDS_DIR = join(CONFIG_DIR, 'commands')
@@ -111,10 +113,15 @@ export function loadCustomCommands(): CustomCommand[] {
     try {
       const content = readFileSync(fullPath, 'utf-8').replace(/^\uFEFF/, '')
       const raw = JSON.parse(content)
-      const hasAction = typeof raw.Action === 'string' && raw.Action.trim()
-      const hasFolder = typeof raw.Folder === 'string' && raw.Folder.trim()
-      if (typeof raw.Command !== 'string' || hasAction === hasFolder) {
-        console.warn(`Skipping invalid custom command file (needs exactly one of Action/Folder): ${fullPath}`)
+      const hasAction = Boolean(typeof raw.Action === 'string' && raw.Action.trim())
+      const hasFolder = Boolean(typeof raw.Folder === 'string' && raw.Folder.trim())
+      const rawTextualVal = raw.Textual ?? raw.textual
+      const textualPath =
+        typeof rawTextualVal === 'string' && rawTextualVal.trim() ? rawTextualVal.trim() : undefined
+      const hasTextualPath = Boolean(textualPath)
+      const modeCount = [hasAction, hasFolder, hasTextualPath].filter(Boolean).length
+      if (typeof raw.Command !== 'string' || modeCount !== 1) {
+        console.warn(`Skipping invalid custom command file (needs exactly one of Action/Folder/Textual): ${fullPath}`)
         continue
       }
       const command = raw.Command.trim().replace(/^\/+/, '')
@@ -132,6 +139,11 @@ export function loadCustomCommands(): CustomCommand[] {
             : undefined
       const rawInterval = Number(raw.IntervalMinutes ?? raw.intervalMinutes)
       const intervalMinutes = !isNaN(rawInterval) && rawInterval > 0 ? rawInterval : undefined
+      const rawDefaultWin = raw.DefaultWindow ?? raw.defaultWindow
+      const defaultWindow =
+        typeof rawDefaultWin === 'string' && rawDefaultWin.trim()
+          ? normalizeLaunchMode(rawDefaultWin)
+          : undefined
       out.push({
         command,
         action: hasAction ? raw.Action : undefined,
@@ -141,7 +153,9 @@ export function loadCustomCommands(): CustomCommand[] {
         showTerminal,
         excludeFromSearch,
         schedule: rawSchedule || undefined,
-        intervalMinutes
+        intervalMinutes,
+        textual: textualPath ?? (rawTextualVal === true ? true : undefined),
+        defaultWindow
       })
     } catch (err) {
       console.warn(`Failed to parse custom command file ${fullPath}:`, err)
@@ -184,6 +198,34 @@ export function notifyMissingParams(cmd: CustomCommand, missing: string[]): void
 }
 
 export function executeCustomAction(cmd: CustomCommand, action: string, elevated?: boolean): void {
+  if (typeof cmd.textual === 'string') {
+    const spec = resolveTextualLaunchSpec({
+      name: cmd.label ?? cmd.command,
+      scriptPath: action
+    })
+    launchTextualSpec(spec, elevated ? 'window' : (cmd.defaultWindow ?? 'embedded'))
+    return
+  }
+
+  if (cmd.textual === true) {
+    if (elevated || cmd.defaultWindow === 'window') {
+      openTextualWindow({
+        title: cmd.label ?? cmd.command,
+        subtitle: `Custom TUI · /${cmd.command}`,
+        file: 'powershell',
+        args: ['-NoLogo', '-NoProfile', '-Command', action],
+        cwd: process.env.USERPROFILE || process.cwd(),
+        psCommand: action,
+        displayCommand: action,
+        runnerLabel: 'custom',
+        scriptPath: ''
+      })
+      return
+    }
+    launchInEmbeddedTerminal(action)
+    return
+  }
+
   if (elevated) {
     runElevated(action, cmd.label ?? cmd.command, cmd.command)
     return

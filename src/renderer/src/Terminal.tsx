@@ -155,10 +155,16 @@ export default function Terminal(): JSX.Element {
       setTimeout(() => setSummonPulse(false), 900)
     })
     const unsubFade = window.api.onDockFade?.((dir) => setDockFading(dir === 'out'))
-    // Collapse on Escape, but only once the current line is empty — otherwise Escape
-    // should reach the shell like any other key (e.g. PSReadLine uses it too).
+    // Collapse on Escape, but only once the current line is empty and no full-screen
+    // alternate-buffer TUI (e.g. Python Textual, vim, lazygit) is active — otherwise
+    // Escape must reach the TUI / PSReadLine directly.
     term.attachCustomKeyEventHandler((event) => {
-      if (event.type === 'keydown' && event.key === 'Escape' && pendingInputRef.current === '') {
+      if (
+        event.type === 'keydown' &&
+        event.key === 'Escape' &&
+        pendingInputRef.current === '' &&
+        term.buffer.active.type !== 'alternate'
+      ) {
         window.api.termToggle()
         return false
       }
@@ -192,7 +198,9 @@ export default function Terminal(): JSX.Element {
   useEffect(() => {
     if (!expanded) return
     setHasUnread(false)
-    window.api.termInput('\x1b')
+    if (termRef.current?.buffer.active.type !== 'alternate') {
+      window.api.termInput('\x1b')
+    }
     pendingInputRef.current = ''
 
     const doFit = (): void => {
