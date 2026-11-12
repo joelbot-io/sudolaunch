@@ -1,10 +1,13 @@
 import { BrowserWindow, ipcMain, screen, type Rectangle, type NativeImage } from 'electron'
 import { join } from 'path'
-import { is } from '@electron-toolkit/utils'
 import { readSettings, writeSettings } from './config'
 import { ensurePty, writeToPty, resizePty, onPtyData, onPtyExit } from './terminal'
 import { DockGeometry } from './dock/DockGeometry'
 import { dockManager } from './dock/DockManager'
+import {
+  calculateSatelliteIdleBounds,
+  configureDockOverlayWindow
+} from './dock/dockWindowHelpers'
 import { getDockDisplay } from './display'
 
 let termWindow: BrowserWindow | null = null
@@ -41,91 +44,9 @@ function setUnreadActivity(unread: boolean): void {
 // renderer's real xterm.js fit measurement arrives via 'term-resize'.
 const CHAR_CELL = { width: 8, height: 17 }
 
-function getLiveBarBounds(bar?: Rectangle | null): Rectangle | null {
-  if (bar) return bar
-  const barWin = dockManager.getBarWindow()
-  if (barWin && !barWin.isDestroyed() && barWin.isVisible()) {
-    return barWin.getBounds()
-  }
-  const last = dockManager.getLastBarBounds()
-  if (last) return last
-  if (lastBarBounds) return lastBarBounds
-  return null
-}
-
 function idleBounds(bar?: Rectangle | null): Rectangle {
   const settings = readSettings()
-  const activeBar = getLiveBarBounds(bar)
-  const display = activeBar
-    ? screen.getDisplayNearestPoint({
-        x: activeBar.x + activeBar.width / 2,
-        y: activeBar.y + activeBar.height / 2
-      })
-    : getDockDisplay(settings.monitor)
-
-  if (settings.dockLayout === 'circle') {
-    const dock =
-      activeBar ??
-      DockGeometry.calculateCircleOrbitBounds(
-        display.workArea,
-        settings.dockHomePosition,
-        settings.dockHomeCustomCoordinates
-      )
-    return DockGeometry.calculateCircleSatelliteBounds(
-      dock,
-      'terminal',
-      settings.shelfIcons,
-      settings.dockHomePosition,
-      settings.dockHomeCustomCoordinates
-    )
-  }
-
-  if (settings.dockLayout === 'shelf') {
-    const slotCount = settings.shelfIcons?.length ?? 7
-    const shelfBar =
-      activeBar ??
-      DockGeometry.calculateShelfBarBounds(
-        display.workArea,
-        slotCount,
-        settings.dockHomePosition,
-        settings.dockHomeCustomCoordinates
-      )
-    return DockGeometry.calculateShelfIconBounds(
-      shelfBar,
-      'terminal',
-      settings.shelfIcons,
-      settings.dockHomePosition,
-      settings.dockHomeCustomCoordinates
-    )
-  }
-
-  if (settings.termPosition) {
-    const { workArea: ptArea } = screen.getDisplayNearestPoint({
-      x: settings.termPosition.x,
-      y: settings.termPosition.y
-    })
-    return DockGeometry.clampRect(
-      { x: settings.termPosition.x, y: settings.termPosition.y, ...DockGeometry.ICON_SIZE },
-      ptArea
-    )
-  }
-
-  if (activeBar) {
-    return DockGeometry.calculateAttachedBounds(
-      activeBar,
-      'terminal',
-      settings.dockLayout ?? 'horizontal',
-      display.workArea
-    )
-  }
-
-  return DockGeometry.calculateDefaultIdleBounds(
-    display.workArea,
-    'terminal',
-    settings.dockLayout ?? 'horizontal',
-    settings.dockHomePosition,
-    settings.dockHomeCustomCoordinates
-  )
+  return calculateSatelliteIdleBounds('terminal', bar, lastBarBounds, settings.termPosition)
 }
 
 const MIN_TERMINAL_WIDTH = 420
@@ -170,16 +91,6 @@ function expandedBounds(bar?: Rectangle | null): Rectangle {
   )
 }
 
-function loadRenderer(win: BrowserWindow): void {
-  if (is.dev && process.env['ELECTRON_RENDERER_URL']) {
-    const url = new URL(process.env['ELECTRON_RENDERER_URL'])
-    url.searchParams.set('mode', 'term')
-    win.loadURL(url.toString())
-  } else {
-    win.loadFile(join(__dirname, '../renderer/index.html'), { query: { mode: 'term' } })
-  }
-}
-
 // Anchored to (and only ever shown alongside) the bar window — see repositionTerminal,
 // which main/index.ts calls every time the bar moves.
 export function createTerminalWindow(icon: NativeImage): BrowserWindow {
@@ -199,13 +110,7 @@ export function createTerminalWindow(icon: NativeImage): BrowserWindow {
       sandbox: false
     }
   })
-  termWindow.webContents.setWindowOpenHandler(() => ({ action: 'deny' }))
-  termWindow.webContents.on('will-navigate', (e) => e.preventDefault())
-  // Plain alwaysOnTop:true only reaches the "floating" level, which the taskbar/Start
-  // menu still renders above — "screen-saver" is what actually clears that band (see
-  // the same fix on the bar/popup windows in main/index.ts's createBaseWindow).
-  termWindow.setAlwaysOnTop(true, 'screen-saver')
-  loadRenderer(termWindow)
+  configureDockOverlayWindow(termWindow, 'term')
   termWindow.on('moved', () => {
     if (termExpanded && termWindow && !termCollapseTimeout && !termExpandTimeout) {
       const { x, y } = termWindow.getBounds()

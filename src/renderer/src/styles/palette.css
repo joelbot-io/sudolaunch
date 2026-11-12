@@ -1,0 +1,839 @@
+/* Shared by the bar's palette and the terminal panel: the OS window snaps to full size in
+   one step (main can't animate window bounds smoothly), so the illusion of growing out of
+   the icon is done here — scaling up from the icon's footprint, anchored wherever the icon
+   actually sat within the new bounds. The custom properties are set inline by
+   CommandPalette.tsx / Terminal.tsx from geometry main sends; the fallbacks cover a
+   dead-center icon. transform/opacity only, so this stays on the compositor. */
+
+/* Mounted and painted, but not yet shown — one frame of this is what lets the animation
+   below start against a warm layer instead of racing the content's first paint. */
+.grow-pending {
+  opacity: 0;
+  overflow: hidden !important;
+  will-change: transform, opacity;
+  /* Dropped here too, not just during grow-in/grow-out: a cold render (first time this
+     panel's fonts/layout have ever painted this session) computing a full backdrop-filter
+     blur for an invisible layer could still be mid-flight when the double-rAF handshake
+     decided the frame was ready and told main to flip the window opaque — showing a
+     flash of the panel at full size before this pending state visibly took hold. */
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}
+
+.grow-in {
+  transform-origin: var(--grow-origin-x, 50%) var(--grow-origin-y, 50%);
+  animation: grow-in 150ms cubic-bezier(0.2, 0.8, 0.3, 1);
+  overflow: hidden !important;
+  will-change: transform, opacity;
+  /* backdrop-filter re-blurs everything behind the element on every frame, and the blur
+     radius interacts with the scaling geometry — by far the most expensive thing in this
+     animation. The palette is nearly transparent during it anyway, so it's dropped until
+     the last frame and only then does the glass settle in. */
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}
+
+.grow-out {
+  transform-origin: var(--grow-origin-x, 50%) var(--grow-origin-y, 50%);
+  animation: grow-out 150ms cubic-bezier(0.4, 0, 1, 1) forwards;
+  overflow: hidden !important;
+  will-change: transform, opacity;
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}
+
+.term-shell.grow-in .term-body {
+  animation: term-body-fade-in 140ms ease-out 20ms both;
+}
+
+@keyframes term-body-fade-in {
+  from {
+    opacity: 0;
+  }
+
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes grow-in {
+  from {
+    transform: scale(var(--grow-scale, 0.07));
+    opacity: 0;
+  }
+
+  to {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+@keyframes grow-out {
+  from {
+    transform: scale(1);
+    opacity: 1;
+  }
+
+  to {
+    transform: scale(var(--grow-scale, 0.07));
+    opacity: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .grow-in {
+    animation: grow-in-fade 150ms ease-out;
+  }
+
+  .grow-out {
+    animation: grow-out-fade 150ms ease-in forwards;
+  }
+
+  @keyframes grow-in-fade {
+    from {
+      opacity: 0;
+    }
+
+    to {
+      opacity: 1;
+    }
+  }
+
+  @keyframes grow-out-fade {
+    from {
+      opacity: 1;
+    }
+
+    to {
+      opacity: 0;
+    }
+  }
+}
+
+.palette-input-box {
+  position: relative;
+  display: flex;
+  align-items: center;
+  border-bottom: 1px solid var(--border);
+}
+
+.palette-input-box .palette-input {
+  flex: 1;
+  min-width: 0;
+  border-bottom: none;
+}
+
+.palette-input-action-badge {
+  flex-shrink: 0;
+  margin-right: 18px;
+  padding: 4px 10px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 500;
+  font-family: 'Cascadia Mono', Consolas, monospace;
+  background: rgba(90, 160, 255, 0.12);
+  color: var(--accent);
+  border: 1px solid rgba(90, 160, 255, 0.25);
+  pointer-events: none;
+  white-space: nowrap;
+  max-width: 240px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.palette-input {
+  border: none;
+  outline: none;
+  background: transparent;
+  color: var(--fg);
+  font-size: 18px;
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--border);
+}
+
+.palette-banner {
+  padding: 8px 20px;
+  font-size: 12px;
+  color: #ff6b5b;
+  background: rgba(255, 107, 91, 0.14);
+  border-bottom: 1px solid var(--border);
+}
+
+.calc-result {
+  padding: 16px 20px;
+  font-size: 20px;
+  color: var(--accent);
+}
+
+.palette-list {
+  list-style: none;
+  margin: 0;
+  padding: 6px;
+  overflow-y: auto;
+  flex: 1;
+}
+
+.palette-list::-webkit-scrollbar {
+  width: 6px;
+}
+
+.palette-list::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.palette-list::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.15);
+  border-radius: 99px;
+}
+
+.palette-list::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.3);
+}
+
+.palette-item {
+  display: flex;
+  flex-direction: column;
+  padding: 8px 12px;
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+.palette-item.active {
+  background: var(--active-bg);
+}
+
+/* Disables hover (and click) entirely until a real mousemove proves the cursor moved —
+   otherwise the row already sitting under the cursor when the palette opens shows this
+   same highlight via native :hover, independent of the active/keyboard state above. */
+.palette-list.ignore-mouse .palette-item {
+  pointer-events: none;
+}
+
+.disable-mouse-input,
+.disable-mouse-input *,
+.disable-mouse-input input,
+.disable-mouse-input textarea {
+  user-select: none !important;
+  -webkit-user-select: none !important;
+}
+
+.palette-item-label {
+  font-size: 14px;
+}
+
+.palette-item-sublabel {
+  font-size: 12px;
+  color: #a0aec0;
+  line-height: 1.35;
+  margin-top: 1px;
+}
+
+.palette-item.active .palette-item-sublabel {
+  color: #e2e8f0;
+}
+
+.palette-empty {
+  padding: 12px;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.palette-footer-hint {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.palette-kbd {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 4px;
+  border-radius: 3px;
+  font-size: 10px;
+  font-family: inherit;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  color: #d0d0d0;
+  box-shadow: 0 1px 0 rgba(0, 0, 0, 0.2);
+}
+
+/* ============================================================================
+   Launchpad Floating Cards & Frameless Backdrop Layout
+   ============================================================================ */
+
+.palette.palette-launchpad {
+  background: rgba(10, 12, 18, 0.72) !important;
+  border: 1px solid rgba(255, 255, 255, 0.1) !important;
+  border-radius: 22px !important;
+  box-shadow:
+    0 24px 64px rgba(0, 0, 0, 0.65),
+    inset 0 1px 0 rgba(255, 255, 255, 0.06) !important;
+  padding: 18px 24px 14px;
+  gap: 14px;
+  -webkit-backdrop-filter: blur(22px) saturate(140%) !important;
+  backdrop-filter: blur(22px) saturate(140%) !important;
+}
+
+.launchpad-search-pill {
+  width: min(760px, 100%);
+  margin: 0 auto;
+  display: flex;
+  align-items: center;
+  background: var(--glass-sheen), rgba(16, 18, 26, 0.96);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: 16px;
+  box-shadow:
+    0 18px 44px rgba(0, 0, 0, 0.68),
+    0 0 24px rgba(90, 160, 255, 0.14),
+    inset 0 1px 0 rgba(255, 255, 255, 0.12);
+  padding: 2px 6px 2px 16px;
+  flex-shrink: 0;
+  transition: border-color 0.18s ease, box-shadow 0.18s ease;
+  -webkit-backdrop-filter: var(--glass-blur);
+  backdrop-filter: var(--glass-blur);
+}
+
+.launchpad-search-pill:focus-within {
+  border-color: rgba(90, 160, 255, 0.55);
+  box-shadow:
+    0 16px 40px rgba(0, 0, 0, 0.65),
+    0 0 28px rgba(90, 160, 255, 0.22),
+    inset 0 1px 0 rgba(255, 255, 255, 0.16);
+}
+
+.launchpad-search-glyph {
+  font-size: 17px;
+  color: var(--accent);
+  opacity: 0.85;
+  margin-right: 4px;
+  user-select: none;
+  font-family: 'Cascadia Mono', Consolas, monospace;
+}
+
+.launchpad-input {
+  flex: 1;
+  min-width: 0;
+  border: none !important;
+  padding: 13px 12px !important;
+  font-size: 17px !important;
+  background: transparent;
+}
+
+.launchpad-clear-btn {
+  width: 26px;
+  height: 26px;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--muted);
+  font-size: 16px;
+  line-height: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  margin-right: 8px;
+  flex-shrink: 0;
+  transition: all 0.14s ease;
+}
+
+.launchpad-clear-btn:hover {
+  background: rgba(255, 107, 91, 0.18);
+  color: #ff6b5b;
+  border-color: rgba(255, 107, 91, 0.4);
+}
+
+.launchpad-banner {
+  width: min(680px, 100%);
+  margin: 0 auto;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 107, 91, 0.35);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+}
+
+.launchpad-calc-card {
+  width: min(680px, 100%);
+  margin: 16px auto auto;
+  background: var(--glass-sheen), rgba(22, 24, 34, 0.94);
+  border: 1px solid rgba(90, 160, 255, 0.35);
+  border-radius: 16px;
+  padding: 20px 24px;
+  box-shadow:
+    0 16px 40px rgba(0, 0, 0, 0.55),
+    0 0 24px rgba(90, 160, 255, 0.16);
+}
+
+.launchpad-calc-label {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--muted);
+  margin-bottom: 6px;
+}
+
+.launchpad-calc-card .calc-result {
+  padding: 0;
+  font-size: 28px;
+  font-weight: 600;
+  font-family: 'Cascadia Mono', Consolas, monospace;
+}
+
+.launchpad-grid-scroll {
+  flex: 1;
+  overflow-y: auto;
+  padding: 4px 6px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.launchpad-grid-scroll::-webkit-scrollbar {
+  width: 6px;
+}
+
+.launchpad-grid-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.launchpad-grid-scroll::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.18);
+  border-radius: 99px;
+}
+
+.launchpad-grid-scroll::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.32);
+}
+
+.launchpad-grid-scroll.ignore-mouse .launchpad-card {
+  pointer-events: none;
+}
+
+.launchpad-empty-card {
+  margin: 32px auto;
+  padding: 18px 28px;
+  border-radius: 14px;
+  background: rgba(20, 22, 30, 0.88);
+  border: 1px solid var(--border);
+  color: var(--muted);
+  font-size: 14px;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.45);
+}
+
+.launchpad-section {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.launchpad-section-header {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  align-self: flex-start;
+  padding: 5px 13px;
+  border-radius: 99px;
+  background: rgba(14, 16, 24, 0.94);
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.55);
+  user-select: none;
+  -webkit-backdrop-filter: blur(16px);
+  backdrop-filter: blur(16px);
+}
+
+.launchpad-section-icon {
+  font-size: 13px;
+  line-height: 1;
+}
+
+.launchpad-section-title {
+  font-size: 11.5px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: #cbd5e1;
+}
+
+.launchpad-section-count {
+  font-size: 10.5px;
+  font-weight: 600;
+  padding: 1px 6px;
+  border-radius: 99px;
+  background: rgba(90, 160, 255, 0.16);
+  color: var(--accent);
+}
+
+.launchpad-cards-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(225px, 1fr));
+  gap: 10px;
+}
+
+.launchpad-card {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 11px 13px;
+  border-radius: 13px;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.06), rgba(255, 255, 255, 0) 60%), rgba(16, 18, 26, 0.94);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  box-shadow:
+    0 12px 28px rgba(0, 0, 0, 0.6),
+    inset 0 1px 0 rgba(255, 255, 255, 0.08);
+  -webkit-backdrop-filter: blur(16px);
+  backdrop-filter: blur(16px);
+  cursor: pointer;
+  transition:
+    transform 0.14s cubic-bezier(0.16, 1, 0.3, 1),
+    border-color 0.14s ease,
+    background 0.14s ease,
+    box-shadow 0.14s ease;
+  min-height: 72px;
+  justify-content: center;
+}
+
+.launchpad-card:hover {
+  transform: translateY(-2px);
+  border-color: rgba(90, 160, 255, 0.4);
+  box-shadow:
+    0 12px 26px rgba(0, 0, 0, 0.52),
+    0 0 14px rgba(90, 160, 255, 0.15);
+}
+
+.launchpad-card.active {
+  background:
+    linear-gradient(135deg, rgba(90, 160, 255, 0.24), rgba(56, 189, 248, 0.12)),
+    rgba(24, 28, 42, 0.95);
+  border-color: rgba(90, 160, 255, 0.72);
+  box-shadow:
+    0 12px 28px rgba(0, 0, 0, 0.58),
+    0 0 18px rgba(90, 160, 255, 0.28),
+    inset 0 1px 0 rgba(255, 255, 255, 0.2);
+  transform: translateY(-2px);
+}
+
+.launchpad-card-top {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.launchpad-card-title-wrap {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  flex: 1;
+  min-width: 0;
+}
+
+.launchpad-card-label {
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--fg);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.launchpad-card.active .launchpad-card-label {
+  color: #ffffff;
+}
+
+.launchpad-card-badge {
+  font-size: 10.5px;
+  font-weight: 600;
+  padding: 2px 6px;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.07);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  color: #cbd5e1;
+  font-family: 'Cascadia Mono', Consolas, monospace;
+  flex-shrink: 0;
+}
+
+.launchpad-card.active .launchpad-card-badge {
+  background: rgba(90, 160, 255, 0.25);
+  border-color: rgba(90, 160, 255, 0.5);
+  color: #ffffff;
+}
+
+.launchpad-card-sublabel {
+  font-size: 11.5px;
+  color: #94a3b8;
+  line-height: 1.35;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.launchpad-card.active .launchpad-card-sublabel {
+  color: #e2e8f0;
+}
+
+.launchpad-footer-pill {
+  align-self: center;
+  display: inline-flex;
+  align-items: center;
+  gap: 14px;
+  padding: 6px 16px;
+  border-radius: 99px;
+  background: rgba(16, 18, 26, 0.9);
+  border: 1px solid rgba(255, 255, 255, 0.13);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
+  font-size: 11px;
+  color: var(--muted);
+  user-select: none;
+  flex-shrink: 0;
+}
+
+.config-manager {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  outline: none;
+}
+
+.config-manager .palette-item {
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.palette-item-text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+
+.config-toggle-badge {
+  font-size: 11px;
+  font-weight: 500;
+  padding: 3px 10px;
+  border-radius: 99px;
+  user-select: none;
+  flex-shrink: 0;
+  transition: all 0.15s ease;
+}
+
+.config-toggle-on {
+  background: rgba(90, 160, 255, 0.18);
+  color: var(--accent);
+  border: 1px solid rgba(90, 160, 255, 0.35);
+}
+
+.config-toggle-off {
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--muted);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.config-value-badge {
+  font-size: 11.5px;
+  font-weight: 500;
+  padding: 3px 10px;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--fg);
+  border: 1px solid var(--border);
+  font-family: 'Cascadia Mono', Consolas, monospace;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  flex-shrink: 0;
+}
+
+.config-color-swatch {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  display: inline-block;
+  border: 1px solid rgba(255, 255, 255, 0.4);
+  box-shadow: 0 0 6px currentColor;
+}
+
+.config-toggle-button {
+  cursor: pointer;
+  align-self: flex-start;
+  font: inherit;
+}
+
+/* Keyboard-only ring — mouse clicks that focus the button don't get an outline, but
+   Tabbing to it does, so keyboard users always have a visible indicator. */
+.config-toggle-button:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.config-item-delete {
+  border: none;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  font-size: 13px;
+  padding: 2px 6px;
+  border-radius: 4px;
+  opacity: 0;
+}
+
+.palette-item:hover .config-item-delete,
+.palette-item.active .config-item-delete {
+  opacity: 1;
+}
+
+.config-item-delete:hover {
+  color: #ff6b5b;
+  background: rgba(255, 107, 91, 0.14);
+}
+
+/* Armed state after the first click/press — stays visible (not just on hover) until
+   confirmed or the arm window times out, so "one more click deletes this" is legible. */
+.config-item-delete-confirm {
+  opacity: 1;
+  color: #ff6b5b;
+  background: rgba(255, 107, 91, 0.14);
+  border: 1px solid rgba(255, 107, 91, 0.4);
+  font-size: 11px;
+  padding: 2px 8px;
+}
+
+.config-action-btn {
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--fg);
+  cursor: pointer;
+  font-size: 11px;
+  padding: 2px 7px;
+  border-radius: 4px;
+  margin-left: 4px;
+  transition: all 0.15s ease;
+  user-select: none;
+}
+
+.config-action-btn:hover {
+  background: rgba(255, 255, 255, 0.14);
+  border-color: rgba(255, 255, 255, 0.25);
+  color: #fff;
+}
+
+.config-footer-hints {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 8px 16px;
+  border-top: 1px solid var(--border);
+  background: rgba(0, 0, 0, 0.25);
+  font-size: 11px;
+  color: var(--muted);
+  user-select: none;
+  flex-shrink: 0;
+}
+
+.config-footer-hints kbd {
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: 4px;
+  padding: 1px 5px;
+  font-family: inherit;
+  font-size: 10px;
+  color: var(--fg);
+  margin-right: 4px;
+}
+
+.config-item-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-left: auto;
+  opacity: 0.6;
+}
+
+.palette-item:hover .config-item-actions,
+.palette-item.active .config-item-actions {
+  opacity: 1;
+}
+
+.config-btn-danger-confirm {
+  background: rgba(255, 107, 91, 0.14);
+  border-color: #ff6b5b;
+}
+
+.config-btn-danger-confirm:hover {
+  background: rgba(255, 107, 91, 0.22);
+}
+
+.config-form {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 16px 20px;
+  overflow-y: auto;
+  flex: 1;
+}
+
+.config-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.config-field-input {
+  font: inherit;
+  color: var(--fg);
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 8px 10px;
+  outline: none;
+}
+
+.config-field-input:focus {
+  border-color: var(--accent);
+}
+
+.config-form-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+.config-btn {
+  font: inherit;
+  border: 1px solid var(--border);
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--fg);
+  border-radius: 6px;
+  padding: 8px 14px;
+  cursor: pointer;
+}
+
+.config-btn:hover {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.config-btn-primary {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #0b1520;
+  font-weight: 600;
+}
+
+.config-btn-primary:hover {
+  filter: brightness(1.08);
+}
+
+.config-btn-danger {
+  color: #ff6b5b;
+}
+
+.config-btn-danger:hover {
+  background: rgba(255, 107, 91, 0.14);
+}
+

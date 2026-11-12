@@ -1,9 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import Fuse from 'fuse.js'
 import {
   CONFIG_TYPES,
   COMMANDS,
-  SEARCHABLE_COMMAND_NAMES,
   DEFAULT_SEARCH_EXCLUDED_COMMANDS,
   DEFAULT_COMMAND_LAYOUT,
   type ConfigTypeDef,
@@ -18,141 +16,43 @@ import {
   DEFAULT_SHELF_ICONS,
   SHELF_MODULE_INFO
 } from '../../shared/types'
+import {
+  type Level,
+  type SettingRow,
+  type Row,
+  getInitialLevel,
+  APPS_ROW_LABEL,
+  APPS_ROW_DESCRIPTION,
+  APPS_ACTION_COUNT,
+  SEARCH_COMMANDS_ROW_LABEL,
+  SEARCH_COMMANDS_ROW_DESCRIPTION,
+  SEARCH_COMMANDS_ACTION_COUNT,
+  SEARCH_COMMAND_DEFS,
+  HIDDEN_COMMANDS_ROW_LABEL,
+  HIDDEN_COMMANDS_ROW_DESCRIPTION,
+  HIDDEN_COMMANDS_ACTION_COUNT,
+  DEFAULT_COMMAND_ROW_LABEL,
+  DEFAULT_COMMAND_ROW_DESCRIPTION,
+  DOCK_SLOTS_ROW_LABEL,
+  DOCK_SLOTS_ROW_DESCRIPTION,
+  DOCK_SLOTS_ACTION_COUNT,
+  ALL_SHELF_MODULES,
+  COMMAND_LAYOUT_ROW_LABEL,
+  COMMAND_LAYOUT_ROW_DESCRIPTION,
+  COMMAND_LAYOUT_ACTION_COUNT,
+  TEAMS_MANAGER_ROW_LABEL,
+  TEAMS_MANAGER_ACTION_COUNT,
+  FOLDER_EDIT_ACTION_COUNT,
+  fuzzyFilter,
+  emptyDraft,
+  buildSettingsRows
+} from './config/configSettingsDefinitions'
+import { CommandLayoutViews } from './config/CommandLayoutViews'
+import { ConfigEntriesAndFormViews } from './config/ConfigEntriesAndFormViews'
 
 interface Props {
   initialTarget?: string
   onExit: (exitVal?: string) => void
-}
-
-type Level =
-  | { kind: 'types' }
-  | { kind: 'settings' }
-  | { kind: 'list'; typeDef: ConfigTypeDef }
-  | { kind: 'apps' }
-  | { kind: 'searchCommands' }
-  | { kind: 'hiddenCommands' }
-  | { kind: 'defaultCommand' }
-  | { kind: 'dockSlots' }
-  | { kind: 'commandLayout' }
-  | { kind: 'folderEdit'; folderId: string }
-  | { kind: 'folderAddCommand'; folderId: string }
-  | { kind: 'commandAssignFolder'; commandName: string }
-  | { kind: 'newFolder' }
-  | { kind: 'teamsManager' }
-  | { kind: 'form'; typeDef: ConfigTypeDef; index: number | null; draft: ConfigEntry; focusFieldKey?: string; returnToTeamsManager?: boolean }
-
-function getInitialLevel(target?: string): Level {
-  if (!target || target === 'types' || target === 'all') return { kind: 'types' }
-  if (target === 'settings' || target === 'edit' || target === 'system') return { kind: 'settings' }
-  if (target === 'teams') return { kind: 'teamsManager' }
-  if (target === 'apps') return { kind: 'apps' }
-  if (target === 'searchCommands') return { kind: 'searchCommands' }
-  if (target === 'hiddenCommands') return { kind: 'hiddenCommands' }
-  if (target === 'defaultCommand') return { kind: 'defaultCommand' }
-  if (target === 'dockSlots' || target === 'dock' || target === 'shelf' || target === 'modules') return { kind: 'dockSlots' }
-  if (target === 'commandLayout' || target === 'layout' || target === 'folders') return { kind: 'commandLayout' }
-  const typeDef = CONFIG_TYPES.find((t) => t.type === target)
-  if (typeDef) {
-    if (typeDef.type === 'settings') return { kind: 'settings' }
-    if (!typeDef.singleton) return { kind: 'list', typeDef }
-  }
-  return { kind: 'types' }
-}
-
-// The apps screen is appended after CONFIG_TYPES as one more row in the "types" list,
-// rather than living in CONFIG_TYPES itself — its list isn't add/edit/delete entries,
-// it's a fixed set of discovered shortcuts toggled on or off.
-const APPS_ROW_LABEL = 'App Visibility'
-const APPS_ROW_DESCRIPTION = 'Choose which apps appear in the app launcher'
-// The apps list is preceded by two action rows: "Select all" and "Select none".
-const APPS_ACTION_COUNT = 2
-
-// Same idea as the apps row, one more fixed toggle screen appended after it.
-const SEARCH_COMMANDS_ROW_LABEL = 'Search Commands'
-const SEARCH_COMMANDS_ROW_DESCRIPTION = 'Choose which commands the "search" command fans out to'
-const SEARCH_COMMANDS_ACTION_COUNT = 3
-const SEARCH_COMMAND_DEFS = SEARCHABLE_COMMAND_NAMES.map(
-  (name) => COMMANDS.find((c) => c.name === name)!
-)
-
-const HIDDEN_COMMANDS_ROW_LABEL = 'Command Visibility'
-const HIDDEN_COMMANDS_ROW_DESCRIPTION = 'Choose which commands appear in the command palette UI'
-const HIDDEN_COMMANDS_ACTION_COUNT = 2
-
-const DEFAULT_COMMAND_ROW_LABEL = 'Default Command'
-const DEFAULT_COMMAND_ROW_DESCRIPTION = 'Choose which command appears first in suggestions'
-
-const DOCK_SLOTS_ROW_LABEL = 'Dock Slots & Modules'
-const DOCK_SLOTS_ROW_DESCRIPTION = 'Choose which icons appear on the shelf dock and customize their order'
-const DOCK_SLOTS_ACTION_COUNT = 2
-const ALL_SHELF_MODULES: ShelfModuleId[] = ['term', 'bar', 'notify', 'shortcuts', 'settings', 'focus', 'git', 'profile', 'system', 'jobs']
-
-const COMMAND_LAYOUT_ROW_LABEL = 'Command Layout'
-const COMMAND_LAYOUT_ROW_DESCRIPTION = 'Rearrange commands, organize into subfolders, and configure display order'
-const COMMAND_LAYOUT_ACTION_COUNT = 3
-
-const TEAMS_MANAGER_ROW_LABEL = 'Teams Contacts & Channels'
-const TEAMS_MANAGER_ACTION_COUNT = 2
-const FOLDER_EDIT_ACTION_COUNT = 3
-
-// Same fuzzy-match settings used throughout main/commands/*.ts (teams.ts, fav.ts, app.ts,
-// custom.ts, etc.) — keeps "/settings" filtering feeling identical to "/" command search instead
-// of introducing a second, different matching behavior.
-function fuzzyFilter<T>(items: T[], keys: string[], needle: string): T[] {
-  if (!needle) return items
-  return new Fuse(items, { keys, threshold: 0.35 }).search(needle).map((r) => r.item)
-}
-
-function emptyDraft(typeDef: ConfigTypeDef): ConfigEntry {
-  const draft: ConfigEntry = {}
-  for (const field of typeDef.fields) {
-    draft[field.key] = field.type === 'boolean' ? false : field.type === 'number' ? 0 : ''
-  }
-  return draft
-}
-
-const GLOW_COLORS = [
-  { name: 'Sky Blue', hex: '#5aa0ff' },
-  { name: 'Purple', hex: '#a855f7' },
-  { name: 'Dark Purple', hex: '#6b21a8' },
-  { name: 'Emerald', hex: '#34d399' },
-  { name: 'Coral', hex: '#ff6b6b' },
-  { name: 'Amber', hex: '#fbbf24' },
-  { name: 'Teal', hex: '#50e3c2' },
-  { name: 'Pink', hex: '#ff6bb4' },
-  { name: 'White', hex: '#ffffff' },
-  { name: 'Black', hex: '#000000' }
-]
-
-const PALETTE_HOTKEYS = ['Alt+Space', 'Control+Space', 'Alt+K', 'Control+Alt+Space', 'Win+Space']
-const TERMINAL_HOTKEYS = ['Alt+`', 'Control+`', 'Alt+T', 'Control+T']
-const SWAP_HOTKEYS = ['ScrollLock', 'Pause', 'Control+Alt+S']
-const HISTORY_LIMITS = [25, 50, 100, 200]
-const RETURN_DELAYS = [4, 8, 12, 16, 30]
-const TERMINAL_WIDTHS = [600, 800, 1000, 1200]
-const TERMINAL_HEIGHTS = [300, 360, 480, 640]
-const MONITORS = [1, 2, 3]
-const DOCK_LAYOUTS: Array<'shelf' | 'horizontal' | 'circle'> = ['shelf', 'horizontal', 'circle']
-const DOCK_GLOW_STYLES: Array<'breathing' | 'steady' | 'stealth'> = ['breathing', 'steady', 'stealth']
-const DOCK_HOME_POSITIONS: Array<'middle' | 'right' | 'left' | 'custom'> = ['middle', 'right', 'left', 'custom']
-
-interface SettingRow {
-  key: string
-  label: string
-  sublabel: string
-  badge: string
-  badgeType: 'toggle-on' | 'toggle-off' | 'value' | 'color'
-  keywords: string
-  onSelect: () => void
-  onCycleBackward?: () => void
-}
-
-interface Row {
-  key: string
-  label: string
-  sublabel?: string
-  keywords?: string
-  onSelect: () => void
 }
 
 export default function ConfigManager({ initialTarget, onExit }: Props): JSX.Element {
@@ -885,375 +785,26 @@ export default function ConfigManager({ initialTarget, onExit }: Props): JSX.Ele
 
   const settingsRows = useMemo((): SettingRow[] => {
     if (!settings) return []
-
-    return [
-      {
-        key: 'dockLayout',
-        label: 'Dock Layout',
-        sublabel: 'Arrangement of the floating dock on screen · ↵ to cycle',
-        badge: (settings.dockLayout ?? 'shelf').charAt(0).toUpperCase() + (settings.dockLayout ?? 'shelf').slice(1),
-        badgeType: 'value',
-        keywords: 'dock layout shelf horizontal circle arrangement mode appearance',
-        onSelect: () => {
-          const cur = settings.dockLayout ?? 'shelf'
-          const idx = DOCK_LAYOUTS.indexOf(cur)
-          const next = DOCK_LAYOUTS[(idx + 1) % DOCK_LAYOUTS.length]
-          updateSetting('dockLayout', next)
-        },
-        onCycleBackward: () => {
-          const cur = settings.dockLayout ?? 'shelf'
-          const idx = DOCK_LAYOUTS.indexOf(cur)
-          const next = DOCK_LAYOUTS[(idx - 1 + DOCK_LAYOUTS.length) % DOCK_LAYOUTS.length]
-          updateSetting('dockLayout', next)
+    return buildSettingsRows({
+      settings,
+      shelfIcons,
+      layout,
+      updateSetting,
+      openDockSlotsScreen,
+      openDefaultCommandScreen,
+      openCommandLayoutScreen,
+      openAppsScreen,
+      openSearchCommandsScreen,
+      openHiddenCommandsScreen,
+      openPeersList: () => {
+        const peersDef = CONFIG_TYPES.find((t) => t.type === 'peers')
+        if (peersDef) {
+          setLevel({ kind: 'list', typeDef: peersDef })
+          setFilter('')
+          setActiveIndex(0)
         }
-      },
-      {
-        key: 'dockGlowStyle',
-        label: 'Minimized Dock Glow Style',
-        sublabel: 'Animation effect for the collapsed pill bar · ↵ to cycle',
-        badge: (settings.dockGlowStyle ?? 'breathing').charAt(0).toUpperCase() + (settings.dockGlowStyle ?? 'breathing').slice(1),
-        badgeType: 'value',
-        keywords: 'glow style animation breathing steady stealth idle pill dock',
-        onSelect: () => {
-          const cur = settings.dockGlowStyle ?? 'breathing'
-          const idx = DOCK_GLOW_STYLES.indexOf(cur)
-          const next = DOCK_GLOW_STYLES[(idx + 1) % DOCK_GLOW_STYLES.length]
-          updateSetting('dockGlowStyle', next)
-        },
-        onCycleBackward: () => {
-          const cur = settings.dockGlowStyle ?? 'breathing'
-          const idx = DOCK_GLOW_STYLES.indexOf(cur)
-          const next = DOCK_GLOW_STYLES[(idx - 1 + DOCK_GLOW_STYLES.length) % DOCK_GLOW_STYLES.length]
-          updateSetting('dockGlowStyle', next)
-        }
-      },
-      {
-        key: 'dockGlowColor',
-        label: 'Dock Glow Color',
-        sublabel: 'Ambient neon glow color of the dock across all display modes · ↵ to cycle colors',
-        badge: settings.dockGlowColor ?? '#5aa0ff',
-        badgeType: 'color',
-        keywords: 'glow color accent pill tint dock light neon hex purple dark black',
-        onSelect: () => {
-          const cur = (settings.dockGlowColor ?? '#5aa0ff').toLowerCase()
-          const idx = GLOW_COLORS.findIndex((c) => c.hex.toLowerCase() === cur)
-          const next = GLOW_COLORS[(idx + 1) % GLOW_COLORS.length].hex
-          updateSetting('dockGlowColor', next)
-        },
-        onCycleBackward: () => {
-          const cur = (settings.dockGlowColor ?? '#5aa0ff').toLowerCase()
-          const idx = GLOW_COLORS.findIndex((c) => c.hex.toLowerCase() === cur)
-          const next = GLOW_COLORS[(idx - 1 + GLOW_COLORS.length) % GLOW_COLORS.length].hex
-          updateSetting('dockGlowColor', next)
-        }
-      },
-      {
-        key: 'dockSlots',
-        label: 'Dock Slots & Modules',
-        sublabel: 'Choose icons and customize their order on the shelf dock · ↵ to open',
-        badge: `${shelfIcons.length} active`,
-        badgeType: 'value',
-        keywords: 'dock slots modules shelf icons tray order reorder buttons',
-        onSelect: openDockSlotsScreen
-      },
-      {
-        key: 'defaultCommand',
-        label: 'Default Command',
-        sublabel: 'Command prioritized at the top of suggestions · ↵ to choose',
-        badge: settings.defaultCommand && settings.defaultCommand !== 'none' ? `/${settings.defaultCommand}` : 'None',
-        badgeType: 'value',
-        keywords: 'default command priority initial fallback suggestion',
-        onSelect: openDefaultCommandScreen
-      },
-      {
-        key: 'commandLayout',
-        label: 'Command Layout & Subfolders',
-        sublabel: 'Organize commands into categories and customize display order · ↵ to open',
-        badge: `${layout?.folders.length ?? 0} folders`,
-        badgeType: 'value',
-        keywords: 'command layout rearrange reorder folders subfolders categories move',
-        onSelect: openCommandLayoutScreen
-      },
-      {
-        key: 'historyEnabled',
-        label: 'Remember Command History',
-        sublabel: 'Save executed commands and offer them back on empty input · ↵ to toggle',
-        badge: settings.historyEnabled ? 'Enabled' : 'Disabled',
-        badgeType: settings.historyEnabled ? 'toggle-on' : 'toggle-off',
-        keywords: 'history remember enabled save commands log suggestions',
-        onSelect: () => updateSetting('historyEnabled', !settings.historyEnabled)
-      },
-      {
-        key: 'historyLimit',
-        label: 'History Limit',
-        sublabel: 'Maximum number of history commands to retain · ↵ to cycle',
-        badge: `${settings.historyLimit ?? 50} entries`,
-        badgeType: 'value',
-        keywords: 'history limit max entries count retained',
-        onSelect: () => {
-          const cur = settings.historyLimit ?? 50
-          const idx = HISTORY_LIMITS.indexOf(cur)
-          const next = HISTORY_LIMITS[(idx + 1) % HISTORY_LIMITS.length]
-          updateSetting('historyLimit', next)
-        },
-        onCycleBackward: () => {
-          const cur = settings.historyLimit ?? 50
-          const idx = HISTORY_LIMITS.indexOf(cur)
-          const next = HISTORY_LIMITS[(idx - 1 + HISTORY_LIMITS.length) % HISTORY_LIMITS.length]
-          updateSetting('historyLimit', next)
-        }
-      },
-      {
-        key: 'autoStart',
-        label: 'Auto-Start on Boot',
-        sublabel: 'Automatically launch SudoLaunch when Windows boots · ↵ to toggle',
-        badge: settings.autoStart ? 'Enabled' : 'Disabled',
-        badgeType: settings.autoStart ? 'toggle-on' : 'toggle-off',
-        keywords: 'autostart auto start boot login windows startup launch',
-        onSelect: () => updateSetting('autoStart', !settings.autoStart)
-      },
-      {
-        key: 'autoReturnHome',
-        label: 'Auto-Return Dock to Home',
-        sublabel: 'Float dock back to rest position above taskbar clock · ↵ to toggle',
-        badge: settings.autoReturnHome ? 'Enabled' : 'Disabled',
-        badgeType: settings.autoReturnHome ? 'toggle-on' : 'toggle-off',
-        keywords: 'auto return home dock float clock timer rest position',
-        onSelect: () => updateSetting('autoReturnHome', !settings.autoReturnHome)
-      },
-      {
-        key: 'dockHomePosition',
-        label: 'Dock Home Position',
-        sublabel: 'Resting screen anchor (Left, Middle, Right, Custom X,Y) · ↵ to cycle',
-        badge: settings.dockHomePosition
-          ? settings.dockHomePosition.charAt(0).toUpperCase() + settings.dockHomePosition.slice(1)
-          : 'Middle',
-        badgeType: 'value',
-        keywords: 'home position anchor dock left middle right custom coords coordinates',
-        onSelect: () => {
-          const cur = settings.dockHomePosition ?? 'middle'
-          const idx = DOCK_HOME_POSITIONS.indexOf(cur)
-          const next = DOCK_HOME_POSITIONS[(idx + 1) % DOCK_HOME_POSITIONS.length]
-          updateSetting('dockHomePosition', next)
-        },
-        onCycleBackward: () => {
-          const cur = settings.dockHomePosition ?? 'middle'
-          const idx = DOCK_HOME_POSITIONS.indexOf(cur)
-          const next = DOCK_HOME_POSITIONS[(idx - 1 + DOCK_HOME_POSITIONS.length) % DOCK_HOME_POSITIONS.length]
-          updateSetting('dockHomePosition', next)
-        }
-      },
-      {
-        key: 'autoReturnDelaySec',
-        label: 'Auto-Return Delay',
-        sublabel: 'Idle seconds before dock returns to home position · ↵ to cycle',
-        badge: `${settings.autoReturnDelaySec ?? 8}s`,
-        badgeType: 'value',
-        keywords: 'auto return delay seconds timer wait idle float',
-        onSelect: () => {
-          const cur = settings.autoReturnDelaySec ?? 8
-          const idx = RETURN_DELAYS.indexOf(cur)
-          const next = RETURN_DELAYS[(idx + 1) % RETURN_DELAYS.length]
-          updateSetting('autoReturnDelaySec', next)
-        },
-        onCycleBackward: () => {
-          const cur = settings.autoReturnDelaySec ?? 8
-          const idx = RETURN_DELAYS.indexOf(cur)
-          const next = RETURN_DELAYS[(idx - 1 + RETURN_DELAYS.length) % RETURN_DELAYS.length]
-          updateSetting('autoReturnDelaySec', next)
-        }
-      },
-      {
-        key: 'terminalWidth',
-        label: 'Terminal Window Width',
-        sublabel: 'Width of the slide-up quick terminal window in pixels (or drag window edges) · ↵ to cycle',
-        badge: `${settings.terminalWidth ?? 800}px`,
-        badgeType: 'value',
-        keywords: 'terminal width size window px cascadia dimension',
-        onSelect: () => {
-          const cur = settings.terminalWidth ?? 800
-          const idx = TERMINAL_WIDTHS.indexOf(cur)
-          const next = TERMINAL_WIDTHS[(idx + 1) % TERMINAL_WIDTHS.length]
-          updateSetting('terminalWidth', next)
-        },
-        onCycleBackward: () => {
-          const cur = settings.terminalWidth ?? 800
-          const idx = TERMINAL_WIDTHS.indexOf(cur)
-          const next = TERMINAL_WIDTHS[(idx - 1 + TERMINAL_WIDTHS.length) % TERMINAL_WIDTHS.length]
-          updateSetting('terminalWidth', next)
-        }
-      },
-      {
-        key: 'terminalHeight',
-        label: 'Terminal Window Height',
-        sublabel: 'Height of the slide-up quick terminal window in pixels (or drag window edges) · ↵ to cycle',
-        badge: `${settings.terminalHeight ?? 360}px`,
-        badgeType: 'value',
-        keywords: 'terminal height size window px cascadia dimension',
-        onSelect: () => {
-          const cur = settings.terminalHeight ?? 360
-          const idx = TERMINAL_HEIGHTS.indexOf(cur)
-          const next = TERMINAL_HEIGHTS[(idx + 1) % TERMINAL_HEIGHTS.length]
-          updateSetting('terminalHeight', next)
-        },
-        onCycleBackward: () => {
-          const cur = settings.terminalHeight ?? 360
-          const idx = TERMINAL_HEIGHTS.indexOf(cur)
-          const next = TERMINAL_HEIGHTS[(idx - 1 + TERMINAL_HEIGHTS.length) % TERMINAL_HEIGHTS.length]
-          updateSetting('terminalHeight', next)
-        }
-      },
-      {
-        key: 'monitor',
-        label: 'Dock Monitor',
-        sublabel: 'Display monitor index to anchor the dock to · ↵ to cycle',
-        badge: `Monitor ${settings.monitor ?? 1}`,
-        badgeType: 'value',
-        keywords: 'monitor display screen display1 display2 multi-monitor',
-        onSelect: () => {
-          const cur = settings.monitor ?? 1
-          const idx = MONITORS.indexOf(cur)
-          const next = MONITORS[(idx + 1) % MONITORS.length]
-          updateSetting('monitor', next)
-        },
-        onCycleBackward: () => {
-          const cur = settings.monitor ?? 1
-          const idx = MONITORS.indexOf(cur)
-          const next = MONITORS[(idx - 1 + MONITORS.length) % MONITORS.length]
-          updateSetting('monitor', next)
-        }
-      },
-      {
-        key: 'hotkey',
-        label: 'Command Palette Hotkey',
-        sublabel: 'Global shortcut to summon launcher · ↵ to cycle presets',
-        badge: settings.hotkey || 'Alt+Space',
-        badgeType: 'value',
-        keywords: 'hotkey shortcut summon palette key alt space global',
-        onSelect: () => {
-          const cur = settings.hotkey || 'Alt+Space'
-          const idx = PALETTE_HOTKEYS.indexOf(cur)
-          const next = PALETTE_HOTKEYS[(idx + 1) % PALETTE_HOTKEYS.length]
-          updateSetting('hotkey', next)
-        },
-        onCycleBackward: () => {
-          const cur = settings.hotkey || 'Alt+Space'
-          const idx = PALETTE_HOTKEYS.indexOf(cur)
-          const next = PALETTE_HOTKEYS[(idx - 1 + PALETTE_HOTKEYS.length) % PALETTE_HOTKEYS.length]
-          updateSetting('hotkey', next)
-        }
-      },
-      {
-        key: 'terminalHotkey',
-        label: 'Terminal Hotkey',
-        sublabel: 'Global shortcut to toggle slide-up terminal · ↵ to cycle presets',
-        badge: settings.terminalHotkey || 'Alt+`',
-        badgeType: 'value',
-        keywords: 'terminal hotkey shortcut quick term tty',
-        onSelect: () => {
-          const cur = settings.terminalHotkey || 'Alt+`'
-          const idx = TERMINAL_HOTKEYS.indexOf(cur)
-          const next = TERMINAL_HOTKEYS[(idx + 1) % TERMINAL_HOTKEYS.length]
-          updateSetting('terminalHotkey', next)
-        },
-        onCycleBackward: () => {
-          const cur = settings.terminalHotkey || 'Alt+`'
-          const idx = TERMINAL_HOTKEYS.indexOf(cur)
-          const next = TERMINAL_HOTKEYS[(idx - 1 + TERMINAL_HOTKEYS.length) % TERMINAL_HOTKEYS.length]
-          updateSetting('terminalHotkey', next)
-        }
-      },
-      {
-        key: 'swapEnabled',
-        label: 'Input Sharing (/control)',
-        sublabel: 'Network mouse and keyboard sharing between PCs · ↵ to toggle',
-        badge: settings.swapEnabled ? 'Enabled' : 'Disabled',
-        badgeType: settings.swapEnabled ? 'toggle-on' : 'toggle-off',
-        keywords: 'swap control input sharing mouse keyboard network mtls',
-        onSelect: () => updateSetting('swapEnabled', !settings.swapEnabled)
-      },
-      {
-        key: 'swapToggleHotkey',
-        label: 'Input Sharing Hotkey',
-        sublabel: 'Hotkey to switch mouse/keyboard to another PC · ↵ to cycle',
-        badge: settings.swapToggleHotkey || 'ScrollLock',
-        badgeType: 'value',
-        keywords: 'swap toggle hotkey control switch machine scrolllock pause',
-        onSelect: () => {
-          const cur = settings.swapToggleHotkey || 'ScrollLock'
-          const idx = SWAP_HOTKEYS.indexOf(cur)
-          const next = SWAP_HOTKEYS[(idx + 1) % SWAP_HOTKEYS.length]
-          updateSetting('swapToggleHotkey', next)
-        },
-        onCycleBackward: () => {
-          const cur = settings.swapToggleHotkey || 'ScrollLock'
-          const idx = SWAP_HOTKEYS.indexOf(cur)
-          const next = SWAP_HOTKEYS[(idx - 1 + SWAP_HOTKEYS.length) % SWAP_HOTKEYS.length]
-          updateSetting('swapToggleHotkey', next)
-        }
-      },
-      {
-        key: 'peers',
-        label: 'Swap Peers',
-        sublabel: 'Computers configured for input sharing · ↵ to view',
-        badge: 'View Peers',
-        badgeType: 'value',
-        keywords: 'peers swap control machines computers remote network',
-        onSelect: () => {
-          const peersDef = CONFIG_TYPES.find((t) => t.type === 'peers')
-          if (peersDef) {
-            setLevel({ kind: 'list', typeDef: peersDef })
-            setFilter('')
-            setActiveIndex(0)
-          }
-        }
-      },
-      {
-        key: 'disableMouseInput',
-        label: 'Disable Mouse Input',
-        sublabel: 'Keyboard-only mode: ignore mouse hover & clicks in palette · ↵ to toggle',
-        badge: settings.disableMouseInput ? 'Enabled' : 'Disabled',
-        badgeType: settings.disableMouseInput ? 'toggle-on' : 'toggle-off',
-        keywords: 'disable mouse input keyboard only pure distraction free',
-        onSelect: () => updateSetting('disableMouseInput', !settings.disableMouseInput)
-      },
-      {
-        key: 'apps',
-        label: 'App Visibility',
-        sublabel: 'Choose which apps appear in the app launcher · ↵ to configure',
-        badge: 'Configure',
-        badgeType: 'value',
-        keywords: 'applications visibility launcher show hide filter apps',
-        onSelect: openAppsScreen
-      },
-      {
-        key: 'searchCommands',
-        label: 'Search Commands',
-        sublabel: 'Choose which commands the "search" command fans out to · ↵ to configure',
-        badge: 'Configure',
-        badgeType: 'value',
-        keywords: 'search fanout commands include exclude query',
-        onSelect: openSearchCommandsScreen
-      },
-      {
-        key: 'hiddenCommands',
-        label: 'Command Visibility',
-        sublabel: 'Choose which commands appear in the command palette UI · ↵ to configure',
-        badge: 'Configure',
-        badgeType: 'value',
-        keywords: 'hide show palette commands visibility toggle ui',
-        onSelect: openHiddenCommandsScreen
-      },
-      {
-        key: 'openConfigFolder',
-        label: 'Open Config Folder',
-        sublabel: 'Open %USERPROFILE%\\.sudolaunch in File Explorer · ↵ to open',
-        badge: 'Explore',
-        badgeType: 'value',
-        keywords: 'folder explorer directory path config json configuration files',
-        onSelect: () => window.api.openConfigFolder()
       }
-    ]
+    })
   }, [
     settings,
     shelfIcons,
@@ -2090,590 +1641,57 @@ export default function ConfigManager({ initialTarget, onExit }: Props): JSX.Ele
         </ul>
       )}
 
-      {level.kind === 'commandLayout' && (
-        <ul className={disableMouseInput ? 'palette-list ignore-mouse' : 'palette-list'}>
-          <li
-            ref={activeIndex === 0 ? activeItemRef : undefined}
-            className={activeIndex === 0 ? 'palette-item active' : 'palette-item'}
-            onMouseEnter={() => setActiveIndex(0)}
-            onClick={() => setLevel({ kind: 'newFolder' })}
-          >
-            <span className="palette-item-label">+ Create New Folder</span>
-          </li>
-          <li
-            ref={activeIndex === 1 ? activeItemRef : undefined}
-            className={activeIndex === 1 ? 'palette-item active' : 'palette-item'}
-            onMouseEnter={() => setActiveIndex(1)}
-            onClick={() => window.api.openCommandLayoutFile()}
-          >
-            <span className="palette-item-text">
-              <span className="palette-item-label">📄 Open command-layout.json</span>
-              <span className="palette-item-sublabel">Open raw configuration in text editor</span>
-            </span>
-          </li>
-          <li
-            ref={activeIndex === 2 ? activeItemRef : undefined}
-            className={activeIndex === 2 ? 'palette-item active' : 'palette-item'}
-            onMouseEnter={() => setActiveIndex(2)}
-            onClick={() => saveLayout(JSON.parse(JSON.stringify(DEFAULT_COMMAND_LAYOUT)))}
-          >
-            <span className="palette-item-text">
-              <span className="palette-item-label">↺ Reset Layout to Defaults</span>
-              <span className="palette-item-sublabel">Restore default folders and order</span>
-            </span>
-          </li>
-          {filteredRootItems.length === 0 && <li className="palette-empty">No matching commands or folders</li>}
-          {filteredRootItems.map((item: string, idx: number) => {
-            const folder = layout.folders.find((f) => f.id === item)
-            const realIdx = layout.rootOrder.indexOf(item)
-            const itemIdx = idx + COMMAND_LAYOUT_ACTION_COUNT
-            const isActive = itemIdx === activeIndex
-            if (folder) {
-              return (
-                <li
-                  key={folder.id}
-                  ref={isActive ? activeItemRef : undefined}
-                  className={isActive ? 'palette-item active' : 'palette-item'}
-                  onMouseEnter={() => setActiveIndex(itemIdx)}
-                  onClick={() => setLevel({ kind: 'folderEdit', folderId: folder.id })}
-                >
-                  <span className="palette-item-text">
-                    <span className="palette-item-label">{folder.icon ?? '📁'} {folder.name}</span>
-                    <span className="palette-item-sublabel">
-                      Folder ({folder.commands.length} commands) · {folder.commands.slice(0, 4).map((c) => '/' + c).join(', ')}{folder.commands.length > 4 ? '...' : ''}
-                    </span>
-                  </span>
-                  <div className="config-item-actions" onClick={(e) => e.stopPropagation()}>
-                    <button
-                      type="button"
-                      className="config-action-btn"
-                      title="Move Up (Alt+Up)"
-                      disabled={realIdx === 0}
-                      onClick={() => moveRootItem(realIdx, -1)}
-                    >
-                      ▲
-                    </button>
-                    <button
-                      type="button"
-                      className="config-action-btn"
-                      title="Move Down (Alt+Down)"
-                      disabled={realIdx === layout.rootOrder.length - 1}
-                      onClick={() => moveRootItem(realIdx, 1)}
-                    >
-                      ▼
-                    </button>
-                    <button
-                      type="button"
-                      className="config-action-btn"
-                      title="Edit Folder"
-                      onClick={() => setLevel({ kind: 'folderEdit', folderId: folder.id })}
-                    >
-                      Edit
-                    </button>
-                  </div>
-                </li>
-              )
-            }
-            return (
-              <li
-                key={item}
-                ref={isActive ? activeItemRef : undefined}
-                className={isActive ? 'palette-item active' : 'palette-item'}
-                onMouseEnter={() => setActiveIndex(itemIdx)}
-                onClick={() => setLevel({ kind: 'commandAssignFolder', commandName: item })}
-              >
-                <span className="palette-item-text">
-                  <span className="palette-item-label">/{item}</span>
-                  <span className="palette-item-sublabel">{getCommandDescription(item)}</span>
-                </span>
-                <div className="config-item-actions" onClick={(e) => e.stopPropagation()}>
-                  <button
-                    type="button"
-                    className="config-action-btn"
-                    title="Move Up (Alt+Up)"
-                    disabled={realIdx === 0}
-                    onClick={() => moveRootItem(realIdx, -1)}
-                  >
-                    ▲
-                  </button>
-                  <button
-                    type="button"
-                    className="config-action-btn"
-                    title="Move Down (Alt+Down)"
-                    disabled={realIdx === layout.rootOrder.length - 1}
-                    onClick={() => moveRootItem(realIdx, 1)}
-                  >
-                    ▼
-                  </button>
-                  <button
-                    type="button"
-                    className="config-action-btn"
-                    title="Move into Folder"
-                    onClick={() => setLevel({ kind: 'commandAssignFolder', commandName: item })}
-                  >
-                    Move to...
-                  </button>
-                </div>
-              </li>
-            )
-          })}
-        </ul>
-      )}
+      <CommandLayoutViews
+        level={level}
+        setLevel={setLevel}
+        disableMouseInput={disableMouseInput}
+        activeIndex={activeIndex}
+        setActiveIndex={setActiveIndex}
+        activeItemRef={activeItemRef}
+        layout={layout}
+        saveLayout={saveLayout}
+        filteredRootItems={filteredRootItems}
+        filteredFolderCommands={filteredFolderCommands}
+        allAvailableCommands={allAvailableCommands}
+        moveRootItem={moveRootItem}
+        moveFolderCommand={moveFolderCommand}
+        removeCommandFromFolder={removeCommandFromFolder}
+        addCommandToFolder={addCommandToFolder}
+        deleteFolder={deleteFolder}
+        getCommandDescription={getCommandDescription}
+        newFolderName={newFolderName}
+        setNewFolderName={setNewFolderName}
+        newFolderIcon={newFolderIcon}
+        setNewFolderIcon={setNewFolderIcon}
+        createNewFolder={createNewFolder}
+      />
 
-      {level.kind === 'folderEdit' && (() => {
-        const folder = layout.folders.find((f) => f.id === level.folderId)
-        if (!folder) return <div className="palette-empty">Folder not found</div>
-        return (
-          <ul className={disableMouseInput ? 'palette-list ignore-mouse' : 'palette-list'}>
-            <li
-              ref={activeIndex === 0 ? activeItemRef : undefined}
-              className={activeIndex === 0 ? 'palette-item active' : 'palette-item'}
-              onMouseEnter={() => setActiveIndex(0)}
-              onClick={() => setLevel({ kind: 'commandLayout' })}
-            >
-              <span className="palette-item-label">← Back to Command Layout</span>
-            </li>
-            <li
-              ref={activeIndex === 1 ? activeItemRef : undefined}
-              className={activeIndex === 1 ? 'palette-item active' : 'palette-item'}
-              onMouseEnter={() => setActiveIndex(1)}
-              onClick={() => setLevel({ kind: 'folderAddCommand', folderId: level.folderId })}
-            >
-              <span className="palette-item-label">+ Add Command to this Folder</span>
-            </li>
-            <li
-              ref={activeIndex === 2 ? activeItemRef : undefined}
-              className={activeIndex === 2 ? 'palette-item active' : 'palette-item'}
-              onMouseEnter={() => setActiveIndex(2)}
-              onClick={() => deleteFolder(level.folderId)}
-            >
-              <span className="palette-item-label" style={{ color: '#ff6b5b' }}>✕ Dissolve Folder (Move commands to Root)</span>
-            </li>
-            {filteredFolderCommands.length === 0 && (
-              <li className="palette-empty">This folder is empty. Click above to add commands.</li>
-            )}
-            {filteredFolderCommands.map((cmd: string, idx: number) => {
-              const realIdx = folder.commands.indexOf(cmd)
-              const itemIdx = idx + FOLDER_EDIT_ACTION_COUNT
-              const isActive = itemIdx === activeIndex
-              return (
-                <li
-                  key={cmd}
-                  ref={isActive ? activeItemRef : undefined}
-                  className={isActive ? 'palette-item active' : 'palette-item'}
-                  onMouseEnter={() => setActiveIndex(itemIdx)}
-                >
-                  <span className="palette-item-text">
-                    <span className="palette-item-label">/{cmd}</span>
-                    <span className="palette-item-sublabel">{getCommandDescription(cmd)}</span>
-                  </span>
-                  <div className="config-item-actions" onClick={(e) => e.stopPropagation()}>
-                    <button
-                      type="button"
-                      className="config-action-btn"
-                      title="Move Up (Alt+Up)"
-                      disabled={realIdx === 0}
-                      onClick={() => moveFolderCommand(level.folderId, realIdx, -1)}
-                    >
-                      ▲
-                    </button>
-                    <button
-                      type="button"
-                      className="config-action-btn"
-                      title="Move Down (Alt+Down)"
-                      disabled={realIdx === folder.commands.length - 1}
-                      onClick={() => moveFolderCommand(level.folderId, realIdx, 1)}
-                    >
-                      ▼
-                    </button>
-                    <button
-                      type="button"
-                      className="config-action-btn"
-                      title="Remove from Folder"
-                      onClick={() => removeCommandFromFolder(level.folderId, cmd)}
-                    >
-                      Remove
-                    </button>
-                  </div>
-                </li>
-              )
-            })}
-          </ul>
-        )
-      })()}
-
-      {level.kind === 'folderAddCommand' && (
-        <ul className={disableMouseInput ? 'palette-list ignore-mouse' : 'palette-list'}>
-          <li
-            className="palette-item"
-            style={{ opacity: 0.8, cursor: 'default' }}
-          >
-            <span className="palette-item-text">
-              <span className="palette-item-label">Pick a command to add to folder:</span>
-            </span>
-          </li>
-          {allAvailableCommands
-            .filter((cmd: string) => {
-              const currentFolder = layout.folders.find((f) => f.id === level.folderId)
-              return currentFolder && !currentFolder.commands.includes(cmd)
-            })
-            .map((cmd: string, idx: number) => (
-              <li
-                key={cmd}
-                ref={idx === activeIndex ? activeItemRef : undefined}
-                className={idx === activeIndex ? 'palette-item active' : 'palette-item'}
-                onMouseEnter={() => setActiveIndex(idx)}
-                onClick={() => {
-                  addCommandToFolder(level.folderId, cmd)
-                  setLevel({ kind: 'folderEdit', folderId: level.folderId })
-                }}
-              >
-                <span className="palette-item-text">
-                  <span className="palette-item-label">/{cmd}</span>
-                  <span className="palette-item-sublabel">{getCommandDescription(cmd)}</span>
-                </span>
-                <span className="config-toggle-badge config-toggle-off">+ Add</span>
-              </li>
-            ))}
-        </ul>
-      )}
-
-      {level.kind === 'commandAssignFolder' && (
-        <ul className={disableMouseInput ? 'palette-list ignore-mouse' : 'palette-list'}>
-          <li
-            className="palette-item"
-            style={{ opacity: 0.8, cursor: 'default' }}
-          >
-            <span className="palette-item-text">
-              <span className="palette-item-label">Move /{level.commandName} into:</span>
-            </span>
-          </li>
-          <li
-            ref={activeIndex === 0 ? activeItemRef : undefined}
-            className={activeIndex === 0 ? 'palette-item active' : 'palette-item'}
-            onMouseEnter={() => setActiveIndex(0)}
-            onClick={() => {
-              const nextFolders = layout.folders.map((f) => ({
-                ...f,
-                commands: f.commands.filter((c) => c !== level.commandName)
-              }))
-              const nextRoot = layout.rootOrder.includes(level.commandName)
-                ? layout.rootOrder
-                : [...layout.rootOrder, level.commandName]
-              saveLayout({ ...layout, folders: nextFolders, rootOrder: nextRoot })
-              setLevel({ kind: 'commandLayout' })
-            }}
-          >
-            <span className="palette-item-text">
-              <span className="palette-item-label">🏠 Root Level</span>
-              <span className="palette-item-sublabel">Keep command outside of any folder</span>
-            </span>
-          </li>
-          {layout.folders.map((f, fIdx) => {
-            const itemIdx = fIdx + 1
-            const isInThisFolder = f.commands.includes(level.commandName)
-            return (
-              <li
-                key={f.id}
-                ref={itemIdx === activeIndex ? activeItemRef : undefined}
-                className={itemIdx === activeIndex ? 'palette-item active' : 'palette-item'}
-                onMouseEnter={() => setActiveIndex(itemIdx)}
-                onClick={() => {
-                  addCommandToFolder(f.id, level.commandName)
-                  setLevel({ kind: 'commandLayout' })
-                }}
-              >
-                <span className="palette-item-text">
-                  <span className="palette-item-label">{f.icon ?? '📁'} {f.name}</span>
-                  <span className="palette-item-sublabel">{f.commands.length} commands</span>
-                </span>
-                {isInThisFolder && (
-                  <span className="config-toggle-badge config-toggle-on">Current</span>
-                )}
-              </li>
-            )
-          })}
-        </ul>
-      )}
-
-      {level.kind === 'newFolder' && (
-        <div className="config-form">
-          <label className="config-field">
-            <span className="config-field-label">Folder Name</span>
-            <input
-              autoFocus
-              className="config-field-input"
-              placeholder="e.g. Work, Dev, Personal..."
-              value={newFolderName}
-              onChange={(e) => setNewFolderName(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') {
-                  e.preventDefault()
-                  createNewFolder(newFolderName, newFolderIcon)
-                }
-              }}
-            />
-          </label>
-          <label className="config-field">
-            <span className="config-field-label">Icon / Emoji</span>
-            <input
-              className="config-field-input"
-              placeholder="📁, ⚡, 💬, 🛠️, 🚀..."
-              value={newFolderIcon}
-              onChange={(e) => setNewFolderIcon(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') {
-                  e.preventDefault()
-                  createNewFolder(newFolderName, newFolderIcon)
-                }
-              }}
-            />
-          </label>
-          <div className="config-form-actions">
-            <button
-              type="button"
-              className="config-btn config-btn-primary"
-              onClick={() => createNewFolder(newFolderName, newFolderIcon)}
-            >
-              Create Folder
-            </button>
-            <button
-              type="button"
-              className="config-btn"
-              onClick={() => setLevel({ kind: 'commandLayout' })}
-            >
-              Cancel
-            </button>
-          </div>
-        </div>
-      )}
-
-      {level.kind === 'teamsManager' && (
-        <>
-          <ul className={disableMouseInput ? 'palette-list ignore-mouse' : 'palette-list'}>
-            <li
-              ref={activeIndex === 0 ? activeItemRef : undefined}
-              className={activeIndex === 0 ? 'palette-item active' : 'palette-item'}
-              onMouseEnter={() => setActiveIndex(0)}
-              onClick={() => openNewTeamsEntry(contactsTypeDef)}
-            >
-              <span className="palette-item-text">
-                <span className="palette-item-label">+ Add New Contact (Person)</span>
-                <span className="palette-item-sublabel">Add a person by name and email for 1:1 Teams chat or call</span>
-              </span>
-              <span className="config-toggle-badge">New Person</span>
-            </li>
-            <li
-              ref={activeIndex === 1 ? activeItemRef : undefined}
-              className={activeIndex === 1 ? 'palette-item active' : 'palette-item'}
-              onMouseEnter={() => setActiveIndex(1)}
-              onClick={() => openNewTeamsEntry(teamLinksTypeDef)}
-            >
-              <span className="palette-item-text">
-                <span className="palette-item-label">+ Add New Team / Channel Link</span>
-                <span className="palette-item-sublabel">Add a Teams channel or group chat deep link</span>
-              </span>
-              <span className="config-toggle-badge">New Team</span>
-            </li>
-            {filteredTeamsManagerItems.map((item, idx) => {
-              const rowIdx = idx + TEAMS_MANAGER_ACTION_COUNT
-              const isPendingDelete = pendingTeamsDeleteKey === item.key
-              return (
-                <li
-                  key={item.key}
-                  ref={rowIdx === activeIndex ? activeItemRef : undefined}
-                  className={rowIdx === activeIndex ? 'palette-item active' : 'palette-item'}
-                  onMouseEnter={() => setActiveIndex(rowIdx)}
-                  onClick={() => openEditTeamsEntry(item.typeDef, item.originalIndex, item.entry)}
-                >
-                  <span className="palette-item-text">
-                    <span className="palette-item-label">{item.title}</span>
-                    {item.subtitle && <span className="palette-item-sublabel">{item.subtitle}</span>}
-                  </span>
-                  <span className="config-toggle-badge" style={{ marginRight: 8 }}>{item.badge}</span>
-                  <button
-                    type="button"
-                    className={
-                      isPendingDelete
-                        ? 'config-item-delete config-item-delete-confirm'
-                        : 'config-item-delete'
-                    }
-                    title={isPendingDelete ? 'Click again to confirm delete' : 'Delete'}
-                    onClick={(e) => {
-                      e.stopPropagation()
-                      requestTeamsItemDelete(item.typeDef, item.originalIndex, item.key)
-                    }}
-                  >
-                    {isPendingDelete ? 'Confirm?' : '✕'}
-                  </button>
-                </li>
-              )
-            })}
-          </ul>
-          <div className="config-footer-hints">
-            <span><kbd>↵</kbd> Add / Edit</span>
-            <span><kbd>Del</kbd> Delete</span>
-            <span><kbd>↑</kbd><kbd>↓</kbd> Navigate</span>
-            <span><kbd>Esc</kbd> Back to /teams</span>
-          </div>
-        </>
-      )}
-
-      {level.kind === 'list' && (
-        <ul className={disableMouseInput ? 'palette-list ignore-mouse' : 'palette-list'}>
-          {filteredEntries.map(({ entry, originalIndex }, idx) => (
-            <li
-              key={originalIndex}
-              ref={idx === activeIndex ? activeItemRef : undefined}
-              className={idx === activeIndex ? 'palette-item active' : 'palette-item'}
-              onMouseEnter={() => setActiveIndex(idx)}
-              onClick={() => openEditEntry(level.typeDef, originalIndex)}
-            >
-              <span className="palette-item-text">
-                <span className="palette-item-label">{String(entry[level.typeDef.titleField] ?? '(untitled)')}</span>
-                {level.typeDef.subtitleField && (
-                  <span className="palette-item-sublabel">{String(entry[level.typeDef.subtitleField] ?? '')}</span>
-                )}
-              </span>
-              <button
-                type="button"
-                className={
-                  pendingDeleteIndex === originalIndex
-                    ? 'config-item-delete config-item-delete-confirm'
-                    : 'config-item-delete'
-                }
-                title={pendingDeleteIndex === originalIndex ? 'Click again to confirm delete' : 'Delete'}
-                onClick={(e) => {
-                  e.stopPropagation()
-                  requestDelete(level.typeDef, originalIndex)
-                }}
-              >
-                {pendingDeleteIndex === originalIndex ? 'Confirm?' : '✕'}
-              </button>
-            </li>
-          ))}
-          <li
-            ref={activeIndex === filteredEntries.length ? activeItemRef : undefined}
-            className={activeIndex === filteredEntries.length ? 'palette-item active' : 'palette-item'}
-            onMouseEnter={() => setActiveIndex(filteredEntries.length)}
-            onClick={() => openNewEntry(level.typeDef)}
-          >
-            <span className="palette-item-label">+ Add new</span>
-          </li>
-        </ul>
-      )}
-
-      {level.kind === 'form' && (
-        <div className="config-form">
-          {level.typeDef.fields.map((field, idx) => {
-            const isTarget = level.focusFieldKey ? field.key === level.focusFieldKey : idx === 0
-            const assignRef = (el: HTMLInputElement | HTMLTextAreaElement | HTMLButtonElement | null) => {
-              if (idx === 0) (firstFieldRef as React.MutableRefObject<any>).current = el
-              if (isTarget) (targetFieldRef as React.MutableRefObject<any>).current = el
-            }
-            return (
-              <label key={field.key} className="config-field">
-                <span className="config-field-label">{field.label}</span>
-                {field.type === 'textarea' ? (
-                  <textarea
-                    ref={assignRef}
-                    className="config-field-input"
-                    rows={3}
-                    value={String(level.draft[field.key] ?? '')}
-                    onChange={(e) => setLevel({ ...level, draft: { ...level.draft, [field.key]: e.target.value } })}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Backspace' && e.currentTarget.value === '') {
-                        e.preventDefault()
-                        backOneLevel()
-                      }
-                    }}
-                  />
-                ) : field.type === 'boolean' ? (
-                  <button
-                    type="button"
-                    ref={assignRef}
-                    className={`config-toggle-badge config-toggle-button ${Boolean(level.draft[field.key]) ? 'config-toggle-on' : 'config-toggle-off'}`}
-                    onClick={() =>
-                      setLevel({
-                        ...level,
-                        draft: { ...level.draft, [field.key]: !Boolean(level.draft[field.key]) }
-                      })
-                    }
-                    onKeyDown={(e) => {
-                      if (e.key === ' ' || e.key === 'Enter') {
-                        e.preventDefault()
-                        setLevel({
-                          ...level,
-                          draft: { ...level.draft, [field.key]: !Boolean(level.draft[field.key]) }
-                        })
-                      }
-                    }}
-                  >
-                    {Boolean(level.draft[field.key]) ? 'Enabled' : 'Disabled'}
-                  </button>
-                ) : (
-                  <input
-                    ref={assignRef}
-                    type={field.type === 'number' ? 'number' : 'text'}
-                    className="config-field-input"
-                    value={String(level.draft[field.key] ?? '')}
-                    onChange={(e) =>
-                      setLevel({
-                        ...level,
-                        draft: {
-                          ...level.draft,
-                          [field.key]: field.type === 'number' ? Number(e.target.value) : e.target.value
-                        }
-                      })
-                    }
-                    onKeyDown={(e) => {
-                      if (e.key === 'Backspace' && e.currentTarget.value === '') {
-                        e.preventDefault()
-                        backOneLevel()
-                        return
-                      }
-                      if (e.key === 'Enter') {
-                        e.preventDefault()
-                        saveDraft()
-                      }
-                    }}
-                  />
-                )}
-              </label>
-            )
-          })}
-          <div className="config-form-actions">
-            <button type="button" className="config-btn config-btn-primary" onClick={saveDraft}>
-              Save
-            </button>
-            {level.index !== null && !level.typeDef.singleton && (
-              <button
-                type="button"
-                className={
-                  pendingDeleteIndex === level.index
-                    ? 'config-btn config-btn-danger config-btn-danger-confirm'
-                    : 'config-btn config-btn-danger'
-                }
-                onClick={async () => {
-                  if (pendingDeleteIndex === level.index) {
-                    if (level.returnToTeamsManager) {
-                      await deleteTeamsItemAt(level.typeDef, level.index as number)
-                      setLevel({ kind: 'teamsManager' })
-                    } else {
-                      await deleteEntryAt(level.typeDef, level.index as number)
-                      setLevel({ kind: 'list', typeDef: level.typeDef })
-                    }
-                    return
-                  }
-                  requestDelete(level.typeDef, level.index as number)
-                }}
-              >
-                {pendingDeleteIndex === level.index ? 'Confirm delete?' : 'Delete'}
-              </button>
-            )}
-          </div>
-        </div>
-      )}
+      <ConfigEntriesAndFormViews
+        level={level}
+        setLevel={setLevel}
+        disableMouseInput={disableMouseInput}
+        activeIndex={activeIndex}
+        setActiveIndex={setActiveIndex}
+        activeItemRef={activeItemRef}
+        contactsTypeDef={contactsTypeDef}
+        teamLinksTypeDef={teamLinksTypeDef}
+        openNewTeamsEntry={openNewTeamsEntry}
+        openEditTeamsEntry={openEditTeamsEntry}
+        filteredTeamsManagerItems={filteredTeamsManagerItems}
+        pendingTeamsDeleteKey={pendingTeamsDeleteKey}
+        requestTeamsItemDelete={requestTeamsItemDelete}
+        filteredEntries={filteredEntries}
+        openEditEntry={openEditEntry}
+        openNewEntry={openNewEntry}
+        pendingDeleteIndex={pendingDeleteIndex}
+        requestDelete={requestDelete}
+        deleteTeamsItemAt={deleteTeamsItemAt}
+        deleteEntryAt={deleteEntryAt}
+        firstFieldRef={firstFieldRef}
+        targetFieldRef={targetFieldRef}
+        backOneLevel={backOneLevel}
+        saveDraft={saveDraft}
+      />
 
       {level.kind === 'settings' && (
         <div className="config-footer-hints">

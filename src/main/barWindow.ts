@@ -1,10 +1,10 @@
 import { BrowserWindow, ipcMain, screen, type Rectangle, type NativeImage } from 'electron'
 import { join } from 'path'
-import { is } from '@electron-toolkit/utils'
 import { readSettings, writeSettings } from './config'
 import { toggleTermMoveMode } from './terminalWindow'
 import { DockGeometry } from './dock/DockGeometry'
 import { dockManager } from './dock/DockManager'
+import { configureDockOverlayWindow } from './dock/dockWindowHelpers'
 import { getDockDisplay } from './display'
 
 let barWindow: BrowserWindow | null = null
@@ -122,16 +122,6 @@ function activeBounds(): Rectangle {
   return DockGeometry.calculateExpandedBounds(anchor, DockGeometry.BAR_ACTIVE_SIZE, workArea)
 }
 
-function loadRenderer(win: BrowserWindow): void {
-  if (is.dev && process.env['ELECTRON_RENDERER_URL']) {
-    const url = new URL(process.env['ELECTRON_RENDERER_URL'])
-    url.searchParams.set('mode', 'bar')
-    win.loadURL(url.toString())
-  } else {
-    win.loadFile(join(__dirname, '../renderer/index.html'), { query: { mode: 'bar' } })
-  }
-}
-
 export function createBarWindow(icon: NativeImage): BrowserWindow {
   barWindow = new BrowserWindow({
     ...idleBounds(),
@@ -149,12 +139,7 @@ export function createBarWindow(icon: NativeImage): BrowserWindow {
       sandbox: false
     }
   })
-  barWindow.webContents.setWindowOpenHandler(() => ({ action: 'deny' }))
-  barWindow.webContents.on('will-navigate', (e) => e.preventDefault())
-  // Plain alwaysOnTop:true only reaches the "floating" level, which the taskbar/Start
-  // menu still renders above — "screen-saver" is what actually clears that band.
-  barWindow.setAlwaysOnTop(true, 'screen-saver')
-  loadRenderer(barWindow)
+  configureDockOverlayWindow(barWindow, 'bar')
 
   dockManager.registerBar(barWindow, {
     cancelAnimations: () => {

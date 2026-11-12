@@ -1,0 +1,1554 @@
+/* ==========================================================================
+   System Management & WinGet Package Manager Panel
+   ========================================================================== */
+
+.system-panel {
+  gap: 10px;
+  padding: 14px 18px;
+  overflow: hidden;
+}
+
+.system-admin-toggle-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 10px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.system-admin-toggle-btn:hover {
+  border-color: rgba(255, 255, 255, 0.25);
+  color: var(--fg);
+}
+
+.system-admin-toggle-btn.is-elevated {
+  border-color: rgba(245, 158, 11, 0.65);
+  background: rgba(245, 158, 11, 0.18);
+  color: #fbbf24;
+  box-shadow: 0 0 10px rgba(245, 158, 11, 0.25);
+}
+
+.system-category-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex-shrink: 0;
+}
+
+.system-category-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 5px 12px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.system-category-pill.is-active {
+  border-color: rgba(56, 189, 248, 0.55);
+  background: rgba(56, 189, 248, 0.14);
+  color: #e0f2fe;
+  box-shadow: 0 0 12px rgba(56, 189, 248, 0.16);
+}
+
+.system-category-badge {
+  font-size: 10px;
+  font-weight: 700;
+  padding: 1px 7px;
+  border-radius: 999px;
+  background: rgba(59, 130, 246, 0.3);
+  color: #93c5fd;
+  border: 1px solid rgba(59, 130, 246, 0.45);
+}
+
+.system-category-hint {
+  font-size: 11px;
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+/* Live Operation Progress Drawer */
+.winget-op-drawer {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 9px 12px;
+  border-radius: 9px;
+  border: 1px solid rgba(59, 130, 246, 0.45);
+  background: rgba(15, 23, 42, 0.85);
+  flex-shrink: 0;
+}
+
+.winget-op-drawer.status-running {
+  border-color: rgba(56, 189, 248, 0.55);
+  box-shadow: 0 0 14px rgba(56, 189, 248, 0.16);
+}
+
+.winget-op-drawer.status-success {
+  border-color: rgba(16, 185, 129, 0.55);
+  background: rgba(6, 78, 59, 0.22);
+}
+
+.winget-op-drawer.status-error {
+  border-color: rgba(239, 68, 68, 0.55);
+  background: rgba(127, 29, 29, 0.22);
+}
+
+.winget-op-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.winget-op-title-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.winget-op-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  background: #38bdf8;
+}
+
+.winget-op-dot.status-running {
+  background: #38bdf8;
+  box-shadow: 0 0 8px #38bdf8;
+  animation: countdownDotPulse 1.2s ease-in-out infinite;
+}
+
+.winget-op-dot.status-success {
+  background: #10b981;
+  box-shadow: 0 0 6px #10b981;
+}
+
+.winget-op-dot.status-error {
+  background: #ef4444;
+  box-shadow: 0 0 6px #ef4444;
+}
+
+.winget-op-title {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--fg);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.winget-op-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.winget-op-progress-line {
+  font-family: 'Cascadia Mono', Consolas, monospace;
+  font-size: 11px;
+  color: #93c5fd;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.winget-op-drawer.status-success .winget-op-progress-line {
+  color: #6ee7b7;
+}
+
+.winget-op-drawer.status-error .winget-op-progress-line {
+  color: #fca5a5;
+}
+
+.winget-op-log-box {
+  margin: 2px 0 0;
+  padding: 8px 10px;
+  max-height: 110px;
+  overflow-y: auto;
+  border-radius: 6px;
+  background: rgba(0, 0, 0, 0.55);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  font-family: 'Cascadia Mono', Consolas, monospace;
+  font-size: 10.5px;
+  line-height: 1.4;
+  color: #cbd5e1;
+  white-space: pre-wrap;
+  word-break: break-word;
+  user-select: text;
+}
+
+/* Inline Pin Configuration Card */
+.winget-pin-editor-card {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px solid rgba(245, 158, 11, 0.5);
+  background: rgba(15, 23, 42, 0.92);
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.4);
+  flex-shrink: 0;
+}
+
+.winget-pin-editor-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.winget-pin-editor-title {
+  font-size: 12.5px;
+  color: var(--fg);
+}
+
+.winget-pin-editor-sub {
+  font-size: 11px;
+  color: var(--muted);
+  margin-top: 2px;
+}
+
+.winget-pin-editor-sub code {
+  color: #93c5fd;
+  font-family: 'Cascadia Mono', Consolas, monospace;
+}
+
+.winget-pin-mode-options {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+}
+
+.winget-pin-mode-card {
+  display: flex;
+  align-items: flex-start;
+  gap: 7px;
+  padding: 7px 9px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: rgba(255, 255, 255, 0.03);
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.winget-pin-mode-card:hover {
+  background: rgba(255, 255, 255, 0.06);
+  border-color: rgba(255, 255, 255, 0.22);
+}
+
+.winget-pin-mode-card.is-selected {
+  border-color: rgba(245, 158, 11, 0.65);
+  background: rgba(245, 158, 11, 0.12);
+}
+
+.winget-pin-mode-card input {
+  margin-top: 2px;
+}
+
+.winget-pin-mode-name {
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--fg);
+}
+
+.winget-pin-mode-desc {
+  font-size: 10.5px;
+  color: var(--muted);
+  line-height: 1.3;
+  margin-top: 2px;
+}
+
+.winget-pin-version-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 11.5px;
+  color: var(--muted);
+}
+
+.winget-pin-editor-footer {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
+/* Sub-Tabs & Toolbar */
+.winget-toolbar-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  border-bottom: 1px solid var(--border);
+  padding-bottom: 8px;
+  flex-shrink: 0;
+}
+
+.winget-toolbar-right {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.winget-filter-input {
+  width: 175px;
+  padding: 5px 10px;
+  border-radius: 7px;
+  border: 1px solid var(--border);
+  background: rgba(0, 0, 0, 0.35);
+  color: var(--fg);
+  font-size: 12px;
+  outline: none;
+  transition: border-color 0.15s ease;
+}
+
+.winget-filter-input:focus {
+  border-color: var(--accent);
+}
+
+.winget-tab-body {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.winget-summary-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.winget-summary-left {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.winget-summary-text {
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--muted);
+}
+
+.winget-summary-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.winget-checkbox-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: rgba(255, 255, 255, 0.04);
+  font-size: 11px;
+  color: var(--muted);
+  cursor: pointer;
+}
+
+.winget-checkbox-pill input {
+  margin: 0;
+  cursor: pointer;
+}
+
+.winget-chip-group {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  flex-shrink: 0;
+}
+
+.winget-filter-chip {
+  padding: 3.5px 9px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.14s ease;
+}
+
+.winget-filter-chip:hover {
+  color: var(--fg);
+  background: rgba(255, 255, 255, 0.09);
+}
+
+.winget-filter-chip.is-active {
+  color: #ffffff;
+  background: rgba(59, 130, 246, 0.25);
+  border-color: rgba(96, 165, 250, 0.6);
+}
+
+.winget-search-bar-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.winget-search-input {
+  flex: 1;
+  padding: 7px 12px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: rgba(0, 0, 0, 0.4);
+  color: var(--fg);
+  font-size: 12.5px;
+  outline: none;
+  transition: border-color 0.15s ease;
+}
+
+.winget-search-input:focus {
+  border-color: var(--accent);
+}
+
+.winget-manual-pin-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: rgba(0, 0, 0, 0.3);
+  border: 1px solid var(--border);
+  flex-shrink: 0;
+}
+
+/* Package List & Rows */
+.winget-pkg-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding-right: 4px;
+}
+
+.winget-pkg-list::-webkit-scrollbar {
+  width: 6px;
+}
+
+.winget-pkg-list::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.winget-pkg-list::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.16);
+  border-radius: 99px;
+}
+
+.winget-pkg-list::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.3);
+}
+
+.winget-pkg-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 8px 12px;
+  border-radius: 9px;
+  border: 1px solid var(--border);
+  background: rgba(0, 0, 0, 0.22);
+  transition: all 0.14s ease;
+  flex-shrink: 0;
+}
+
+.winget-pkg-row:hover {
+  background: rgba(255, 255, 255, 0.04);
+  border-color: rgba(255, 255, 255, 0.2);
+}
+
+.winget-pkg-row.is-pinned {
+  border-color: rgba(245, 158, 11, 0.35);
+  background: rgba(245, 158, 11, 0.05);
+}
+
+.winget-pkg-main {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+  flex: 1;
+}
+
+.winget-pkg-title-row {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+  flex-wrap: wrap;
+}
+
+.winget-pkg-name {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--fg);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 280px;
+}
+
+.winget-pkg-id-btn {
+  padding: 1px 6px;
+  border-radius: 5px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--muted);
+  font-family: 'Cascadia Mono', Consolas, monospace;
+  font-size: 10.5px;
+  cursor: pointer;
+  max-width: 220px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  transition: all 0.14s ease;
+}
+
+.winget-pkg-id-btn:hover {
+  color: #93c5fd;
+  border-color: rgba(96, 165, 250, 0.45);
+  background: rgba(59, 130, 246, 0.12);
+}
+
+.winget-pkg-meta-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 11px;
+  color: var(--muted);
+}
+
+.winget-version-diff {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-family: 'Cascadia Mono', Consolas, monospace;
+  font-size: 11px;
+}
+
+.winget-ver-old {
+  color: #94a3b8;
+}
+
+.winget-ver-arrow {
+  color: var(--muted);
+}
+
+.winget-ver-new {
+  color: #34d399;
+  font-weight: 600;
+}
+
+.winget-ver-current {
+  font-family: 'Cascadia Mono', Consolas, monospace;
+  font-size: 11px;
+  color: #94a3b8;
+}
+
+.winget-source-tag {
+  font-size: 10px;
+  padding: 0.5px 6px;
+  border-radius: 5px;
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--muted);
+}
+
+.winget-pkg-actions {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  flex-shrink: 0;
+}
+
+/* Badges */
+.winget-badge {
+  font-size: 10px;
+  font-weight: 700;
+  padding: 1px 6px;
+  border-radius: 999px;
+  white-space: nowrap;
+}
+
+.winget-badge-pinned {
+  background: rgba(245, 158, 11, 0.18);
+  color: #fbbf24;
+  border: 1px solid rgba(245, 158, 11, 0.4);
+}
+
+.winget-badge-blocked {
+  background: rgba(239, 68, 68, 0.2);
+  color: #fca5a5;
+  border: 1px solid rgba(239, 68, 68, 0.45);
+}
+
+.winget-badge-gated {
+  background: rgba(168, 85, 247, 0.2);
+  color: #d8b4fe;
+  border: 1px solid rgba(168, 85, 247, 0.45);
+}
+
+.winget-badge-installed {
+  background: rgba(16, 185, 129, 0.18);
+  color: #6ee7b7;
+  border: 1px solid rgba(16, 185, 129, 0.4);
+}
+
+.winget-badge-admin {
+  background: rgba(245, 158, 11, 0.22);
+  color: #fde68a;
+  border: 1px solid rgba(245, 158, 11, 0.5);
+}
+
+/* ==========================================================================
+   Expanded 1040x720 System Management Control Center Styles
+   ========================================================================== */
+
+.system-category-pills-group {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  flex-wrap: wrap;
+}
+
+.system-category-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.system-category-badge.badge-warn {
+  background: rgba(245, 158, 11, 0.25);
+  color: #fbbf24;
+  border-color: rgba(245, 158, 11, 0.5);
+}
+
+.system-winget-container {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.winget-split-workspace {
+  display: flex;
+  gap: 12px;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.winget-main-column {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+}
+
+/* Multi-Select Batch Action Bar */
+.winget-batch-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 7px 12px;
+  border-radius: 8px;
+  background: rgba(59, 130, 246, 0.16);
+  border: 1px solid rgba(96, 165, 250, 0.5);
+  flex-shrink: 0;
+}
+
+.winget-batch-count {
+  font-size: 12px;
+  color: #dbeafe;
+}
+
+.winget-batch-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.winget-row-checkbox {
+  width: 15px;
+  height: 15px;
+  cursor: pointer;
+  accent-color: #3b82f6;
+  flex-shrink: 0;
+}
+
+.winget-pkg-row.is-inspected {
+  border-color: rgba(56, 189, 248, 0.65);
+  background: rgba(56, 189, 248, 0.1);
+}
+
+/* Right-Hand Package Inspector Pane */
+.winget-inspector-pane {
+  width: 325px;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px;
+  border-radius: 10px;
+  border: 1px solid rgba(56, 189, 248, 0.35);
+  background: rgba(15, 23, 42, 0.85);
+  overflow-y: auto;
+}
+
+.winget-inspector-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding-bottom: 6px;
+  border-bottom: 1px solid var(--border);
+}
+
+.winget-inspector-title {
+  font-size: 12px;
+  font-weight: 700;
+  color: #38bdf8;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+}
+
+.winget-inspector-body {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.winget-inspector-pkg-name {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--fg);
+  line-height: 1.25;
+}
+
+.winget-inspector-pkg-id {
+  display: inline-block;
+  align-self: flex-start;
+  padding: 2px 7px;
+  border-radius: 5px;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  font-family: 'Cascadia Mono', Consolas, monospace;
+  font-size: 11px;
+  color: #93c5fd;
+  cursor: pointer;
+}
+
+.winget-inspector-meta-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 11.5px;
+  color: var(--fg);
+}
+
+.inspector-label {
+  color: var(--muted);
+}
+
+.winget-inspector-desc {
+  font-size: 11.5px;
+  line-height: 1.45;
+  color: #cbd5e1;
+  background: rgba(0, 0, 0, 0.3);
+  padding: 8px 10px;
+  border-radius: 7px;
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  max-height: 125px;
+  overflow-y: auto;
+  user-select: text;
+}
+
+.winget-inspector-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.winget-inspector-controls {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding-top: 8px;
+  border-top: 1px solid var(--border);
+}
+
+.inspector-control-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 11.5px;
+  color: var(--muted);
+}
+
+.winget-inspector-select {
+  width: 170px;
+  padding: 4px 8px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: rgba(0, 0, 0, 0.55);
+  color: var(--fg);
+  font-size: 11.5px;
+  outline: none;
+}
+
+.inspector-checkbox-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.inspector-action-buttons {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin-top: 2px;
+}
+
+/* Dev Runtimes Grid */
+.system-runtimes-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 10px;
+}
+
+.system-runtime-card {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  padding: 11px 13px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: rgba(0, 0, 0, 0.25);
+  transition: all 0.15s ease;
+}
+
+.system-runtime-card:hover {
+  border-color: rgba(255, 255, 255, 0.22);
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.system-runtime-card.has-conflict {
+  border-color: rgba(245, 158, 11, 0.45);
+  background: rgba(245, 158, 11, 0.05);
+}
+
+.system-runtime-card.is-missing {
+  opacity: 0.78;
+  border-style: dashed;
+}
+
+.system-runtime-top {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.system-runtime-title-group {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+}
+
+.system-runtime-icon {
+  font-size: 20px;
+  line-height: 1;
+}
+
+.system-runtime-name {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--fg);
+}
+
+.system-runtime-ver {
+  font-family: 'Cascadia Mono', Consolas, monospace;
+  font-size: 11px;
+  color: #38bdf8;
+  margin-top: 1px;
+}
+
+.system-runtime-path {
+  font-family: 'Cascadia Mono', Consolas, monospace;
+  font-size: 10.5px;
+  color: var(--muted);
+  background: rgba(0, 0, 0, 0.35);
+  padding: 4px 7px;
+  border-radius: 5px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.system-runtime-path:hover {
+  color: #93c5fd;
+}
+
+.system-runtime-shadow-box {
+  font-size: 10.5px;
+  color: #fbbf24;
+  background: rgba(245, 158, 11, 0.1);
+  padding: 4px 7px;
+  border-radius: 5px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.system-runtime-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  justify-content: flex-end;
+  margin-top: auto;
+}
+
+/* ============================================================================
+   Visual Loading Spinners & Running Job Indicators
+   ============================================================================ */
+
+@keyframes sudoSpin {
+  0% {
+    transform: rotate(0deg);
+  }
+
+  100% {
+    transform: rotate(360deg);
+  }
+}
+
+.sudo-spinner {
+  display: inline-block;
+  width: 12px;
+  height: 12px;
+  border: 2px solid rgba(255, 255, 255, 0.22);
+  border-top-color: currentColor;
+  border-radius: 50%;
+  animation: sudoSpin 0.68s linear infinite;
+  vertical-align: middle;
+  flex-shrink: 0;
+  box-sizing: border-box;
+}
+
+.sudo-spinner-sm {
+  width: 10px;
+  height: 10px;
+  border-width: 1.75px;
+}
+
+.sudo-spinner-lg {
+  width: 16px;
+  height: 16px;
+  border-width: 2.25px;
+}
+
+.sudo-job-running-banner {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 12px;
+  border-radius: 8px;
+  background: rgba(56, 189, 248, 0.12);
+  border: 1px solid rgba(56, 189, 248, 0.35);
+  color: #7dd3fc;
+  font-size: 11.5px;
+  font-weight: 600;
+  animation: fadeIn 0.16s ease-out;
+}
+
+/* ============================================================================
+   Git Hot-Reload Filesystem Watchers Styles
+   ============================================================================ */
+
+.git-watcher-quick-strip {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 7px 10px;
+  margin-top: 2px;
+  border-radius: 7px;
+  background: rgba(16, 185, 129, 0.08);
+  border: 1px solid rgba(16, 185, 129, 0.28);
+}
+
+.git-watcher-quick-strip-left {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+}
+
+.git-watcher-quick-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.35);
+  flex-shrink: 0;
+}
+
+.git-watcher-quick-dot[data-active='true'] {
+  background: #10b981;
+  box-shadow: 0 0 8px #10b981;
+}
+
+.git-watcher-quick-text {
+  font-size: 11.5px;
+  font-weight: 600;
+  color: #d1fae5;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.git-watcher-quick-strip-actions {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  flex-shrink: 0;
+}
+
+.git-watchers-container {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding-right: 2px;
+}
+
+.git-watchers-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.git-watchers-toolbar-left,
+.git-watchers-toolbar-right {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.git-watcher-form-card {
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+  padding: 12px;
+  border-radius: 9px;
+  border: 1px solid var(--accent);
+  background: rgba(15, 23, 42, 0.92);
+  box-shadow: 0 4px 18px rgba(0, 0, 0, 0.38);
+}
+
+.git-watcher-form-header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.git-watcher-form-title {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--fg);
+}
+
+.git-watcher-form-subtitle {
+  font-size: 11px;
+  color: var(--muted);
+}
+
+.git-watcher-form-row {
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+}
+
+.git-watcher-field {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+
+.git-watcher-label {
+  font-size: 10.5px;
+  font-weight: 600;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+}
+
+.git-watcher-input,
+.git-watcher-select {
+  background: rgba(0, 0, 0, 0.45);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 6px 9px;
+  color: var(--fg);
+  font-size: 12px;
+  outline: none;
+}
+
+.git-watcher-input:focus,
+.git-watcher-select:focus {
+  border-color: var(--accent);
+}
+
+.git-watcher-mono-input {
+  font-family: 'Cascadia Mono', Consolas, monospace;
+  font-size: 11.5px;
+}
+
+.git-watcher-presets-box {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  padding: 7px 9px;
+  border-radius: 7px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.git-watcher-preset-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+
+.git-watcher-preset-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 9px;
+  border-radius: 6px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  background: rgba(0, 0, 0, 0.32);
+  color: var(--fg);
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.12s ease;
+}
+
+.git-watcher-preset-chip:hover {
+  border-color: var(--accent);
+  background: rgba(90, 160, 255, 0.15);
+}
+
+.git-watcher-preset-chip.is-selected {
+  border-color: #10b981;
+  background: rgba(16, 185, 129, 0.18);
+  color: #6ee7b7;
+}
+
+.git-watcher-form-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding-top: 2px;
+}
+
+.git-watcher-empty-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: 6px;
+  padding: 18px 16px;
+  border-radius: 9px;
+  border: 1px dashed rgba(255, 255, 255, 0.18);
+  background: rgba(0, 0, 0, 0.2);
+}
+
+.git-watcher-empty-title {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--fg);
+}
+
+.git-watcher-empty-desc {
+  font-size: 11.5px;
+  color: var(--muted);
+  max-width: 520px;
+  line-height: 1.4;
+}
+
+.git-watcher-quick-presets {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  margin-top: 6px;
+}
+
+.git-watchers-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.git-watcher-card {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: rgba(0, 0, 0, 0.28);
+  transition: all 0.14s ease;
+}
+
+.git-watcher-card.is-enabled {
+  border-color: rgba(16, 185, 129, 0.42);
+  background: rgba(16, 185, 129, 0.05);
+}
+
+.git-watcher-card.is-error {
+  border-color: rgba(239, 68, 68, 0.48);
+  background: rgba(239, 68, 68, 0.06);
+}
+
+.git-watcher-card-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.git-watcher-card-title-group {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+  flex-wrap: wrap;
+}
+
+.git-watcher-status-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 10px;
+  font-weight: 700;
+  padding: 2px 7px;
+  border-radius: 99px;
+  letter-spacing: 0.3px;
+}
+
+.git-watcher-status-badge.status-running {
+  background: rgba(56, 189, 248, 0.18);
+  border: 1px solid rgba(56, 189, 248, 0.45);
+  color: #38bdf8;
+}
+
+.git-watcher-status-badge.status-watching {
+  background: rgba(16, 185, 129, 0.18);
+  border: 1px solid rgba(16, 185, 129, 0.42);
+  color: #34d399;
+}
+
+.git-watcher-status-badge.status-error {
+  background: rgba(239, 68, 68, 0.2);
+  border: 1px solid rgba(239, 68, 68, 0.45);
+  color: #f87171;
+}
+
+.git-watcher-status-badge.status-stopped {
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  color: var(--muted);
+}
+
+.git-watcher-pulse-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #34d399;
+  box-shadow: 0 0 6px #34d399;
+}
+
+.git-watcher-name {
+  font-size: 12.5px;
+  font-weight: 700;
+  color: var(--fg);
+}
+
+.git-watcher-repo-badge {
+  font-size: 10.5px;
+  padding: 1px 6px;
+  border-radius: 5px;
+  background: rgba(255, 255, 255, 0.07);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  color: var(--muted);
+  font-family: 'Cascadia Mono', Consolas, monospace;
+}
+
+.git-watcher-repo-badge.is-current-repo {
+  background: rgba(90, 160, 255, 0.14);
+  border-color: rgba(90, 160, 255, 0.35);
+  color: #93c5fd;
+}
+
+.git-watcher-mode-badge {
+  font-size: 10px;
+  padding: 1px 6px;
+  border-radius: 5px;
+  background: rgba(168, 85, 247, 0.14);
+  border: 1px solid rgba(168, 85, 247, 0.3);
+  color: #d8b4fe;
+}
+
+.git-watcher-card-actions {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  flex-shrink: 0;
+}
+
+.git-watcher-card-meta {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  font-size: 11px;
+  color: var(--muted);
+}
+
+.git-watcher-cmd-pill {
+  padding: 2px 7px;
+  border-radius: 5px;
+  background: rgba(0, 0, 0, 0.45);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  color: #93c5fd;
+  font-family: 'Cascadia Mono', Consolas, monospace;
+  font-size: 11px;
+  max-width: 280px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.git-watcher-meta-item strong {
+  color: var(--fg);
+}
+
+.git-watcher-reload-counter {
+  color: #fbbf24;
+}
+
+.git-watcher-last-file code {
+  font-family: 'Cascadia Mono', Consolas, monospace;
+  font-size: 10.5px;
+  color: #cbd5e1;
+}
+
+.git-watcher-logs-drawer {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: 2px;
+  padding: 8px;
+  border-radius: 6px;
+  background: rgba(0, 0, 0, 0.55);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+}
+
+.git-watcher-logs-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 10.5px;
+  font-weight: 600;
+  color: var(--muted);
+}
+
+.git-watcher-logs-pre {
+  margin: 0;
+  max-height: 155px;
+  overflow-y: auto;
+  font-family: 'Cascadia Mono', Consolas, monospace;
+  font-size: 10.5px;
+  line-height: 1.45;
+  color: #e2e8f0;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+/* Floating Python Textual TUI Window */
+.tui-window-shell {
+  background:
+    linear-gradient(160deg, rgba(255, 255, 255, 0.03), transparent 45%),
+    rgba(11, 15, 25, 0.96);
+  border: 1px solid rgba(90, 160, 255, 0.28);
+  box-shadow:
+    0 22px 54px rgba(0, 0, 0, 0.65),
+    inset 0 1px 0 rgba(255, 255, 255, 0.1);
+}
+
+.tui-window-header {
+  padding: 7px 12px;
+  background: rgba(18, 24, 38, 0.92);
+  gap: 10px;
+}
+
+.tui-header-left {
+  min-width: 0;
+  flex: 1;
+  overflow: hidden;
+}
+
+.tui-header-title {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--fg);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.tui-subtitle-badge {
+  font-size: 10.5px;
+  font-family: 'Cascadia Mono', Consolas, monospace;
+  color: #94a3b8;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 5px;
+  padding: 1px 6px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 340px;
+}
+
+.tui-header-actions {
+  -webkit-app-region: no-drag;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  flex-shrink: 0;
+}
+
+.tui-header-btn {
+  font-size: 11.5px;
+  line-height: 1;
+}
+
+.tui-header-btn.active {
+  background: rgba(90, 160, 255, 0.22);
+  border-color: rgba(90, 160, 255, 0.55);
+  color: #ffffff;
+}
+
+.tui-close-btn:hover {
+  background: rgba(239, 68, 68, 0.24);
+  border-color: rgba(239, 68, 68, 0.55);
+  color: #fecaca;
+}
+
+.tui-window-body {
+  padding: 6px 8px 8px 8px;
+}
+
+.tui-exit-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 7px 14px;
+  background: rgba(127, 29, 29, 0.35);
+  border-top: 1px solid rgba(248, 113, 113, 0.35);
+  font-size: 11.5px;
+  color: #fecaca;
+  flex-shrink: 0;
+}
+
+.tui-exit-text code {
+  font-family: 'Cascadia Mono', Consolas, monospace;
+  padding: 1px 5px;
+  border-radius: 4px;
+  background: rgba(0, 0, 0, 0.35);
+  color: #ffffff;
+}
+
+.tui-exit-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.tui-exit-btn {
+  padding: 3px 10px;
+  border-radius: 5px;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  background: rgba(255, 255, 255, 0.08);
+  color: #ffffff;
+  font-size: 11px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+
+.tui-exit-btn:hover {
+  background: rgba(255, 255, 255, 0.18);
+}
+
+.tui-exit-btn-close {
+  border-color: rgba(248, 113, 113, 0.4);
+  background: rgba(239, 68, 68, 0.18);
+}
+
+.tui-exit-btn-close:hover {
+  background: rgba(239, 68, 68, 0.32);
+}
+

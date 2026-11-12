@@ -1,0 +1,420 @@
+/* Same semi-transparent glass look as .palette — the terminal window is its own
+   BrowserWindow (see main/terminalWindow.ts) so it needs its own root element, but should
+   read as part of the same visual family as the bar it hovers off of. */
+.term-shell {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  background: var(--glass-sheen), var(--bg);
+  color: var(--fg);
+  border-radius: 14px;
+  border: 1px solid var(--border);
+  box-shadow:
+    0 20px 50px rgba(0, 0, 0, 0.45),
+    inset 0 1px 0 rgba(255, 255, 255, 0.1),
+    inset 0 0 24px rgba(0, 0, 0, 0.2);
+  overflow: hidden;
+  -webkit-backdrop-filter: var(--glass-blur);
+  backdrop-filter: var(--glass-blur);
+}
+
+.term-icon {
+  flex: 1;
+  width: 100%;
+  height: 100%;
+  border: none;
+  background: transparent;
+  color: var(--accent);
+  font-size: 16px;
+  font-family: 'Cascadia Mono', Consolas, monospace;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.term-icon:hover {
+  background: var(--active-bg);
+}
+
+/* The shell that was backing the panel has exited (see Terminal.tsx's sessionEnded) —
+   amber rather than the error red used for banners, since this isn't a failure: clicking
+   still works, it just starts a new session. The glow pulses so it reads as a status
+   change on an icon that's otherwise easy to overlook at 44px. */
+.term-icon-ended {
+  color: #ffb45a;
+  position: relative;
+}
+
+/* The pulse animates opacity on a static radial glow rather than the icon's own
+   text-shadow — this window sits always-on-top and the animation runs indefinitely, so
+   it needs to stay a compositor-only property instead of repainting every frame. */
+.term-icon-ended::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: radial-gradient(circle at center, rgba(255, 180, 90, 0.45), transparent 70%);
+  animation: term-icon-ended-glow 2s ease-in-out infinite;
+}
+
+.term-icon-ended:hover {
+  background: rgba(255, 180, 90, 0.16);
+}
+
+@keyframes term-icon-ended-glow {
+
+  0%,
+  100% {
+    opacity: 0.35;
+  }
+
+  50% {
+    opacity: 1;
+  }
+}
+
+/* Users who've asked the OS to cut down on motion get the glow, without the pulse. */
+@media (prefers-reduced-motion: reduce) {
+  .term-icon-ended::after {
+    animation: none;
+    opacity: 0.7;
+  }
+}
+
+/* Unread terminal output glow — indicates background command activity without stealing focus */
+.term-icon-unread {
+  color: #5aa0ff;
+  position: relative;
+}
+
+.term-icon-unread::after {
+  content: '';
+  position: absolute;
+  inset: -2px;
+  border-radius: inherit;
+  pointer-events: none;
+  background: radial-gradient(circle at center, rgba(90, 160, 255, 0.5), transparent 70%);
+  box-shadow: 0 0 14px rgba(90, 160, 255, 0.55), inset 0 0 8px rgba(90, 160, 255, 0.35);
+  animation: term-icon-unread-glow 2.2s ease-in-out infinite;
+}
+
+.term-icon-unread:hover {
+  background: rgba(90, 160, 255, 0.16);
+}
+
+@keyframes term-icon-unread-glow {
+
+  0%,
+  100% {
+    opacity: 0.35;
+    transform: scale(0.96);
+  }
+
+  50% {
+    opacity: 1;
+    transform: scale(1.06);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .term-icon-unread::after {
+    animation: none;
+    opacity: 0.75;
+  }
+}
+
+.term-shell.term-expanded.term-unread {
+  box-shadow: 0 0 20px rgba(90, 160, 255, 0.35), 0 8px 32px rgba(0, 0, 0, 0.45);
+  border-color: rgba(90, 160, 255, 0.45);
+}
+
+.term-header {
+  -webkit-app-region: drag;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 14px;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--muted);
+  background: rgba(255, 255, 255, 0.02);
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+  user-select: none;
+  cursor: grab;
+}
+
+.term-header:active {
+  cursor: grabbing;
+}
+
+.term-header-left {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.term-drag-handle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--muted);
+  opacity: 0.45;
+  transition: opacity 0.15s ease, color 0.15s ease;
+}
+
+.term-header:hover .term-drag-handle {
+  opacity: 0.85;
+  color: var(--accent);
+}
+
+.term-header-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.term-header-label::before {
+  content: '';
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--accent);
+  box-shadow: 0 0 6px var(--accent);
+}
+
+.term-header-actions {
+  -webkit-app-region: no-drag;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.term-resize-badge {
+  font-size: 10px;
+  font-family: 'Cascadia Mono', Consolas, monospace;
+  color: var(--accent);
+  background: rgba(90, 160, 255, 0.12);
+  border: 1px solid rgba(90, 160, 255, 0.25);
+  border-radius: 5px;
+  padding: 1px 6px;
+  line-height: 1.3;
+  letter-spacing: 0.02em;
+}
+
+.term-header-btn,
+.term-collapse {
+  -webkit-app-region: no-drag;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--muted);
+  cursor: pointer;
+  border-radius: 6px;
+  transition: all 0.15s ease;
+}
+
+.term-header-btn:hover,
+.term-collapse:hover {
+  background: rgba(255, 255, 255, 0.12);
+  border-color: rgba(255, 255, 255, 0.18);
+  color: var(--fg);
+  transform: translateY(1px);
+}
+
+.term-header-btn:active,
+.term-collapse:active {
+  transform: translateY(2px);
+  background: rgba(255, 255, 255, 0.18);
+}
+
+.term-resize-edge,
+.term-resize-corner {
+  -webkit-app-region: no-drag;
+  position: absolute;
+  user-select: none;
+}
+
+.term-resize-edge {
+  z-index: 40;
+}
+
+.term-resize-corner {
+  z-index: 45;
+  width: 14px;
+  height: 14px;
+}
+
+.term-resize-n {
+  top: 0;
+  left: 14px;
+  right: 14px;
+  height: 5px;
+  cursor: ns-resize;
+}
+
+.term-resize-s {
+  bottom: 0;
+  left: 14px;
+  right: 18px;
+  height: 6px;
+  cursor: ns-resize;
+}
+
+.term-resize-e {
+  top: 14px;
+  right: 0;
+  bottom: 18px;
+  width: 6px;
+  cursor: ew-resize;
+}
+
+.term-resize-w {
+  top: 14px;
+  left: 0;
+  bottom: 14px;
+  width: 6px;
+  cursor: ew-resize;
+}
+
+.term-resize-nw {
+  top: 0;
+  left: 0;
+  cursor: nwse-resize;
+}
+
+.term-resize-ne {
+  top: 0;
+  right: 0;
+  cursor: nesw-resize;
+}
+
+.term-resize-sw {
+  bottom: 0;
+  left: 0;
+  cursor: nesw-resize;
+}
+
+.term-resize-se {
+  bottom: 0;
+  right: 0;
+  width: 18px;
+  height: 18px;
+  cursor: nwse-resize;
+  display: flex;
+  align-items: flex-end;
+  justify-content: flex-end;
+  padding: 2px 3px;
+}
+
+.term-resize-grip {
+  font-size: 10px;
+  line-height: 1;
+  color: var(--muted);
+  opacity: 0.45;
+  transition: opacity 0.15s ease, color 0.15s ease;
+  pointer-events: none;
+}
+
+.term-resize-se:hover .term-resize-grip {
+  opacity: 0.9;
+  color: var(--accent);
+}
+
+.term-body {
+  flex: 1;
+  min-height: 0;
+  padding: 8px 12px 10px 12px;
+  background: transparent;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Unpadded inner host so @xterm/addon-fit measures the true content area
+   (FitAddon reads getComputedStyle(parentElement).height/width, which on a
+   border-box element includes padding unless the immediate parent is unpadded). */
+.term-viewport-host {
+  flex: 1;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  padding: 0;
+  overflow: hidden;
+  position: relative;
+}
+
+.term-body .xterm {
+  height: 100%;
+}
+
+.term-body .xterm,
+.term-body .xterm-viewport,
+.term-body .xterm-scrollable-element,
+.term-body .xterm-screen {
+  background: transparent !important;
+}
+
+.term-body .xterm-viewport {
+  overflow: hidden !important;
+}
+
+/* Custom sleek scrollbar for xterm v6 scrollable element & legacy viewport */
+.term-body .xterm .xterm-scrollable-element > .scrollbar.vertical > .slider {
+  border-radius: 99px;
+}
+
+.term-body .xterm-viewport::-webkit-scrollbar {
+  width: 6px;
+}
+
+.term-body .xterm-viewport::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.term-body .xterm-viewport::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.15);
+  border-radius: 99px;
+  transition: background 0.15s ease;
+}
+
+.term-body .xterm-viewport::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.3);
+}
+
+/* Instantly suppress the terminal body and header during collapsed, pending, and collapsing states */
+.term-collapsed .term-header,
+.term-collapsed .term-body,
+.grow-out .term-header,
+.grow-out .term-body,
+.grow-out .term-resize-edge,
+.grow-out .term-resize-corner,
+.grow-pending .term-header,
+.grow-pending .term-body,
+.grow-pending .term-resize-edge,
+.grow-pending .term-resize-corner {
+  display: none !important;
+}
+
+/* Same treatment for the shelf palette's content (search input/list, Focus/Git/Profile
+   panels, Settings) — opacity:0 alone (see .grow-pending above) still leaves the content
+   laid out and painted, including its own nested backdrop-filter/font work, which on a
+   cold render could still be mid-flight when the window's opacity flips to 1, flashing
+   the panel at full size for a frame. display:none removes it from the paint pipeline
+   entirely until the grow-in animation actually starts. */
+.palette.grow-pending>*,
+.palette.grow-out>* {
+  display: none !important;
+}
+
+.term-expanded .term-icon {
+  display: none;
+}
+

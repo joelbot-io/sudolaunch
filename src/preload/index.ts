@@ -52,8 +52,9 @@ import type {
   ShortcutsOverlayData,
   TextualWindowInitInfo
 } from '../shared/types'
+import type { SudoLaunchApi } from '../shared/preloadApi'
 
-const api = {
+const api: SudoLaunchApi = {
   search: (command: CommandName, query: string): Promise<SearchResultItem[]> =>
     ipcRenderer.invoke('search', command, query),
   runCalc: (expression: string): Promise<string | null> => ipcRenderer.invoke('run-calc', expression),

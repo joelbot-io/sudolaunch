@@ -1,9 +1,12 @@
 import { BrowserWindow, screen, type Rectangle, type NativeImage } from 'electron'
 import { join } from 'path'
-import { is } from '@electron-toolkit/utils'
 import { readSettings, writeSettings } from './config'
 import { DockGeometry } from './dock/DockGeometry'
 import { dockManager } from './dock/DockManager'
+import {
+  calculateSatelliteIdleBounds,
+  configureDockOverlayWindow
+} from './dock/dockWindowHelpers'
 import { getDockDisplay } from './display'
 
 let shortcutsWindow: BrowserWindow | null = null
@@ -11,61 +14,8 @@ let shortcutsExpanded = false
 let lastBarBounds: Rectangle | null = null
 let shortcutsReadyResolver: (() => void) | null = null
 
-function getLiveBarBounds(bar?: Rectangle | null): Rectangle | null {
-  if (bar) return bar
-  const barWin = dockManager.getBarWindow()
-  if (barWin && !barWin.isDestroyed() && barWin.isVisible()) {
-    return barWin.getBounds()
-  }
-  const last = dockManager.getLastBarBounds()
-  if (last) return last
-  if (lastBarBounds) return lastBarBounds
-  return null
-}
-
 function idleBounds(bar?: Rectangle | null): Rectangle {
-  const settings = readSettings()
-  const activeBar = getLiveBarBounds(bar)
-  const display = activeBar
-    ? screen.getDisplayNearestPoint({
-        x: activeBar.x + activeBar.width / 2,
-        y: activeBar.y + activeBar.height / 2
-      })
-    : getDockDisplay(settings.monitor)
-
-  if (settings.dockLayout === 'circle') {
-    const dock =
-      activeBar ??
-      DockGeometry.calculateCircleOrbitBounds(
-        display.workArea,
-        settings.dockHomePosition,
-        settings.dockHomeCustomCoordinates
-      )
-    return DockGeometry.calculateCircleSatelliteBounds(
-      dock,
-      'shortcuts',
-      settings.shelfIcons,
-      settings.dockHomePosition,
-      settings.dockHomeCustomCoordinates
-    )
-  }
-
-  const slotCount = settings.shelfIcons?.length ?? 7
-  const shelfBar =
-    activeBar ??
-    DockGeometry.calculateShelfBarBounds(
-      display.workArea,
-      slotCount,
-      settings.dockHomePosition,
-      settings.dockHomeCustomCoordinates
-    )
-  return DockGeometry.calculateShelfIconBounds(
-    shelfBar,
-    'shortcuts',
-    settings.shelfIcons,
-    settings.dockHomePosition,
-    settings.dockHomeCustomCoordinates
-  )
+  return calculateSatelliteIdleBounds('shortcuts', bar, lastBarBounds)
 }
 
 const MIN_SHORTCUTS_WIDTH = 520
@@ -96,16 +46,6 @@ function expandedBounds(bar?: Rectangle | null): Rectangle {
   )
 }
 
-function loadRenderer(win: BrowserWindow): void {
-  if (is.dev && process.env['ELECTRON_RENDERER_URL']) {
-    const url = new URL(process.env['ELECTRON_RENDERER_URL'])
-    url.searchParams.set('mode', 'shortcuts')
-    win.loadURL(url.toString())
-  } else {
-    win.loadFile(join(__dirname, '../renderer/index.html'), { query: { mode: 'shortcuts' } })
-  }
-}
-
 let shortcutsCollapseTimeout: NodeJS.Timeout | null = null
 let shortcutsExpandTimeout: NodeJS.Timeout | null = null
 
@@ -129,10 +69,7 @@ export function createShortcutsWindow(icon: NativeImage): BrowserWindow {
     }
   })
 
-  shortcutsWindow.webContents.setWindowOpenHandler(() => ({ action: 'deny' }))
-  shortcutsWindow.webContents.on('will-navigate', (e) => e.preventDefault())
-  shortcutsWindow.setAlwaysOnTop(true, 'screen-saver')
-  loadRenderer(shortcutsWindow)
+  configureDockOverlayWindow(shortcutsWindow, 'shortcuts')
 
   shortcutsWindow.on('moved', () => {
     if (shortcutsExpanded && shortcutsWindow && !shortcutsCollapseTimeout && !shortcutsExpandTimeout) {

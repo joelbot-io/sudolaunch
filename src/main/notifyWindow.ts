@@ -1,6 +1,5 @@
 import { BrowserWindow, ipcMain, screen, type Rectangle, type NativeImage } from 'electron'
 import { join } from 'path'
-import { is } from '@electron-toolkit/utils'
 import {
   getNotifications,
   clearNotifications,
@@ -10,91 +9,24 @@ import {
 import { readSettings } from './config'
 import { DockGeometry } from './dock/DockGeometry'
 import { dockManager } from './dock/DockManager'
+import {
+  calculateSatelliteIdleBounds,
+  configureDockOverlayWindow,
+  getLiveBarBounds
+} from './dock/dockWindowHelpers'
 import { getDockDisplay } from './display'
 
 let notifyWindow: BrowserWindow | null = null
 let notifyExpanded = false
 let lastBarBounds: Rectangle | null = null
 
-function getLiveBarBounds(bar?: Rectangle | null): Rectangle | null {
-  if (bar) return bar
-  const barWin = dockManager.getBarWindow()
-  if (barWin && !barWin.isDestroyed() && barWin.isVisible()) {
-    return barWin.getBounds()
-  }
-  const last = dockManager.getLastBarBounds()
-  if (last) return last
-  if (lastBarBounds) return lastBarBounds
-  return null
-}
-
 function idleBounds(bar?: Rectangle | null): Rectangle {
-  const settings = readSettings()
-  const activeBar = getLiveBarBounds(bar)
-  const display = activeBar
-    ? screen.getDisplayNearestPoint({
-        x: activeBar.x + activeBar.width / 2,
-        y: activeBar.y + activeBar.height / 2
-      })
-    : getDockDisplay(settings.monitor)
-
-  if (settings.dockLayout === 'circle') {
-    const dock =
-      activeBar ??
-      DockGeometry.calculateCircleOrbitBounds(
-        display.workArea,
-        settings.dockHomePosition,
-        settings.dockHomeCustomCoordinates
-      )
-    return DockGeometry.calculateCircleSatelliteBounds(
-      dock,
-      'notify',
-      settings.shelfIcons,
-      settings.dockHomePosition,
-      settings.dockHomeCustomCoordinates
-    )
-  }
-
-  if (settings.dockLayout === 'shelf') {
-    const slotCount = settings.shelfIcons?.length ?? 7
-    const shelfBar =
-      activeBar ??
-      DockGeometry.calculateShelfBarBounds(
-        display.workArea,
-        slotCount,
-        settings.dockHomePosition,
-        settings.dockHomeCustomCoordinates
-      )
-    return DockGeometry.calculateShelfIconBounds(
-      shelfBar,
-      'notify',
-      settings.shelfIcons,
-      settings.dockHomePosition,
-      settings.dockHomeCustomCoordinates
-    )
-  }
-
-  if (activeBar) {
-    return DockGeometry.calculateAttachedBounds(
-      activeBar,
-      'notify',
-      settings.dockLayout ?? 'horizontal',
-      display.workArea
-    )
-  }
-
-  return DockGeometry.calculateDefaultIdleBounds(
-    display.workArea,
-    'notify',
-    settings.dockLayout ?? 'horizontal',
-    settings.dockHomePosition,
-    settings.dockHomeCustomCoordinates
-  )
+  return calculateSatelliteIdleBounds('notify', bar, lastBarBounds)
 }
 
 function expandedBounds(bar?: Rectangle | null): Rectangle {
   const settings = readSettings()
-  const activeBar = getLiveBarBounds(bar)
+  const activeBar = getLiveBarBounds(bar, lastBarBounds)
   const display = activeBar
     ? screen.getDisplayNearestPoint({
         x: activeBar.x + activeBar.width / 2,
@@ -110,16 +42,6 @@ function expandedBounds(bar?: Rectangle | null): Rectangle {
     settings.dockHomePosition,
     settings.dockHomeCustomCoordinates
   )
-}
-
-function loadRenderer(win: BrowserWindow): void {
-  if (is.dev && process.env['ELECTRON_RENDERER_URL']) {
-    const url = new URL(process.env['ELECTRON_RENDERER_URL'])
-    url.searchParams.set('mode', 'notify')
-    win.loadURL(url.toString())
-  } else {
-    win.loadFile(join(__dirname, '../renderer/index.html'), { query: { mode: 'notify' } })
-  }
 }
 
 export function createNotificationWindow(icon: NativeImage): BrowserWindow {
@@ -140,10 +62,7 @@ export function createNotificationWindow(icon: NativeImage): BrowserWindow {
     }
   })
 
-  notifyWindow.webContents.setWindowOpenHandler(() => ({ action: 'deny' }))
-  notifyWindow.webContents.on('will-navigate', (e) => e.preventDefault())
-  notifyWindow.setAlwaysOnTop(true, 'screen-saver')
-  loadRenderer(notifyWindow)
+  configureDockOverlayWindow(notifyWindow, 'notify')
 
   notifyWindow.on('closed', () => {
     notifyWindow = null

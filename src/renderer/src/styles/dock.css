@@ -1,0 +1,403 @@
+/* --- SHELF DOCK (Bottom-Center Unified Tray) --- */
+.dock-shelf-container {
+  width: 100%;
+  height: 88px;
+  position: relative;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  padding-bottom: 8px;
+  /* 8px margin above taskbar */
+  box-sizing: border-box;
+  background: transparent !important;
+  user-select: none;
+  transition: opacity 0.24s ease;
+  overflow: visible;
+}
+
+.dock-shelf-container.dock-fading {
+  opacity: 0 !important;
+  pointer-events: none !important;
+}
+
+.dock-shelf {
+  position: relative;
+  width: 100%;
+  max-width: 100%;
+  height: 48px;
+  border-radius: 16px;
+  border: 1px solid var(--dock-glow-color, var(--border));
+  background: var(--bg);
+  box-shadow:
+    0 8px 32px rgba(0, 0, 0, 0.45),
+    0 2px 8px rgba(0, 0, 0, 0.3),
+    0 0 12px var(--dock-glow-color, transparent),
+    inset 0 1px 0 rgba(255, 255, 255, 0.1);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 0 10px;
+  box-sizing: border-box;
+  transition: border-color 0.22s ease, box-shadow 0.22s ease;
+}
+
+.dock-shelf:hover {
+  border-color: var(--dock-glow-color, var(--accent));
+  box-shadow:
+    0 8px 32px rgba(0, 0, 0, 0.45),
+    0 0 16px var(--dock-glow-color, rgba(90, 160, 255, 0.32)),
+    inset 0 1px 0 rgba(255, 255, 255, 0.15);
+}
+
+.dock-shelf-container.summon-pulse .dock-shelf {
+  animation: dockSummonPulse 0.5s ease-out;
+  border-color: var(--summon-color, #5aa0ff) !important;
+}
+
+/* Idle collapse: the full shelf shrinks down to a thin glowing pill after sitting at
+   rest — click anywhere on it to expand back to the icon row. */
+.dock-shelf-collapsed-wrap {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.shelf-focus-countdown-clock.is-collapsed-pill {
+  position: relative;
+  bottom: auto;
+  left: auto;
+  transform: none;
+  margin-bottom: 6px;
+  pointer-events: auto;
+  cursor: pointer;
+  animation: none;
+}
+
+.dock-shelf-glow-bar {
+  width: 72px;
+  height: 5px;
+  border: none;
+  border-radius: 999px;
+  padding: 0;
+  margin: 0 0 21px;
+  cursor: pointer;
+  background: var(--dock-glow-color, var(--accent));
+  box-shadow:
+    0 0 6px 1px var(--dock-glow-color, var(--accent)),
+    0 0 13px 2px var(--dock-glow-color, rgba(90, 160, 255, 0.4));
+  opacity: 0.6;
+  animation: dockGlowBarBreathe 2.6s ease-in-out infinite;
+  transition: opacity 0.18s ease, transform 0.18s ease, width 0.18s ease, box-shadow 0.2s ease, background 0.2s ease;
+}
+
+.dock-shelf-glow-bar:hover {
+  opacity: 0.85;
+  width: 88px;
+  transform: scaleY(1.4);
+  box-shadow:
+    0 0 10px 1px var(--dock-glow-color, var(--accent)),
+    0 0 19px 3px var(--dock-glow-color, rgba(90, 160, 255, 0.48));
+}
+
+@keyframes dockGlowBarBreathe {
+
+  0%,
+  100% {
+    opacity: 0.44;
+  }
+
+  50% {
+    opacity: 0.72;
+  }
+}
+
+.dock-shelf-glow-bar.glow-steady {
+  animation: none;
+  opacity: 0.68;
+}
+
+.dock-shelf-glow-bar.glow-stealth {
+  animation: none;
+  opacity: 0.22;
+  box-shadow: 0 0 4px 1px var(--dock-glow-color, var(--accent));
+}
+
+.dock-shelf-glow-bar.glow-stealth:hover {
+  opacity: 1;
+  box-shadow:
+    0 0 12px 2px var(--dock-glow-color, var(--accent)),
+    0 0 24px 5px var(--dock-glow-color, rgba(90, 160, 255, 0.6));
+}
+
+
+/* Shelf Icon Buttons */
+.shelf-icon {
+  position: relative;
+  width: 40px;
+  height: 40px;
+  flex-shrink: 0;
+  border: none;
+  background: transparent;
+  color: var(--accent);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 12px;
+  padding: 0;
+  margin: 0;
+  transform-origin: center bottom;
+  transition:
+    transform 0.24s cubic-bezier(0.16, 1, 0.3, 1),
+    background 0.16s ease,
+    color 0.16s ease,
+    box-shadow 0.24s ease,
+    border-color 0.16s ease;
+}
+
+/* Hit-target bridge: extends the clickable hit area vertically across the tray so
+   translating upward (-14px) and active scaling never leave the cursor, eliminating
+   hover jitter and missed clicks near the bottom edge of the button. */
+.shelf-icon::before {
+  content: '';
+  position: absolute;
+  top: -4px;
+  left: -2px;
+  right: -2px;
+  bottom: -6px;
+  background: transparent;
+  pointer-events: auto;
+  z-index: 1;
+}
+
+.shelf-icon:hover::before,
+.shelf-icon:active::before {
+  top: -8px;
+  bottom: -24px;
+}
+
+.shelf-icon-glyph {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+  font-family: 'Cascadia Mono', Consolas, monospace;
+  font-size: 17px;
+  line-height: 1;
+  pointer-events: none;
+}
+
+.shelf-icon-glyph * {
+  pointer-events: none;
+}
+
+/* Slide-up on hover: -14px upward travel into the 32px transparent headroom */
+.shelf-icon:hover {
+  transform: translateY(-14px);
+  background: var(--active-bg);
+  color: #ffffff;
+  box-shadow:
+    0 10px 24px rgba(0, 0, 0, 0.5),
+    0 0 16px var(--summon-glow-color, rgba(90, 160, 255, 0.4)),
+    inset 0 1px 0 rgba(255, 255, 255, 0.2);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+}
+
+.shelf-icon:active {
+  transform: translateY(-10px) scale(0.96);
+}
+
+/* Unread Activity Badge / Glow */
+.shelf-icon.has-unread::after {
+  content: '';
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #5aa0ff;
+  box-shadow: 0 0 8px #5aa0ff, 0 0 14px rgba(90, 160, 255, 0.6);
+  pointer-events: none;
+}
+
+.shelf-badge-indicator {
+  position: absolute;
+  top: -2px;
+  right: -2px;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 4px;
+  border-radius: 99px;
+  background: #ff5555;
+  color: #ffffff;
+  font-size: 9.5px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.4);
+  pointer-events: none;
+}
+
+/* Floating Countdown Clock above Focus Icon in Dock */
+.shelf-focus-countdown-clock {
+  position: absolute;
+  bottom: calc(100% + 5px);
+  left: 50%;
+  transform: translateX(-50%);
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 2px 9px;
+  height: 22px;
+  border-radius: 99px;
+  background: rgba(15, 23, 42, 0.94);
+  border: 1px solid rgba(16, 185, 129, 0.58);
+  box-shadow:
+    0 4px 12px rgba(0, 0, 0, 0.5),
+    0 0 10px rgba(16, 185, 129, 0.35);
+  font-family: 'Cascadia Mono', Consolas, monospace;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.3px;
+  color: #10b981;
+  pointer-events: none;
+  white-space: nowrap;
+  z-index: 10;
+  animation: countdownClockFadeIn 0.2s ease-out;
+}
+
+.shelf-focus-countdown-clock.is-paused {
+  border-color: rgba(245, 158, 11, 0.55);
+  box-shadow:
+    0 4px 12px rgba(0, 0, 0, 0.5),
+    0 0 10px rgba(245, 158, 11, 0.35);
+  color: #f59e0b;
+}
+
+.countdown-pulse-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #10b981;
+  box-shadow: 0 0 6px #10b981;
+  flex-shrink: 0;
+  animation: countdownDotPulse 1.5s ease-in-out infinite;
+}
+
+.shelf-focus-countdown-clock.is-paused .countdown-pulse-dot {
+  background: #f59e0b;
+  box-shadow: 0 0 6px #f59e0b;
+  animation: none;
+  opacity: 0.8;
+}
+
+.countdown-time-digits {
+  line-height: 1;
+}
+
+@keyframes countdownClockFadeIn {
+  from {
+    opacity: 0;
+    transform: translate(-50%, 4px) scale(0.92);
+  }
+
+  to {
+    opacity: 1;
+    transform: translate(-50%, 0) scale(1);
+  }
+}
+
+@keyframes countdownDotPulse {
+
+  0%,
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+
+  50% {
+    opacity: 0.35;
+    transform: scale(0.85);
+  }
+}
+
+.shelf-icon-focus.is-running {
+  color: #10b981;
+  animation: focusRunningPulse 2s ease-in-out infinite;
+}
+
+@keyframes focusRunningPulse {
+
+  0%,
+  100% {
+    box-shadow: 0 0 6px rgba(16, 185, 129, 0.3);
+  }
+
+  50% {
+    box-shadow: 0 0 14px rgba(16, 185, 129, 0.7);
+  }
+}
+
+/* Git Status Shelf Badge */
+.shelf-git-badge {
+  background: rgba(30, 41, 59, 0.95);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  color: #e2e8f0;
+  font-size: 8.5px;
+  font-family: 'Cascadia Mono', Consolas, monospace;
+  padding: 0 5px;
+  top: -4px;
+  right: -6px;
+  max-width: 68px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  opacity: 0;
+  transform: translateY(2px) scale(0.92);
+  transition: opacity 0.16s ease, transform 0.16s ease;
+}
+
+.shelf-icon-git:hover .shelf-git-badge {
+  opacity: 1;
+  transform: translateY(0) scale(1);
+}
+
+.shelf-git-badge.is-dirty {
+  border-color: #f59e0b;
+  color: #fbbf24;
+}
+
+/* Terminal unread glowing border/pulse on shelf terminal button */
+.shelf-icon-term.has-unread {
+  animation: termUnreadShelfGlow 2s ease-in-out infinite;
+}
+
+@keyframes termUnreadShelfGlow {
+
+  0%,
+  100% {
+    box-shadow: 0 0 6px rgba(90, 160, 255, 0.3);
+  }
+
+  50% {
+    box-shadow: 0 0 14px rgba(90, 160, 255, 0.8), inset 0 0 8px rgba(90, 160, 255, 0.3);
+  }
+}
+
+/* Active State when the command window or module is open */
+.shelf-icon.is-active {
+  transform: translateY(-8px);
+  background: var(--active-bg);
+  color: #ffffff;
+  box-shadow:
+    0 8px 20px rgba(0, 0, 0, 0.45),
+    0 0 14px var(--accent),
+    inset 0 1px 0 rgba(255, 255, 255, 0.2);
+  border: 1px solid var(--accent);
+}
+
