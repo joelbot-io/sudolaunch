@@ -10,12 +10,30 @@ import { openTextualWindow } from './textualWindow'
 
 export interface ParsedPythonMetadata {
   title: string
+  hasExplicitTitle?: boolean
   description?: string
   args?: string
   defaultMode?: TextualLaunchMode
   runner?: string
   hasPep723: boolean
   importsTextual: boolean
+}
+
+export interface ParsedPyprojectMetadata {
+  name?: string
+  title: string
+  hasExplicitTitle?: boolean
+  description?: string
+  scriptName?: string
+  scriptTarget?: string
+  moduleName?: string
+  callableName?: string
+  scriptPath?: string
+  cwd?: string
+  args?: string
+  defaultMode?: TextualLaunchMode
+  runner?: string
+  dependsOnTextual: boolean
 }
 
 export interface DiscoveredTextualApp {
@@ -29,6 +47,10 @@ export interface DiscoveredTextualApp {
   description?: string
   source: 'saved' | 'folder'
   hasPep723?: boolean
+  hasPyproject?: boolean
+  moduleName?: string
+  scriptName?: string
+  callableName?: string
   importsTextual?: boolean
 }
 
@@ -38,6 +60,7 @@ export interface TextualLaunchSpec {
   file: string
   args: string[]
   cwd: string
+  pythonPathEnv?: string
   psCommand: string
   displayCommand: string
   runnerLabel: string
@@ -254,12 +277,169 @@ export function parsePythonScriptMetadata(content: string, fallbackName: string)
 
   return {
     title: title || humanizeScriptName(fallbackName),
+    hasExplicitTitle: Boolean(title),
     description: description || undefined,
     args,
     defaultMode,
     runner,
     hasPep723,
     importsTextual
+  }
+}
+
+export function parsePyprojectToml(content: string, fallbackName: string): ParsedPyprojectMetadata {
+  const lines = content.split(/\r?\n/)
+  let currentSection = ''
+  let projectName = ''
+  let explicitTitle = ''
+  let description = ''
+  let scriptName: string | undefined
+  let scriptTarget: string | undefined
+  let moduleName: string | undefined
+  let callableName: string | undefined
+  let scriptPath: string | undefined
+  let cwd: string | undefined
+  let args: string | undefined
+  let defaultMode: TextualLaunchMode | undefined
+  let runner: string | undefined
+
+  for (let i = 0; i < lines.length; i++) {
+    const rawLine = lines[i]
+    const trimmed = rawLine.trim()
+    if (!trimmed || trimmed.startsWith('#')) continue
+
+    const secMatch = trimmed.match(/^\[([^\]]+)\]\s*(?:#.*)?$/)
+    if (secMatch) {
+      currentSection = secMatch[1].trim().toLowerCase()
+      continue
+    }
+
+    const kvMatch = trimmed.match(/^([A-Za-z0-9_.-]+)\s*=\s*(.+)$/)
+    if (!kvMatch) continue
+
+    const key = kvMatch[1].trim()
+    const keyLower = key.toLowerCase()
+    let rhs = kvMatch[2].trim()
+
+    // Handle multi-line triple-quoted strings ("""...""" or '''...''')
+    let val = ''
+    if (rhs.startsWith('"""') || rhs.startsWith("'''")) {
+      const delim = rhs.slice(0, 3)
+      const afterOpen = rhs.slice(3)
+      const closeIdx = afterOpen.indexOf(delim)
+      if (closeIdx !== -1) {
+        val = afterOpen.slice(0, closeIdx).trim()
+      } else {
+        const parts = [afterOpen]
+        while (++i < lines.length) {
+          const nextLine = lines[i]
+          const cIdx = nextLine.indexOf(delim)
+          if (cIdx !== -1) {
+            parts.push(nextLine.slice(0, cIdx))
+            break
+          }
+          parts.push(nextLine)
+        }
+        val = parts.join(' ').replace(/\s+/g, ' ').trim()
+      }
+    } else {
+      // Strip inline comment outside quotes
+      const strMatch = rhs.match(/^(?:"((?:[^"\\]|\\.)*)"|'([^']*)')/)
+      if (strMatch) {
+        val = (strMatch[1] ?? strMatch[2] ?? '').trim()
+      } else {
+        val = rhs.replace(/\s+#.*$/, '').trim()
+      }
+    }
+
+    if (!val) continue
+
+    if (currentSection === 'project' || currentSection === 'tool.poetry' || currentSection === '') {
+      if (keyLower === 'name' && !projectName) {
+        projectName = val
+      } else if (keyLower === 'title' && !explicitTitle) {
+        explicitTitle = val
+      } else if ((keyLower === 'description' || keyLower === 'summary') && !description) {
+        description = val
+      }
+    }
+
+    if (
+      currentSection === 'project.scripts' ||
+      currentSection === 'project.gui-scripts' ||
+      currentSection === 'tool.poetry.scripts'
+    ) {
+      if (!scriptName && val.includes(':')) {
+        scriptName = key
+        scriptTarget = val
+        const [modPart, callPart] = val.split(':')
+        if (modPart?.trim()) moduleName = modPart.trim()
+        if (callPart?.trim()) callableName = callPart.trim()
+      } else if (!scriptName && !moduleName) {
+        scriptName = key
+        scriptTarget = val
+        moduleName = val
+      }
+    }
+
+    if (
+      currentSection === 'tool.sudolaunch' ||
+      currentSection === 'sudolaunch' ||
+      currentSection === 'textual' ||
+      currentSection === ''
+    ) {
+      if (keyLower === 'title') {
+        explicitTitle = val
+      } else if (keyLower === 'name' && currentSection !== '') {
+        explicitTitle = val
+      } else if (keyLower === 'description' || keyLower === 'summary') {
+        description = val
+      } else if (keyLower === 'args') {
+        args = val
+      } else if (keyLower === 'mode' || keyLower === 'window' || keyLower === 'default_mode' || keyLower === 'defaultmode') {
+        defaultMode = normalizeLaunchMode(val)
+      } else if (keyLower === 'runner' || keyLower === 'python' || keyLower === 'python_path' || keyLower === 'pythonpath') {
+        runner = val
+      } else if (keyLower === 'module') {
+        moduleName = val
+      } else if (keyLower === 'entrypoint' || keyLower === 'entry' || keyLower === 'target') {
+        if (val.includes(':')) {
+          scriptTarget = val
+          const [modPart, callPart] = val.split(':')
+          if (modPart?.trim()) moduleName = modPart.trim()
+          if (callPart?.trim()) callableName = callPart.trim()
+        } else if (val.toLowerCase().endsWith('.py')) {
+          scriptPath = val
+        } else {
+          moduleName = val
+        }
+      } else if (keyLower === 'script' || keyLower === 'path' || keyLower === 'script_path' || keyLower === 'scriptpath') {
+        scriptPath = val
+      } else if (keyLower === 'cwd') {
+        cwd = val
+      }
+    }
+  }
+
+  const dependsOnTextual = /\btextual\b/i.test(content)
+  const resolvedTitle =
+    explicitTitle || humanizeScriptName(projectName || fallbackName)
+
+  return {
+    name: projectName || undefined,
+    title: resolvedTitle,
+    hasExplicitTitle: Boolean(explicitTitle),
+    description: description || undefined,
+    scriptName,
+    scriptTarget,
+    moduleName,
+    callableName,
+    scriptPath,
+    cwd,
+    args,
+    defaultMode,
+    runner,
+    dependsOnTextual
   }
 }
 
@@ -302,15 +482,143 @@ export function ensureTextualDir(): void {
   }
 }
 
+const NON_PACKAGE_DIRS = new Set([
+  ...SKIP_DIRS,
+  'src',
+  'tests',
+  'test',
+  'docs',
+  'doc',
+  'scripts',
+  'examples',
+  'assets',
+  'resources'
+])
+
+function findPackageEntryInDir(
+  dirPath: string,
+  preferredModule?: string
+): { entryScript: string; moduleName: string; hasMainModule: boolean } | null {
+  const pkgCandidates = ['__main__.py', 'app.py', 'main.py', 'tui.py', '__init__.py']
+
+  const checkPackageDir = (
+    pkgDir: string,
+    modName: string
+  ): { entryScript: string; moduleName: string; hasMainModule: boolean } | null => {
+    if (!existsSync(pkgDir)) return null
+    try {
+      if (!statSync(pkgDir).isDirectory()) return null
+    } catch {
+      return null
+    }
+    const hasMain = existsSync(join(pkgDir, '__main__.py'))
+    for (const cand of pkgCandidates) {
+      const full = join(pkgDir, cand)
+      if (existsSync(full)) {
+        return { entryScript: full, moduleName: modName, hasMainModule: hasMain }
+      }
+    }
+    try {
+      const pyFiles = readdirSync(pkgDir)
+        .filter((f) => f.toLowerCase().endsWith('.py') && !f.startsWith('_'))
+        .sort((a, b) => a.localeCompare(b))
+      if (pyFiles.length > 0) {
+        return { entryScript: join(pkgDir, pyFiles[0]), moduleName: modName, hasMainModule: hasMain }
+      }
+    } catch {
+      // ignore
+    }
+    return null
+  }
+
+  // 1. If a preferred module name is known (e.g. from pyproject.toml [project.scripts])
+  if (preferredModule) {
+    const cleanMod = preferredModule.trim()
+    const modParts = cleanMod.split('.').filter(Boolean)
+    if (modParts.length > 0) {
+      const fromSrc = checkPackageDir(join(dirPath, 'src', ...modParts), cleanMod)
+      if (fromSrc) return fromSrc
+      const fromRoot = checkPackageDir(join(dirPath, ...modParts), cleanMod)
+      if (fromRoot) return fromRoot
+
+      const srcSingleFile = join(dirPath, 'src', ...modParts) + '.py'
+      if (existsSync(srcSingleFile)) {
+        return { entryScript: srcSingleFile, moduleName: cleanMod, hasMainModule: true }
+      }
+      const rootSingleFile = join(dirPath, ...modParts) + '.py'
+      if (existsSync(rootSingleFile)) {
+        return { entryScript: rootSingleFile, moduleName: cleanMod, hasMainModule: true }
+      }
+    }
+  }
+
+  // 2. Scan src/<pkg>/ layout
+  const srcDir = join(dirPath, 'src')
+  if (existsSync(srcDir)) {
+    try {
+      if (statSync(srcDir).isDirectory()) {
+        const subEntries = readdirSync(srcDir)
+          .filter((name) => !name.startsWith('.') && !name.endsWith('.egg-info') && !NON_PACKAGE_DIRS.has(name.toLowerCase()))
+          .sort((a, b) => a.localeCompare(b))
+        for (const sub of subEntries) {
+          const found = checkPackageDir(join(srcDir, sub), sub)
+          if (found) return found
+        }
+      }
+    } catch {
+      // ignore
+    }
+  }
+
+  // 3. Scan flat <pkg>/ layout at project root (only directories containing __init__.py or __main__.py)
+  try {
+    const rootEntries = readdirSync(dirPath)
+      .filter((name) => !name.startsWith('.') && !name.endsWith('.egg-info') && !NON_PACKAGE_DIRS.has(name.toLowerCase()))
+      .sort((a, b) => a.localeCompare(b))
+    for (const sub of rootEntries) {
+      const pkgDir = join(dirPath, sub)
+      if (existsSync(join(pkgDir, '__init__.py')) || existsSync(join(pkgDir, '__main__.py'))) {
+        const found = checkPackageDir(pkgDir, sub)
+        if (found) return found
+      }
+    }
+  } catch {
+    // ignore
+  }
+
+  return null
+}
+
 function findEntryScriptInDir(dirPath: string): string | null {
   const preferred = ['app.py', 'main.py', 'tui.py', '__main__.py']
   for (const candidate of preferred) {
     const full = join(dirPath, candidate)
     if (existsSync(full)) return full
   }
+
+  // Check pyproject.toml [project.scripts] / src/<pkg>/ before falling back to arbitrary root .py files (like scaffold.py or setup.py)
+  const pyprojectPath = join(dirPath, 'pyproject.toml')
+  if (existsSync(pyprojectPath)) {
+    const tomlMeta = parsePyprojectToml(readFileHeader(pyprojectPath, 16384), basename(dirPath))
+    if (tomlMeta.scriptPath) {
+      const explicitScript = isAbsolute(tomlMeta.scriptPath)
+        ? tomlMeta.scriptPath
+        : join(dirPath, tomlMeta.scriptPath)
+      if (existsSync(explicitScript)) return explicitScript
+    }
+    const pkgEntry = findPackageEntryInDir(dirPath, tomlMeta.moduleName)
+    if (pkgEntry) return pkgEntry.entryScript
+  }
+
   try {
     const pyFiles = readdirSync(dirPath)
-      .filter((f) => f.toLowerCase().endsWith('.py') && !f.startsWith('_'))
+      .filter(
+        (f) =>
+          f.toLowerCase().endsWith('.py') &&
+          !f.startsWith('_') &&
+          f.toLowerCase() !== 'setup.py' &&
+          f.toLowerCase() !== 'conftest.py'
+      )
       .sort((a, b) => a.localeCompare(b))
     if (pyFiles.length > 0) {
       return join(dirPath, pyFiles[0])
@@ -318,7 +626,169 @@ function findEntryScriptInDir(dirPath: string): string | null {
   } catch {
     // ignore
   }
+
+  const fallbackPkg = findPackageEntryInDir(dirPath)
+  if (fallbackPkg) return fallbackPkg.entryScript
+
+  if (existsSync(pyprojectPath)) return pyprojectPath
   return null
+}
+
+function findNearestPyprojectContext(
+  scriptOrDirPath: string
+): { projectRoot: string; pyprojectPath: string; meta: ParsedPyprojectMetadata } | null {
+  let current = resolve(scriptOrDirPath)
+  try {
+    if (existsSync(current) && statSync(current).isFile()) {
+      current = dirname(current)
+    }
+  } catch {
+    current = dirname(current)
+  }
+
+  const textualRoot = getConfiguredTextualRoot()
+  const normTextualRoot = textualRoot ? resolve(textualRoot).toLowerCase() : ''
+
+  for (let depth = 0; depth < 4; depth++) {
+    if (normTextualRoot && current.toLowerCase() === normTextualRoot) break
+    const candidate = join(current, 'pyproject.toml')
+    if (existsSync(candidate)) {
+      const content = readFileHeader(candidate, 16384)
+      const meta = parsePyprojectToml(content, basename(current))
+      return { projectRoot: current, pyprojectPath: candidate, meta }
+    }
+    const parent = dirname(current)
+    if (parent === current) break
+    current = parent
+  }
+  return null
+}
+
+function discoverProjectFromDir(dirPath: string, folderId: string): DiscoveredTextualApp | null {
+  const pyprojectPath = join(dirPath, 'pyproject.toml')
+  const hasPyproject = existsSync(pyprojectPath)
+  const tomlMeta = hasPyproject
+    ? parsePyprojectToml(readFileHeader(pyprojectPath, 16384), folderId)
+    : null
+
+  const pkgEntry = findPackageEntryInDir(dirPath, tomlMeta?.moduleName)
+  const entryScript = findEntryScriptInDir(dirPath)
+  if (!entryScript && !hasPyproject) return null
+
+  const scriptToRead =
+    entryScript && entryScript.toLowerCase().endsWith('.py') ? entryScript : null
+  const pyHeader = scriptToRead ? readFileHeader(scriptToRead) : ''
+  const pyMeta = parsePythonScriptMetadata(pyHeader, folderId)
+
+  // Also check app.py inside the package if entryScript was __main__.py so we pick up class/header comments
+  let appPyMeta: ParsedPythonMetadata | null = null
+  if (scriptToRead && basename(scriptToRead).toLowerCase() === '__main__.py') {
+    const siblingAppPy = join(dirname(scriptToRead), 'app.py')
+    if (existsSync(siblingAppPy)) {
+      appPyMeta = parsePythonScriptMetadata(readFileHeader(siblingAppPy), folderId)
+    }
+  }
+
+  const name =
+    (pyMeta.hasExplicitTitle ? pyMeta.title : undefined) ||
+    (appPyMeta?.hasExplicitTitle ? appPyMeta.title : undefined) ||
+    tomlMeta?.title ||
+    pyMeta.title
+
+  const description =
+    tomlMeta?.description ||
+    pyMeta.description ||
+    appPyMeta?.description
+
+  const resolvedScriptPath = entryScript || pyprojectPath
+  const moduleName = pkgEntry?.moduleName || tomlMeta?.moduleName
+
+  return {
+    id: folderId,
+    name,
+    scriptPath: resolvedScriptPath,
+    args: tomlMeta?.args || pyMeta.args || appPyMeta?.args,
+    cwd: tomlMeta?.cwd ? resolve(dirPath, expandHomePath(tomlMeta.cwd)) : dirPath,
+    pythonPath: tomlMeta?.runner || pyMeta.runner || appPyMeta?.runner,
+    defaultMode:
+      tomlMeta?.defaultMode ??
+      pyMeta.defaultMode ??
+      appPyMeta?.defaultMode ??
+      'embedded',
+    description,
+    source: 'folder',
+    hasPep723: pyMeta.hasPep723 || appPyMeta?.hasPep723,
+    hasPyproject,
+    moduleName,
+    scriptName: tomlMeta?.scriptName,
+    callableName: tomlMeta?.callableName,
+    importsTextual:
+      Boolean(tomlMeta?.dependsOnTextual) ||
+      pyMeta.importsTextual ||
+      Boolean(appPyMeta?.importsTextual)
+  }
+}
+
+function discoverFromTomlFile(tomlFilePath: string): DiscoveredTextualApp | null {
+  const fileName = basename(tomlFilePath)
+  const dirPath = dirname(tomlFilePath)
+  if (fileName.toLowerCase() === 'pyproject.toml') {
+    return discoverProjectFromDir(dirPath, basename(dirPath))
+  }
+
+  const stem = basename(fileName, extname(fileName))
+  const tomlMeta = parsePyprojectToml(readFileHeader(tomlFilePath, 16384), stem)
+  const baseCwd = tomlMeta.cwd
+    ? isAbsolute(expandHomePath(tomlMeta.cwd))
+      ? resolve(expandHomePath(tomlMeta.cwd))
+      : resolve(dirPath, expandHomePath(tomlMeta.cwd))
+    : dirPath
+
+  let targetScript = tomlFilePath
+  if (tomlMeta.scriptPath) {
+    targetScript =
+      resolveScriptTargetPath(tomlMeta.scriptPath, baseCwd) ??
+      (isAbsolute(expandHomePath(tomlMeta.scriptPath))
+        ? resolve(expandHomePath(tomlMeta.scriptPath))
+        : resolve(baseCwd, expandHomePath(tomlMeta.scriptPath)))
+  } else if (baseCwd !== dirPath && existsSync(baseCwd)) {
+    targetScript = findEntryScriptInDir(baseCwd) ?? tomlFilePath
+  } else {
+    const siblingPy = join(dirPath, `${stem}.py`)
+    const siblingDir = join(dirPath, stem)
+    if (existsSync(siblingPy)) {
+      targetScript = siblingPy
+    } else if (existsSync(siblingDir)) {
+      const discovered = discoverProjectFromDir(siblingDir, stem)
+      if (discovered) {
+        return {
+          ...discovered,
+          name: tomlMeta.hasExplicitTitle ? tomlMeta.title : discovered.name,
+          description: tomlMeta.description || discovered.description,
+          args: tomlMeta.args || discovered.args,
+          pythonPath: tomlMeta.runner || discovered.pythonPath,
+          defaultMode: tomlMeta.defaultMode ?? discovered.defaultMode
+        }
+      }
+    }
+  }
+
+  return {
+    id: stem,
+    name: tomlMeta.title,
+    scriptPath: targetScript,
+    args: tomlMeta.args,
+    cwd: baseCwd,
+    pythonPath: tomlMeta.runner,
+    defaultMode: tomlMeta.defaultMode ?? 'embedded',
+    description: tomlMeta.description,
+    source: 'folder',
+    hasPyproject: true,
+    moduleName: tomlMeta.moduleName,
+    scriptName: tomlMeta.scriptName,
+    callableName: tomlMeta.callableName,
+    importsTextual: tomlMeta.dependsOnTextual
+  }
 }
 
 export function resolveScriptTargetPath(rawTarget: string, baseDir = CONFIG_DIR): string | null {
@@ -327,7 +797,12 @@ export function resolveScriptTargetPath(rawTarget: string, baseDir = CONFIG_DIR)
   if (!existsSync(abs)) return null
   try {
     const st = statSync(abs)
-    if (st.isFile()) return abs
+    if (st.isFile()) {
+      if (basename(abs).toLowerCase() === 'pyproject.toml') {
+        return findEntryScriptInDir(dirname(abs)) ?? abs
+      }
+      return abs
+    }
     if (st.isDirectory()) return findEntryScriptInDir(abs)
   } catch {
     // ignore
@@ -368,7 +843,14 @@ export function discoverTextualApps(force = false): DiscoveredTextualApp[] {
       for (const entry of entries) {
         if (entry.name.startsWith('.')) continue
         const fullPath = join(root, entry.name)
-        if (entry.isFile() && entry.name.toLowerCase().endsWith('.py')) {
+        let st
+        try {
+          st = statSync(fullPath)
+        } catch {
+          continue
+        }
+        const lowerName = entry.name.toLowerCase()
+        if (st.isFile() && lowerName.endsWith('.py')) {
           const header = readFileHeader(fullPath)
           const meta = parsePythonScriptMetadata(header, entry.name)
           const normKey = fullPath.toLowerCase()
@@ -385,25 +867,41 @@ export function discoverTextualApps(force = false): DiscoveredTextualApp[] {
             hasPep723: meta.hasPep723,
             importsTextual: meta.importsTextual
           })
-        } else if (entry.isDirectory() && !SKIP_DIRS.has(entry.name.toLowerCase())) {
-          const entryScript = findEntryScriptInDir(fullPath)
-          if (entryScript) {
-            const header = readFileHeader(entryScript)
-            const meta = parsePythonScriptMetadata(header, entry.name)
-            const normKey = entryScript.toLowerCase()
-            byPath.set(normKey, {
-              id: entry.name,
-              name: meta.title,
-              scriptPath: entryScript,
-              args: meta.args,
-              cwd: fullPath,
-              pythonPath: meta.runner,
-              defaultMode: meta.defaultMode ?? 'embedded',
-              description: meta.description,
-              source: 'folder',
-              hasPep723: meta.hasPep723,
-              importsTextual: meta.importsTextual
-            })
+        } else if (st.isFile() && lowerName.endsWith('.toml')) {
+          const tomlApp = discoverFromTomlFile(fullPath)
+          if (tomlApp) {
+            const normKey = (tomlApp.cwd && tomlApp.hasPyproject ? tomlApp.cwd : tomlApp.scriptPath).toLowerCase()
+            byPath.set(normKey, tomlApp)
+          }
+        } else if (st.isDirectory() && !SKIP_DIRS.has(lowerName)) {
+          const discovered = discoverProjectFromDir(fullPath, entry.name)
+          if (discovered) {
+            const normKey = (discovered.hasPyproject && discovered.cwd ? discovered.cwd : discovered.scriptPath).toLowerCase()
+            byPath.set(normKey, discovered)
+          } else {
+            // Check 1 level of child folders (e.g. ~/.sudolaunch/textual/aws/eventbridge)
+            try {
+              const childEntries = readdirSync(fullPath, { withFileTypes: true })
+              for (const child of childEntries) {
+                if (child.name.startsWith('.') || SKIP_DIRS.has(child.name.toLowerCase())) continue
+                const childPath = join(fullPath, child.name)
+                let childStat
+                try {
+                  childStat = statSync(childPath)
+                } catch {
+                  continue
+                }
+                if (childStat.isDirectory()) {
+                  const childApp = discoverProjectFromDir(childPath, child.name)
+                  if (childApp) {
+                    const normKey = (childApp.hasPyproject && childApp.cwd ? childApp.cwd : childApp.scriptPath).toLowerCase()
+                    byPath.set(normKey, childApp)
+                  }
+                }
+              }
+            } catch {
+              // ignore nested scan errors
+            }
           }
         }
       }
@@ -417,24 +915,33 @@ export function discoverTextualApps(force = false): DiscoveredTextualApp[] {
     const rawScript = (saved.scriptPath || '').trim()
     if (!rawScript) continue
     const resolvedScript = resolveScriptTargetPath(rawScript, root || CONFIG_DIR) ?? expandHomePath(rawScript)
-    const header = existsSync(resolvedScript) ? readFileHeader(resolvedScript) : ''
-    const meta = parsePythonScriptMetadata(header, saved.name || basename(resolvedScript))
-    const normKey = resolvedScript.toLowerCase()
-    const cleanName = (saved.name || '').trim() || meta.title
+    const pyprojectCtx = findNearestPyprojectContext(resolvedScript)
+    const header = existsSync(resolvedScript) && resolvedScript.toLowerCase().endsWith('.py') ? readFileHeader(resolvedScript) : ''
+    const meta = parsePythonScriptMetadata(header, saved.name || pyprojectCtx?.meta.title || basename(resolvedScript))
+    const normKey = (pyprojectCtx ? pyprojectCtx.projectRoot : resolvedScript).toLowerCase()
+    const cleanName = (saved.name || '').trim() || (meta.hasExplicitTitle ? meta.title : (pyprojectCtx?.meta.title || meta.title))
     const slug = cleanName.toLowerCase().replace(/[^a-z0-9_-]+/g, '-').replace(/^-+|-+$/g, '') || basename(resolvedScript, '.py')
+    const defaultCwd = pyprojectCtx ? pyprojectCtx.projectRoot : dirname(resolvedScript)
+    const pkgEntry = pyprojectCtx ? findPackageEntryInDir(pyprojectCtx.projectRoot, pyprojectCtx.meta.moduleName) : null
 
     byPath.set(normKey, {
       id: slug,
       name: cleanName,
       scriptPath: resolvedScript,
-      args: saved.args?.trim() || meta.args,
-      cwd: saved.cwd?.trim() ? expandHomePath(saved.cwd.trim()) : dirname(resolvedScript),
-      pythonPath: saved.pythonPath?.trim() || meta.runner,
-      defaultMode: saved.defaultMode?.trim() ? normalizeLaunchMode(saved.defaultMode) : (meta.defaultMode ?? 'embedded'),
-      description: saved.description?.trim() || meta.description,
+      args: saved.args?.trim() || pyprojectCtx?.meta.args || meta.args,
+      cwd: saved.cwd?.trim() ? expandHomePath(saved.cwd.trim()) : defaultCwd,
+      pythonPath: saved.pythonPath?.trim() || pyprojectCtx?.meta.runner || meta.runner,
+      defaultMode: saved.defaultMode?.trim()
+        ? normalizeLaunchMode(saved.defaultMode)
+        : (pyprojectCtx?.meta.defaultMode ?? meta.defaultMode ?? 'embedded'),
+      description: saved.description?.trim() || pyprojectCtx?.meta.description || meta.description,
       source: 'saved',
       hasPep723: meta.hasPep723,
-      importsTextual: meta.importsTextual
+      hasPyproject: Boolean(pyprojectCtx),
+      moduleName: pkgEntry?.moduleName || pyprojectCtx?.meta.moduleName,
+      scriptName: pyprojectCtx?.meta.scriptName,
+      callableName: pyprojectCtx?.meta.callableName,
+      importsTextual: Boolean(pyprojectCtx?.meta.dependsOnTextual) || meta.importsTextual
     })
   }
 
@@ -519,7 +1026,7 @@ function findNearestVenvExe(startDir: string, exeBase: 'python.exe' | 'textual.e
 function hasUvProjectLock(startDir: string): boolean {
   let current = resolve(startDir)
   for (let depth = 0; depth < 3; depth++) {
-    if (existsSync(join(current, 'uv.lock'))) return true
+    if (existsSync(join(current, 'uv.lock')) || existsSync(join(current, 'pyproject.toml'))) return true
     const parent = dirname(current)
     if (parent === current) break
     current = parent
@@ -543,6 +1050,10 @@ export function resolveTextualLaunchSpec(
     cwd?: string
     pythonPath?: string
     hasPep723?: boolean
+    hasPyproject?: boolean
+    moduleName?: string
+    scriptName?: string
+    callableName?: string
   },
   options?: {
     extraArgs?: string
@@ -550,21 +1061,62 @@ export function resolveTextualLaunchSpec(
   }
 ): TextualLaunchSpec {
   const resolvedScript = resolveScriptTargetPath(app.scriptPath) ?? resolve(expandHomePath(app.scriptPath))
-  const cwd = app.cwd ? resolve(expandHomePath(app.cwd)) : dirname(resolvedScript)
-  const baseArgs = tokenizeCliArgs(app.args)
+  const pyprojectCtx = findNearestPyprojectContext(app.cwd ? expandHomePath(app.cwd) : resolvedScript)
+  const cwd = app.cwd
+    ? resolve(expandHomePath(app.cwd))
+    : pyprojectCtx
+      ? pyprojectCtx.projectRoot
+      : dirname(resolvedScript)
+
+  const pkgEntry = pyprojectCtx ? findPackageEntryInDir(cwd, app.moduleName ?? pyprojectCtx.meta.moduleName) : null
+  const moduleName = app.moduleName ?? pkgEntry?.moduleName ?? pyprojectCtx?.meta.moduleName
+  const scriptName = app.scriptName ?? pyprojectCtx?.meta.scriptName
+  const callableName = app.callableName ?? pyprojectCtx?.meta.callableName
+  const hasPyproject = app.hasPyproject ?? Boolean(pyprojectCtx)
+
+  const baseArgs = tokenizeCliArgs(app.args ?? pyprojectCtx?.meta.args)
   const extra = tokenizeCliArgs(options?.extraArgs)
   const scriptArgs = [...baseArgs, ...extra]
 
-  const header = existsSync(resolvedScript) ? readFileHeader(resolvedScript) : ''
-  const meta = parsePythonScriptMetadata(header, app.name || basename(resolvedScript))
+  const header =
+    existsSync(resolvedScript) && resolvedScript.toLowerCase().endsWith('.py')
+      ? readFileHeader(resolvedScript)
+      : ''
+  const meta = parsePythonScriptMetadata(header, app.name || pyprojectCtx?.meta.title || basename(resolvedScript))
   const hasPep723 = app.hasPep723 ?? meta.hasPep723
-  const title = (app.name || '').trim() || meta.title
+  const title =
+    (app.name || '').trim() ||
+    (meta.hasExplicitTitle ? meta.title : undefined) ||
+    pyprojectCtx?.meta.title ||
+    meta.title
+
+  const srcDirCandidate = join(cwd, 'src')
+  const pythonPathEnv = existsSync(srcDirCandidate) ? srcDirCandidate : undefined
+
+  const buildPythonInvocationArgs = (): string[] => {
+    if (moduleName) {
+      const hasMain =
+        pkgEntry?.hasMainModule ||
+        basename(resolvedScript).toLowerCase() === '__main__.py' ||
+        existsSync(join(cwd, 'src', ...moduleName.split('.'), '__main__.py')) ||
+        existsSync(join(cwd, ...moduleName.split('.'), '__main__.py'))
+      if (hasMain || !callableName) {
+        return ['-m', moduleName, ...scriptArgs]
+      }
+      return [
+        '-c',
+        `import sys; from ${moduleName} import ${callableName}; sys.exit(${callableName}())`,
+        ...scriptArgs
+      ]
+    }
+    return [resolvedScript, ...scriptArgs]
+  }
 
   let file = 'python'
-  let args: string[] = [resolvedScript, ...scriptArgs]
+  let args: string[] = buildPythonInvocationArgs()
   let runnerLabel = 'python'
 
-  const override = (app.pythonPath || '').trim()
+  const override = (app.pythonPath || pyprojectCtx?.meta.runner || '').trim()
   const overrideLower = override.toLowerCase()
 
   if (options?.devMode) {
@@ -575,7 +1127,7 @@ export function resolveTextualLaunchSpec(
       file = venvTextual
       args = ['run', '--dev', resolvedScript, ...scriptArgs]
       runnerLabel = '.venv textual --dev'
-    } else if (uvExe && (hasPep723 || hasUvProjectLock(cwd) || !globalTextual)) {
+    } else if (uvExe && (hasPep723 || hasPyproject || hasUvProjectLock(cwd) || !globalTextual)) {
       file = uvExe
       args = ['run', '--with', 'textual-dev', 'textual', 'run', '--dev', resolvedScript, ...scriptArgs]
       runnerLabel = 'uv textual --dev'
@@ -587,7 +1139,13 @@ export function resolveTextualLaunchSpec(
   } else if (override && overrideLower !== 'auto') {
     if (overrideLower === 'uv') {
       file = findExecutableOnPath('uv') ?? 'uv'
-      args = ['run', resolvedScript, ...scriptArgs]
+      if (moduleName && scriptName) {
+        args = ['run', scriptName, ...scriptArgs]
+      } else if (moduleName) {
+        args = ['run', 'python', ...buildPythonInvocationArgs()]
+      } else {
+        args = ['run', resolvedScript, ...scriptArgs]
+      }
       runnerLabel = 'uv run'
     } else if (overrideLower === 'textual') {
       file = findExecutableOnPath('textual') ?? 'textual'
@@ -596,42 +1154,51 @@ export function resolveTextualLaunchSpec(
     } else {
       const expandedOverride = expandHomePath(override)
       file = existsSync(expandedOverride) ? resolve(expandedOverride) : (findExecutableOnPath(expandedOverride) ?? expandedOverride)
-      args = [resolvedScript, ...scriptArgs]
+      args = buildPythonInvocationArgs()
       runnerLabel = basename(file)
     }
   } else {
     // Auto-detection priority:
     // 1. Project or shared ~/.sudolaunch/textual .venv/Scripts/python.exe
-    // 2. uv run (when PEP 723 "# /// script" inline metadata or uv.lock is present and uv is installed)
+    // 2. uv run (when PEP 723 "# /// script" inline metadata, pyproject.toml, or uv.lock is present and uv is installed)
     // 3. python.exe (or py.exe fallback on Windows)
     const venvPython = findNearestVenvExe(cwd, 'python.exe')
     const uvExe = findExecutableOnPath('uv')
     if (venvPython) {
       file = venvPython
-      args = [resolvedScript, ...scriptArgs]
+      args = buildPythonInvocationArgs()
       runnerLabel = '.venv'
-    } else if (uvExe && (hasPep723 || hasUvProjectLock(cwd))) {
+    } else if (uvExe && (hasPep723 || hasPyproject || hasUvProjectLock(cwd))) {
       file = uvExe
-      args = ['run', resolvedScript, ...scriptArgs]
+      if (moduleName && scriptName) {
+        args = ['run', scriptName, ...scriptArgs]
+      } else if (moduleName) {
+        args = ['run', 'python', ...buildPythonInvocationArgs()]
+      } else {
+        args = ['run', resolvedScript, ...scriptArgs]
+      }
       runnerLabel = 'uv run'
     } else {
       const pythonExe = findExecutableOnPath('python') ?? findExecutableOnPath('py') ?? 'python'
       file = pythonExe
-      args = [resolvedScript, ...scriptArgs]
+      args = buildPythonInvocationArgs()
       runnerLabel = basename(pythonExe, '.exe')
     }
   }
 
   const displayCommand = [formatDisplayArg(file), ...args.map(formatDisplayArg)].join(' ')
   const psInvoke = `& ${quotePsArg(file)} ${args.map(quotePsArg).join(' ')}`
-  const psCommand = `Push-Location -LiteralPath ${quotePsArg(cwd)}; try { $env:PYTHONUTF8='1'; $env:COLORTERM='truecolor'; ${psInvoke} } finally { Pop-Location }`
+  const pyPathEnvCmd = pythonPathEnv ? `$env:PYTHONPATH=${quotePsArg(pythonPathEnv)}; ` : ''
+  const psCommand = `Push-Location -LiteralPath ${quotePsArg(cwd)}; try { ${pyPathEnvCmd}$env:PYTHONUTF8='1'; $env:COLORTERM='truecolor'; ${psInvoke} } finally { Pop-Location }`
+  const subtitleTarget = moduleName || basename(resolvedScript)
 
   return {
     title,
-    subtitle: `${runnerLabel} · ${basename(resolvedScript)}`,
+    subtitle: `${runnerLabel} · ${subtitleTarget}`,
     file,
     args,
     cwd,
+    pythonPathEnv,
     psCommand,
     displayCommand,
     runnerLabel,
@@ -640,9 +1207,13 @@ export function resolveTextualLaunchSpec(
 }
 
 export function launchExternalTextualWindow(spec: TextualLaunchSpec): void {
+  const pyPathLine = spec.pythonPathEnv
+    ? `$env:PYTHONPATH = ${quotePsArg(spec.pythonPathEnv)}`
+    : ''
   const runnerScript = `
     $Host.UI.RawUI.WindowTitle = ${quotePsArg(`Textual · ${spec.title}`)}
     Set-Location -LiteralPath ${quotePsArg(spec.cwd)}
+    ${pyPathLine}
     $env:PYTHONUTF8 = '1'
     $env:PYTHONIOENCODING = 'utf-8'
     $env:COLORTERM = 'truecolor'

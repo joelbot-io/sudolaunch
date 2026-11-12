@@ -1,7 +1,7 @@
 import { BrowserWindow, ipcMain, nativeImage, screen } from 'electron'
 import { randomUUID } from 'crypto'
 import { existsSync } from 'fs'
-import { join } from 'path'
+import { delimiter, join } from 'path'
 import { is } from '@electron-toolkit/utils'
 import * as pty from 'node-pty'
 import type { TextualWindowInitInfo } from '../shared/types'
@@ -63,6 +63,11 @@ function spawnSessionPty(session: TextualWindowSession, cols: number, rows: numb
     TERM_PROGRAM: 'SudoLaunch',
     PYTHONUTF8: '1',
     PYTHONIOENCODING: 'utf-8'
+  }
+  if (session.spec.pythonPathEnv) {
+    env.PYTHONPATH = env.PYTHONPATH
+      ? `${session.spec.pythonPathEnv}${delimiter}${env.PYTHONPATH}`
+      : session.spec.pythonPathEnv
   }
 
   const isDirectExe =

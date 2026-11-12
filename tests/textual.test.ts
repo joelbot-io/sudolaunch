@@ -20,6 +20,7 @@ import {
   humanizeScriptName,
   isPythonTextualFile,
   normalizeLaunchMode,
+  parsePyprojectToml,
   parsePythonScriptMetadata,
   resolveScriptTargetPath,
   resolveTextualLaunchSpec,
@@ -143,6 +144,65 @@ print("ok")
       expect(textualOverride.args[0]).toBe('run')
       expect(textualOverride.args[1]).toBe(appScript)
       expect(textualOverride.runnerLabel).toBe('textual run')
+    } finally {
+      rmSync(tempRoot, { recursive: true, force: true })
+    }
+  })
+
+  it('discovers and resolves pyproject.toml projects with src/<package> layout and [project.scripts]', () => {
+    const tempRoot = mkdtempSync(join(tmpdir(), 'sudolaunch-pyproject-test-'))
+    try {
+      const pyprojectContent = `[project]
+name = "eventbridge-tui"
+version = "0.1.0"
+description = "Textual TUI to view, search, modify, and execute AWS EventBridge Schedules and Rules"
+dependencies = [
+    "boto3>=1.35.0",
+    "textual>=8.0.0",
+]
+
+[project.scripts]
+eventbridge-tui = "eventbridge_tui:main"
+`
+      writeFileSync(join(tempRoot, 'pyproject.toml'), pyprojectContent, 'utf-8')
+
+      const parsed = parsePyprojectToml(pyprojectContent, 'eventbridge')
+      expect(parsed.name).toBe('eventbridge-tui')
+      expect(parsed.title).toBe('Eventbridge Tui')
+      expect(parsed.description).toContain('AWS EventBridge Schedules')
+      expect(parsed.scriptName).toBe('eventbridge-tui')
+      expect(parsed.moduleName).toBe('eventbridge_tui')
+      expect(parsed.callableName).toBe('main')
+      expect(parsed.dependsOnTextual).toBe(true)
+
+      const pkgDir = join(tempRoot, 'src', 'eventbridge_tui')
+      mkdirSync(pkgDir, { recursive: true })
+      const initPy = join(pkgDir, '__init__.py')
+      const mainPy = join(pkgDir, '__main__.py')
+      const appPy = join(pkgDir, 'app.py')
+      writeFileSync(initPy, 'from .app import EventBridgeApp\n', 'utf-8')
+      writeFileSync(mainPy, 'from . import main\nif __name__ == "__main__":\n    main()\n', 'utf-8')
+      writeFileSync(appPy, 'from textual.app import App\nclass EventBridgeApp(App):\n    pass\n', 'utf-8')
+
+      const venvScripts = join(tempRoot, '.venv', 'Scripts')
+      mkdirSync(venvScripts, { recursive: true })
+      const fakePython = join(venvScripts, 'python.exe')
+      writeFileSync(fakePython, '', 'utf-8')
+
+      // Directory target resolves to src/eventbridge_tui/__main__.py via pyproject.toml
+      expect(resolveScriptTargetPath(tempRoot)).toBe(mainPy)
+
+      // Launch spec runs `python.exe -m eventbridge_tui` with PYTHONPATH pointing to src/
+      const spec = resolveTextualLaunchSpec(
+        { scriptPath: mainPy, cwd: tempRoot },
+        { extraArgs: '--demo' }
+      )
+      expect(spec.title).toBe('Eventbridge Tui')
+      expect(spec.file).toBe(fakePython)
+      expect(spec.args).toEqual(['-m', 'eventbridge_tui', '--demo'])
+      expect(spec.pythonPathEnv).toBe(join(tempRoot, 'src'))
+      expect(spec.psCommand).toContain('$env:PYTHONPATH=')
+      expect(spec.psCommand).toContain("'-m' 'eventbridge_tui' '--demo'")
     } finally {
       rmSync(tempRoot, { recursive: true, force: true })
     }

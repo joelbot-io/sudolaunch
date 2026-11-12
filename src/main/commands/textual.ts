@@ -22,6 +22,10 @@ interface SerializedAppTarget {
   pythonPath?: string
   defaultMode?: TextualLaunchMode
   hasPep723?: boolean
+  hasPyproject?: boolean
+  moduleName?: string
+  scriptName?: string
+  callableName?: string
   extraArgs?: string
 }
 
@@ -54,8 +58,10 @@ function parseAdHocInput(raw: string): { scriptPath: string; extraArgs: string }
   const quotedMatch = trimmed.match(/^(?:"([^"]+)"|'([^']+)')(?:\s+(.*))?$/)
   if (quotedMatch) {
     const candidate = quotedMatch[1] ?? quotedMatch[2]
+    const candLower = candidate.toLowerCase()
     if (
-      candidate.toLowerCase().endsWith('.py') ||
+      candLower.endsWith('.py') ||
+      candLower.endsWith('.toml') ||
       /^[a-zA-Z]:[\\/]/.test(candidate) ||
       /^~[\\/]/.test(candidate)
     ) {
@@ -70,9 +76,11 @@ function parseAdHocInput(raw: string): { scriptPath: string; extraArgs: string }
   const firstSpace = trimmed.indexOf(' ')
   const firstToken = firstSpace === -1 ? trimmed : trimmed.slice(0, firstSpace)
   const restArgs = firstSpace === -1 ? '' : trimmed.slice(firstSpace + 1).trim()
+  const tokenLower = firstToken.toLowerCase()
 
   if (
-    firstToken.toLowerCase().endsWith('.py') ||
+    tokenLower.endsWith('.py') ||
+    tokenLower.endsWith('.toml') ||
     /^[a-zA-Z]:[\\/]/.test(firstToken) ||
     /^~[\\/]/.test(firstToken)
   ) {
@@ -94,6 +102,10 @@ function serializeTarget(app: DiscoveredTextualApp, extraArgs?: string): string 
     pythonPath: app.pythonPath,
     defaultMode: app.defaultMode,
     hasPep723: app.hasPep723,
+    hasPyproject: app.hasPyproject,
+    moduleName: app.moduleName,
+    scriptName: app.scriptName,
+    callableName: app.callableName,
     extraArgs: extraArgs || undefined
   }
   return JSON.stringify(payload)
