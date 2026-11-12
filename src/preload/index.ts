@@ -201,6 +201,18 @@ const api = {
   },
   termInput: (data: string): void => ipcRenderer.send('term-input', data),
   termResize: (cols: number, rows: number): void => ipcRenderer.send('term-resize', cols, rows),
+  resizeTerminalWindow: (
+    width: number,
+    height: number,
+    x?: number,
+    y?: number,
+    resetToDefault?: boolean
+  ): Promise<{ x: number; y: number; width: number; height: number }> =>
+    ipcRenderer.invoke('term-resize-window', width, height, x, y, resetToDefault),
+  toggleMaximizeTerminalWindow: (): Promise<{
+    maximized: boolean
+    bounds: { x: number; y: number; width: number; height: number } | null
+  }> => ipcRenderer.invoke('term-toggle-maximize'),
   onTermData: (callback: (data: string) => void): (() => void) => {
     const listener = (_event: Electron.IpcRendererEvent, data: string): void => callback(data)
     ipcRenderer.on('term-data', listener)

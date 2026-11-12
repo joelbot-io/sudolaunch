@@ -163,6 +163,8 @@ export interface Settings {
   recentGitRepos?: string[]
   // Width of the expanded terminal window in pixels (default 800)
   terminalWidth?: number
+  // Height of the expanded terminal window in pixels (default 360)
+  terminalHeight?: number
   // Monitor index (1-based) to assign the dock to. Defaults to monitor 1 for any error.
   monitor?: number
   // Custom glow color for the minimized dock glowing pill bar (e.g. '#5aa0ff', 'cyan', 'purple')
@@ -1253,6 +1255,7 @@ export const CONFIG_TYPES: ConfigTypeDef[] = [
       { key: 'dockHomePosition', label: 'Dock home position anchor (left, middle, right, custom)', type: 'text' },
       { key: 'autoReturnDelaySec', label: 'Auto-return delay in seconds', type: 'number' },
       { key: 'terminalWidth', label: 'Terminal window width (px, default 800)', type: 'number' },
+      { key: 'terminalHeight', label: 'Terminal window height (px, default 360)', type: 'number' },
       { key: 'monitor', label: 'Dock monitor (1-based, default 1)', type: 'number' },
       { key: 'dockGlowColor', label: 'Dock glow color (e.g. #5aa0ff, cyan, dark purple, black)', type: 'text' },
       { key: 'dockGlowStyle', label: 'Dock glow style (breathing, steady, stealth)', type: 'text' }

@@ -128,17 +128,39 @@ function idleBounds(bar?: Rectangle | null): Rectangle {
   )
 }
 
+const MIN_TERMINAL_WIDTH = 420
+const MIN_TERMINAL_HEIGHT = 220
+let preMaximizeBounds: Rectangle | null = null
+
+function setTerminalResizableState(resizable: boolean): void {
+  if (!termWindow || termWindow.isDestroyed()) return
+  if (resizable) {
+    termWindow.setMinimumSize(MIN_TERMINAL_WIDTH, MIN_TERMINAL_HEIGHT)
+    termWindow.setResizable(true)
+  } else {
+    termWindow.setMinimumSize(1, 1)
+    termWindow.setResizable(false)
+  }
+}
+
 function expandedBounds(bar?: Rectangle | null): Rectangle {
   const settings = readSettings()
   const icon = idleBounds(bar)
   const { workArea } = screen.getDisplayNearestPoint({ x: icon.x, y: icon.y })
   const width = Math.max(
-    480,
-    Math.min(settings.terminalWidth ?? DockGeometry.TERMINAL_PANEL_SIZE.width, workArea.width - 32)
+    MIN_TERMINAL_WIDTH,
+    Math.min(settings.terminalWidth ?? DockGeometry.TERMINAL_PANEL_SIZE.width, workArea.width - 24)
+  )
+  const height = Math.max(
+    MIN_TERMINAL_HEIGHT,
+    Math.min(
+      settings.terminalHeight ?? DockGeometry.TERMINAL_PANEL_SIZE.height,
+      workArea.height - 24
+    )
   )
   const panelSize = {
     width,
-    height: DockGeometry.TERMINAL_PANEL_SIZE.height
+    height
   }
   return DockGeometry.calculateExpandedBounds(
     icon,
@@ -193,6 +215,27 @@ export function createTerminalWindow(icon: NativeImage): BrowserWindow {
       }
     }
   })
+  termWindow.on('resized', () => {
+    if (termExpanded && termWindow && !termCollapseTimeout && !termExpandTimeout) {
+      const { x, y, width, height } = termWindow.getBounds()
+      if (width < MIN_TERMINAL_WIDTH || height < MIN_TERMINAL_HEIGHT) return
+      preMaximizeBounds = null
+      const settings = readSettings()
+      if (
+        settings.terminalWidth !== width ||
+        settings.terminalHeight !== height ||
+        settings.termWindowPosition?.x !== x ||
+        settings.termWindowPosition?.y !== y
+      ) {
+        writeSettings({
+          ...settings,
+          termWindowPosition: { x, y },
+          terminalWidth: width,
+          terminalHeight: height
+        })
+      }
+    }
+  })
   termWindow.on('closed', () => {
     if (ptyFlushTimer) {
       clearTimeout(ptyFlushTimer)
@@ -225,6 +268,7 @@ export function createTerminalWindow(icon: NativeImage): BrowserWindow {
     if (!termWindow) return
     if (termExpanded) {
       termExpanded = false
+      setTerminalResizableState(false)
       termWindow.setBounds(idleBounds(lastBarBounds))
       termWindow.webContents.send('term-expanded', false)
     }
@@ -241,23 +285,139 @@ export function createTerminalWindow(icon: NativeImage): BrowserWindow {
   return termWindow
 }
 
+export function resizeTerminalWindow(
+  width: number,
+  height: number,
+  x?: number,
+  y?: number,
+  resetToDefault?: boolean
+): { x: number; y: number; width: number; height: number } {
+  const settings = readSettings()
+  const currentBounds = termWindow?.getBounds()
+  const display = currentBounds
+    ? screen.getDisplayNearestPoint({ x: currentBounds.x, y: currentBounds.y })
+    : getDockDisplay(settings.monitor)
+  const { workArea } = display
+  const maxW = Math.max(MIN_TERMINAL_WIDTH, workArea.width - 24)
+  const maxH = Math.max(MIN_TERMINAL_HEIGHT, workArea.height - 24)
+  const nextWidth = Math.round(Math.max(MIN_TERMINAL_WIDTH, Math.min(maxW, width)))
+  const nextHeight = Math.round(Math.max(MIN_TERMINAL_HEIGHT, Math.min(maxH, height)))
+  preMaximizeBounds = null
+
+  if (resetToDefault) {
+    const nextSettings = {
+      ...settings,
+      terminalWidth: nextWidth,
+      terminalHeight: nextHeight,
+      termWindowPosition: null
+    }
+    writeSettings(nextSettings)
+    if (termWindow && !termWindow.isDestroyed() && termExpanded) {
+      const icon = idleBounds(lastBarBounds)
+      const resetBounds = DockGeometry.calculateExpandedBounds(
+        icon,
+        { width: nextWidth, height: nextHeight },
+        workArea,
+        null
+      )
+      termWindow.setBounds(resetBounds)
+      return resetBounds
+    }
+    return {
+      x: currentBounds?.x ?? workArea.x,
+      y: currentBounds?.y ?? workArea.y,
+      width: nextWidth,
+      height: nextHeight
+    }
+  }
+
+  const nextX = typeof x === 'number' ? Math.round(x) : (currentBounds?.x ?? workArea.x)
+  const nextY = typeof y === 'number' ? Math.round(y) : (currentBounds?.y ?? workArea.y)
+  const clamped = DockGeometry.clampRect(
+    { x: nextX, y: nextY, width: nextWidth, height: nextHeight },
+    workArea
+  )
+
+  if (termWindow && !termWindow.isDestroyed() && termExpanded) {
+    termWindow.setBounds(clamped)
+    writeSettings({
+      ...settings,
+      termWindowPosition: { x: clamped.x, y: clamped.y },
+      terminalWidth: clamped.width,
+      terminalHeight: clamped.height
+    })
+  } else {
+    writeSettings({
+      ...settings,
+      terminalWidth: clamped.width,
+      terminalHeight: clamped.height
+    })
+  }
+
+  return clamped
+}
+
+export function toggleMaximizeTerminalWindow(): { maximized: boolean; bounds: Rectangle | null } {
+  if (!termWindow || termWindow.isDestroyed() || !termExpanded) {
+    return { maximized: false, bounds: null }
+  }
+  const current = termWindow.getBounds()
+  const { workArea } = screen.getDisplayNearestPoint({
+    x: current.x + current.width / 2,
+    y: current.y + current.height / 2
+  })
+
+  if (preMaximizeBounds) {
+    const restore = DockGeometry.clampRect(preMaximizeBounds, workArea)
+    preMaximizeBounds = null
+    termWindow.setBounds(restore)
+    const settings = readSettings()
+    writeSettings({
+      ...settings,
+      termWindowPosition: { x: restore.x, y: restore.y },
+      terminalWidth: restore.width,
+      terminalHeight: restore.height
+    })
+    return { maximized: false, bounds: restore }
+  }
+
+  preMaximizeBounds = { ...current }
+  const maxBounds: Rectangle = {
+    x: workArea.x + 12,
+    y: workArea.y + 12,
+    width: Math.max(MIN_TERMINAL_WIDTH, workArea.width - 24),
+    height: Math.max(MIN_TERMINAL_HEIGHT, workArea.height - 24)
+  }
+  termWindow.setBounds(maxBounds)
+  return { maximized: true, bounds: maxBounds }
+}
+
 export function registerTerminalIpc(): void {
   ipcMain.on('term-toggle', () => toggleTerminal())
   ipcMain.on('term-move-mode-toggle', () => toggleTermMoveMode())
   ipcMain.on('term-input', (_event, data: string) => writeToPty(data))
   ipcMain.on('term-resize', (_event, cols: number, rows: number) => resizePty(cols, rows))
+  ipcMain.handle(
+    'term-resize-window',
+    (_event, width: number, height: number, x?: number, y?: number, resetToDefault?: boolean) =>
+      resizeTerminalWindow(width, height, x, y, resetToDefault)
+  )
+  ipcMain.handle('term-toggle-maximize', () => toggleMaximizeTerminalWindow())
 }
 
 export function repositionTerminal(barBounds?: Rectangle): void {
   if (barBounds) lastBarBounds = barBounds
   if (!termWindow) return
+  if (!termExpanded) setTerminalResizableState(false)
   termWindow.setBounds(termExpanded ? expandedBounds(lastBarBounds) : idleBounds(lastBarBounds))
+  if (termExpanded) setTerminalResizableState(true)
 }
 
 export function showTerminalWindow(): void {
   if (!termWindow) return
   if (termExpanded) {
     termWindow.setBounds(expandedBounds(lastBarBounds))
+    setTerminalResizableState(true)
     if (!termWindow.isVisible()) {
       termWindow.showInactive()
     }
@@ -266,11 +426,13 @@ export function showTerminalWindow(): void {
   const settings = readSettings()
   if (settings.dockLayout === 'shelf' || settings.dockLayout === 'circle') {
     termExpanded = false
+    setTerminalResizableState(false)
     termWindow.webContents.send('term-expanded', false)
     termWindow.hide()
     return
   }
   termExpanded = false
+  setTerminalResizableState(false)
   termWindow.setBounds(idleBounds(lastBarBounds))
   termWindow.webContents.send('term-expanded', false)
   termWindow.showInactive()
@@ -280,6 +442,7 @@ export function hideTerminalWindow(): void {
   if (!termWindow) return
   if (termExpanded) {
     termExpanded = false
+    setTerminalResizableState(false)
     dockManager.notifyPanelCollapsed()
     termWindow.webContents.send('term-expanded', false)
   }
@@ -296,6 +459,7 @@ export function toggleTermMoveMode(): void {
   } else {
     termExpanded = false
     termMoveModeActive = true
+    setTerminalResizableState(false)
     termWindow.setBounds(idleBounds(lastBarBounds))
     if (!termWindow.isVisible()) termWindow.showInactive()
     termWindow.focus()
@@ -305,9 +469,16 @@ export function toggleTermMoveMode(): void {
 
 export function resetTermPosition(): void {
   const settings = readSettings()
-  writeSettings({ ...settings, termPosition: null, termWindowPosition: null })
-  if (termWindow && !termExpanded) {
-    termWindow.setBounds(idleBounds(lastBarBounds))
+  preMaximizeBounds = null
+  writeSettings({
+    ...settings,
+    termPosition: null,
+    termWindowPosition: null,
+    terminalWidth: DockGeometry.TERMINAL_PANEL_SIZE.width,
+    terminalHeight: DockGeometry.TERMINAL_PANEL_SIZE.height
+  })
+  if (termWindow) {
+    termWindow.setBounds(termExpanded ? expandedBounds(lastBarBounds) : idleBounds(lastBarBounds))
   }
 }
 
@@ -330,6 +501,7 @@ export function toggleTerminal(): void {
     dockManager.notifyPanelExpanded()
     setUnreadActivity(false)
     if (!termWindow.isVisible()) {
+      setTerminalResizableState(false)
       termWindow.setBounds(idleBounds(lastBarBounds))
       termWindow.showInactive()
     }
@@ -343,6 +515,7 @@ export function toggleTerminal(): void {
       termExpandTimeout = null
       if (!termWindow || !termExpanded) return
       termWindow.setBounds(panel)
+      setTerminalResizableState(true)
       termWindow.focus()
       ensurePty(
         Math.max(20, Math.floor((panel.width - 38) / CHAR_CELL.width)),
@@ -353,11 +526,12 @@ export function toggleTerminal(): void {
   } else {
     dockManager.notifyPanelCollapsed()
     const icon = idleBounds(lastBarBounds)
-    const panel = expandedBounds(lastBarBounds)
+    const panel = termWindow.getBounds()
     termWindow.webContents.send('term-collapsing', DockGeometry.calculateGrowOrigin(icon, panel))
     termCollapseTimeout = setTimeout(() => {
       termCollapseTimeout = null
       if (!termWindow) return
+      setTerminalResizableState(false)
       const settings = readSettings()
       if (settings.dockLayout === 'shelf' || settings.dockLayout === 'circle') {
         termWindow.hide()

@@ -70,6 +70,7 @@ export const DEFAULT_SETTINGS: Settings = {
   shelfIcons: DEFAULT_SHELF_ICONS,
   activeProfile: 'default',
   terminalWidth: 800,
+  terminalHeight: 360,
   monitor: 1,
   dockGlowColor: '#5aa0ff',
   dockGlowStyle: 'breathing'

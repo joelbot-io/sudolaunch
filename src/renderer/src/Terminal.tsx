@@ -22,6 +22,9 @@ export default function Terminal(): JSX.Element {
   const [dockGlowColor, setDockGlowColor] = useState<string>('')
   const [dockLayout, setDockLayout] = useState<'horizontal' | 'circle' | 'shelf'>('shelf')
   const [dockFading, setDockFading] = useState(false)
+  const [isMaximized, setIsMaximized] = useState(false)
+  const [resizeBadge, setResizeBadge] = useState<string | null>(null)
+  const resizeBadgeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const { growPhase, setGrowOrigin, setGrowPhase, growClassNames, growStyle, onGrowEnd } =
     useGrowAnimation()
   const [shimmerInfo, setShimmerInfo] = useState<{
@@ -173,6 +176,7 @@ export default function Terminal(): JSX.Element {
 
     return () => {
       if (fitRafId !== null) cancelAnimationFrame(fitRafId)
+      if (resizeBadgeTimerRef.current) clearTimeout(resizeBadgeTimerRef.current)
       resizeObserver.disconnect()
       keyDisposable.dispose()
       dataDisposable.dispose()
@@ -303,6 +307,103 @@ export default function Terminal(): JSX.Element {
     window.api.termToggle()
   }
 
+  function flashResizeBadge(text: string, durationMs = 1400): void {
+    if (resizeBadgeTimerRef.current) clearTimeout(resizeBadgeTimerRef.current)
+    setResizeBadge(text)
+    if (durationMs > 0) {
+      resizeBadgeTimerRef.current = setTimeout(() => {
+        resizeBadgeTimerRef.current = null
+        setResizeBadge(null)
+      }, durationMs)
+    }
+  }
+
+  function handleResetSize(): void {
+    setIsMaximized(false)
+    window.api.resizeTerminalWindow?.(800, 360, undefined, undefined, true).then((res) => {
+      if (res) {
+        flashResizeBadge(`Reset ${res.width}×${res.height}`)
+      }
+      termRef.current?.focus()
+    })
+  }
+
+  function handleToggleMaximize(): void {
+    window.api.toggleMaximizeTerminalWindow?.().then((res) => {
+      if (res) {
+        setIsMaximized(res.maximized)
+        if (res.bounds) {
+          flashResizeBadge(`${res.bounds.width}×${res.bounds.height}`)
+        }
+      }
+      termRef.current?.focus()
+    })
+  }
+
+  function startResizeDrag(
+    e: React.MouseEvent,
+    dir: 'n' | 's' | 'e' | 'w' | 'ne' | 'nw' | 'se' | 'sw'
+  ): void {
+    e.preventDefault()
+    e.stopPropagation()
+    setIsMaximized(false)
+    const startScreenX = e.screenX
+    const startScreenY = e.screenY
+    const startWinX = window.screenX
+    const startWinY = window.screenY
+    const startW = window.innerWidth
+    const startH = window.innerHeight
+    const rightEdge = startWinX + startW
+    const bottomEdge = startWinY + startH
+    let rafId: number | null = null
+
+    if (resizeBadgeTimerRef.current) {
+      clearTimeout(resizeBadgeTimerRef.current)
+      resizeBadgeTimerRef.current = null
+    }
+    setResizeBadge(`${startW}×${startH}`)
+
+    function onMouseMove(ev: MouseEvent): void {
+      if (rafId !== null) cancelAnimationFrame(rafId)
+      rafId = requestAnimationFrame(() => {
+        const dx = ev.screenX - startScreenX
+        const dy = ev.screenY - startScreenY
+        let nextW = startW
+        let nextH = startH
+        let nextX = startWinX
+        let nextY = startWinY
+
+        if (dir.includes('e')) {
+          nextW = Math.max(420, startW + dx)
+        } else if (dir.includes('w')) {
+          nextW = Math.max(420, startW - dx)
+          nextX = rightEdge - nextW
+        }
+
+        if (dir.includes('s')) {
+          nextH = Math.max(220, startH + dy)
+        } else if (dir.includes('n')) {
+          nextH = Math.max(220, startH - dy)
+          nextY = bottomEdge - nextH
+        }
+
+        setResizeBadge(`${Math.round(nextW)}×${Math.round(nextH)}`)
+        window.api.resizeTerminalWindow?.(nextW, nextH, nextX, nextY)
+      })
+    }
+
+    function onMouseUp(): void {
+      if (rafId !== null) cancelAnimationFrame(rafId)
+      window.removeEventListener('mousemove', onMouseMove)
+      window.removeEventListener('mouseup', onMouseUp)
+      flashResizeBadge(`${window.innerWidth}×${window.innerHeight}`, 900)
+      termRef.current?.focus()
+    }
+
+    window.addEventListener('mousemove', onMouseMove)
+    window.addEventListener('mouseup', onMouseUp)
+  }
+
   if (!expanded && moveMode) {
     return (
       <div
@@ -364,7 +465,11 @@ export default function Terminal(): JSX.Element {
           {'>_'}
         </button>
       )}
-      <div className="term-header" title="Drag to move PowerShell window">
+      <div
+        className="term-header"
+        title="Drag to move PowerShell window · Double-click to maximize/restore"
+        onDoubleClick={handleToggleMaximize}
+      >
         <div className="term-header-left">
           <span className="term-drag-handle" title="Drag to move window">
             <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor">
@@ -380,21 +485,88 @@ export default function Terminal(): JSX.Element {
             </svg>
           </span>
           <span className="term-header-label">PowerShell</span>
+          {resizeBadge && <span className="term-resize-badge">{resizeBadge}</span>}
         </div>
-        <button
-          className="term-collapse"
-          title={termHotkey ? `Collapse terminal (${termHotkey} or Esc)` : 'Collapse terminal'}
-          onClick={toggle}
-          aria-label="Collapse terminal"
-        >
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-            <polyline points="6 9 12 15 18 9"></polyline>
-          </svg>
-        </button>
+        <div className="term-header-actions">
+          <button
+            className="term-header-btn"
+            title={isMaximized ? 'Restore terminal size' : 'Maximize terminal (or double-click header)'}
+            onClick={handleToggleMaximize}
+            aria-label={isMaximized ? 'Restore terminal size' : 'Maximize terminal'}
+          >
+            {isMaximized ? (
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.1" strokeLinecap="round" strokeLinejoin="round">
+                <rect x="5" y="7" width="12" height="12" rx="1.5" />
+                <path d="M9 7V5.5A1.5 1.5 0 0 1 10.5 4h8A1.5 1.5 0 0 1 20 5.5v8a1.5 1.5 0 0 1-1.5 1.5H17" />
+              </svg>
+            ) : (
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.1" strokeLinecap="round" strokeLinejoin="round">
+                <rect x="4" y="4" width="16" height="16" rx="2" />
+              </svg>
+            )}
+          </button>
+          <button
+            className="term-collapse"
+            title={termHotkey ? `Collapse terminal (${termHotkey} or Esc)` : 'Collapse terminal'}
+            onClick={toggle}
+            aria-label="Collapse terminal"
+          >
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+              <polyline points="6 9 12 15 18 9"></polyline>
+            </svg>
+          </button>
+        </div>
       </div>
       <div className="term-body">
         <div ref={containerRef} className="term-viewport-host" />
       </div>
+      {expanded && (
+        <>
+          <div
+            className="term-resize-edge term-resize-n"
+            onMouseDown={(e) => startResizeDrag(e, 'n')}
+            title="Drag top edge to resize height"
+          />
+          <div
+            className="term-resize-edge term-resize-s"
+            onMouseDown={(e) => startResizeDrag(e, 's')}
+            title="Drag bottom edge to resize height"
+          />
+          <div
+            className="term-resize-edge term-resize-e"
+            onMouseDown={(e) => startResizeDrag(e, 'e')}
+            title="Drag right edge to resize width"
+          />
+          <div
+            className="term-resize-edge term-resize-w"
+            onMouseDown={(e) => startResizeDrag(e, 'w')}
+            title="Drag left edge to resize width"
+          />
+          <div
+            className="term-resize-corner term-resize-nw"
+            onMouseDown={(e) => startResizeDrag(e, 'nw')}
+            title="Drag corner to resize window"
+          />
+          <div
+            className="term-resize-corner term-resize-ne"
+            onMouseDown={(e) => startResizeDrag(e, 'ne')}
+            title="Drag corner to resize window"
+          />
+          <div
+            className="term-resize-corner term-resize-sw"
+            onMouseDown={(e) => startResizeDrag(e, 'sw')}
+            title="Drag corner to resize window"
+          />
+          <div
+            className="term-resize-corner term-resize-se"
+            onMouseDown={(e) => startResizeDrag(e, 'se')}
+            onDoubleClick={handleResetSize}
+            title="Drag corner to resize · Double-click to reset to 800×360"
+          >
+            <span className="term-resize-grip">◢</span>
+          </div>
+        </>
+      )}
     </div>
   )
 }

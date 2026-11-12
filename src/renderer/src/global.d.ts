@@ -107,6 +107,17 @@ declare global {
       onTermMoveModeChanged: (callback: (active: boolean) => void) => () => void
       termInput: (data: string) => void
       termResize: (cols: number, rows: number) => void
+      resizeTerminalWindow?: (
+        width: number,
+        height: number,
+        x?: number,
+        y?: number,
+        resetToDefault?: boolean
+      ) => Promise<{ x: number; y: number; width: number; height: number }>
+      toggleMaximizeTerminalWindow?: () => Promise<{
+        maximized: boolean
+        bounds: { x: number; y: number; width: number; height: number } | null
+      }>
       onTermData: (callback: (data: string) => void) => () => void
       onTermExpanded: (callback: (expanded: boolean) => void) => () => void
       onTermGrowOrigin: (callback: (origin: GrowOrigin) => void) => () => void

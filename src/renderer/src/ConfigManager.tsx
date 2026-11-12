@@ -130,6 +130,7 @@ const SWAP_HOTKEYS = ['ScrollLock', 'Pause', 'Control+Alt+S']
 const HISTORY_LIMITS = [25, 50, 100, 200]
 const RETURN_DELAYS = [4, 8, 12, 16, 30]
 const TERMINAL_WIDTHS = [600, 800, 1000, 1200]
+const TERMINAL_HEIGHTS = [300, 360, 480, 640]
 const MONITORS = [1, 2, 3]
 const DOCK_LAYOUTS: Array<'shelf' | 'horizontal' | 'circle'> = ['shelf', 'horizontal', 'circle']
 const DOCK_GLOW_STYLES: Array<'breathing' | 'steady' | 'stealth'> = ['breathing', 'steady', 'stealth']
@@ -1065,7 +1066,7 @@ export default function ConfigManager({ initialTarget, onExit }: Props): JSX.Ele
       {
         key: 'terminalWidth',
         label: 'Terminal Window Width',
-        sublabel: 'Width of the slide-up quick terminal window in pixels · ↵ to cycle',
+        sublabel: 'Width of the slide-up quick terminal window in pixels (or drag window edges) · ↵ to cycle',
         badge: `${settings.terminalWidth ?? 800}px`,
         badgeType: 'value',
         keywords: 'terminal width size window px cascadia dimension',
@@ -1080,6 +1081,26 @@ export default function ConfigManager({ initialTarget, onExit }: Props): JSX.Ele
           const idx = TERMINAL_WIDTHS.indexOf(cur)
           const next = TERMINAL_WIDTHS[(idx - 1 + TERMINAL_WIDTHS.length) % TERMINAL_WIDTHS.length]
           updateSetting('terminalWidth', next)
+        }
+      },
+      {
+        key: 'terminalHeight',
+        label: 'Terminal Window Height',
+        sublabel: 'Height of the slide-up quick terminal window in pixels (or drag window edges) · ↵ to cycle',
+        badge: `${settings.terminalHeight ?? 360}px`,
+        badgeType: 'value',
+        keywords: 'terminal height size window px cascadia dimension',
+        onSelect: () => {
+          const cur = settings.terminalHeight ?? 360
+          const idx = TERMINAL_HEIGHTS.indexOf(cur)
+          const next = TERMINAL_HEIGHTS[(idx + 1) % TERMINAL_HEIGHTS.length]
+          updateSetting('terminalHeight', next)
+        },
+        onCycleBackward: () => {
+          const cur = settings.terminalHeight ?? 360
+          const idx = TERMINAL_HEIGHTS.indexOf(cur)
+          const next = TERMINAL_HEIGHTS[(idx - 1 + TERMINAL_HEIGHTS.length) % TERMINAL_HEIGHTS.length]
+          updateSetting('terminalHeight', next)
         }
       },
       {
